@@ -1,0 +1,54 @@
+// Heart-rate-based auto classification.
+// Returns one of: "Easy Run" / "Aerobic Run" / "Tempo Run" / "Interval Run", or "" for trail runs.
+// Recovery Run removed (Wilf rarely lands in <130 zone).
+export function autoClassifyRun(avgHR, isTrail) {
+  if (isTrail) return "";
+  if (!avgHR) return "Easy Run";
+  if (avgHR < 150) return "Easy Run";
+  if (avgHR < 165) return "Aerobic Run";
+  if (avgHR < 175) return "Tempo Run";
+  return "Interval Run";
+}
+
+export function parseTimeToSeconds(t) {
+  if (!t) return 0;
+  const parts = String(t).split(":").map(Number);
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  return 0;
+}
+
+export function formatDuration(sec) {
+  if (!sec) return "—";
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = Math.round(sec % 60);
+  if (h > 0) return `${h}h ${String(m).padStart(2, "0")}m ${String(s).padStart(2, "0")}s`;
+  if (m > 0) return `${m}m ${String(s).padStart(2, "0")}s`;
+  return `${s}s`;
+}
+
+export function formatPaceFromSec(secPerKm) {
+  if (!secPerKm || !isFinite(secPerKm)) return "—";
+  const m = Math.floor(secPerKm / 60);
+  const s = Math.round(secPerKm % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+export function formatDateShort(dateStr) {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  const thisYear = new Date().getFullYear();
+  const m = d.getMonth() + 1;
+  const day = d.getDate();
+  if (d.getFullYear() === thisYear) return `${m}-${day}`;
+  return `${String(d.getFullYear()).slice(2)}-${m}-${day}`;
+}
+
+export function isDuplicate(a, b) {
+  if (a.date !== b.date) return false;
+  if (a.type !== b.type) return false;
+  const distDiff = Math.abs((a.distance || 0) - (b.distance || 0));
+  const durDiff = Math.abs((a.duration || 0) - (b.duration || 0));
+  return distDiff < 0.3 && durDiff < 60;
+}

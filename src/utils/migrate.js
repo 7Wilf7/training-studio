@@ -1,0 +1,102 @@
+// Backward-compatible data migrations.
+// Applied once at app boot to logs loaded from localStorage.
+
+const RUN_PACE_SET = new Set(["Easy Run", "Aerobic Run", "Tempo Run", "Interval Run", "Recovery Run"]);
+
+export function migrateLog(log) {
+  let out = { ...log };
+
+  // Aerobic → Strength (sub-types Upper/Lower/Core kept as-is, they're already correct)
+  if (out.type === "Aerobic") {
+    out.type = "Strength";
+  }
+
+  // Recovery Run → Easy Run (sub-type collapsed)
+  if (Array.isArray(out.subTypes) && out.subTypes.includes("Recovery Run")) {
+    out.subTypes = out.subTypes.map(s => s === "Recovery Run" ? "Easy Run" : s);
+    // dedupe in case both existed
+    out.subTypes = [...new Set(out.subTypes)];
+  }
+
+  return out;
+}
+
+export function migrateLogs(logs) {
+  if (!Array.isArray(logs)) return logs;
+  return logs.map(migrateLog);
+}
+
+// Heuristic: infer a race category from its name + distance string
+export function inferRaceCategory(race) {
+  const text = `${race.name || ""} ${race.distance || ""}`.toLowerCase();
+  if (/hyrox/.test(text)) return "Hyrox";
+  if (/spartan|spartrace|spartanraz/.test(text)) return "Spartan";
+  if (/(^|\W)(half\s*marathon|半马|半程马拉松|21\.1|21\.0975|13\.1\s*mi)/.test(text)) return "Half Marathon";
+  if (/(^|\W)(marathon|全马|马拉松|42\.195|42km|26\.2\s*mi)/.test(text)) return "Marathon";
+  if (/(trail|越野|skyrun|sky\s*race|utm|ultra)/.test(text)) return "Trail";
+  if (/(^|\W)(10\s*k|10km|10\.0\s*km)/.test(text)) return "10K";
+  return "";
+}
+
+export function migrateRace(race) {
+  if (!race) return race;
+  if (race.category) return race; // already migrated
+  return { ...race, category: inferRaceCategory(race) || "" };
+}
+
+export function migrateRaces(races) {
+  if (!Array.isArray(races)) return races;
+  return races.map(migrateRace);
+}
+
+// Old experience IDs (mixed level + event type) → new pure-years IDs (rough mapping)
+const EXPERIENCE_OLD_TO_NEW = {
+  "beginner": "<1y",
+  "regular": "1-3y",
+  "marathoner": "3-5y",
+  "trail-runner": "3-5y",
+  "multi-sport": "5-10y",
+};
+
+export function migrateProfile(profile) {
+  if (!profile || typeof profile !== "object") return profile;
+  const out = { ...profile };
+
+  // experience: map old enum values to year-based ones
+  if (out.experience && EXPERIENCE_OLD_TO_NEW[out.experience]) {
+    out.experience = EXPERIENCE_OLD_TO_NEW[out.experience];
+  }
+
+  // injuries → recentInjuries (rename)
+  if (Array.isArray(out.injuries) && !Array.isArray(out.recentInjuries)) {
+    out.recentInjuries = out.injuries;
+    delete out.injuries;
+  }
+
+  return out;
+}
+
+// Old coach style/intervention IDs collapsed to 3-point spectrum
+const COACH_STYLE_OLD_TO_NEW = {
+  "data-analytical": "analytical",
+  "performance":     "analytical",
+  "calm-rational":   "balanced",
+  "encouraging":     "soft",
+  "casual":          "soft",
+};
+const COACH_INTERVENTION_OLD_TO_NEW = {
+  "minimal":   "light",
+  "risk-only": "light",
+};
+
+export function migrateCoachConfig(cfg) {
+  if (!cfg || typeof cfg !== "object") return cfg;
+  const out = { ...cfg };
+  if (out.style && COACH_STYLE_OLD_TO_NEW[out.style]) {
+    out.style = COACH_STYLE_OLD_TO_NEW[out.style];
+  }
+  if (out.intervention && COACH_INTERVENTION_OLD_TO_NEW[out.intervention]) {
+    out.intervention = COACH_INTERVENTION_OLD_TO_NEW[out.intervention];
+  }
+  return out;
+}

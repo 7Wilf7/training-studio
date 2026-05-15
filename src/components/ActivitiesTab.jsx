@@ -1,0 +1,438 @@
+import { useState, useRef, useMemo } from "react";
+import { s } from "../styles";
+import { RUN_SUBTYPES, RUN_FLAGS, SORT_OPTIONS } from "../constants";
+import {
+  autoClassifyRun, parseTimeToSeconds,
+  formatDuration, formatPaceFromSec, formatDateShort, isDuplicate,
+} from "../utils/format";
+import { ActivityForm } from "./ActivityForm";
+
+export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
+  const [sortBy, setSortBy] = useState("date_desc");
+  const [showAdd, setShowAdd] = useState(false);
+  const [editingId, setEditingId] = useState(null); // log.id currently being edited inline
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [uploadMsg, setUploadMsg] = useState("");
+  const [parsedRows, setParsedRows] = useState(null);
+  const [duplicateWarning, setDuplicateWarning] = useState(null);
+  const fileRef = useRef();
+
+  const displayedLogs = useMemo(() => {
+    const sorted = [...periodLogs];
+    sorted.sort((a, b) => {
+      switch (sortBy) {
+        case "date_desc": return new Date(b.date) - new Date(a.date);
+        case "date_asc": return new Date(a.date) - new Date(b.date);
+        case "distance_desc": return (b.distance || 0) - (a.distance || 0);
+        case "distance_asc": return (a.distance || 0) - (b.distance || 0);
+        case "duration_desc": return (b.duration || 0) - (a.duration || 0);
+        case "duration_asc": return (a.duration || 0) - (b.duration || 0);
+        case "hr_desc": return (b.hr || 0) - (a.hr || 0);
+        case "hr_asc": return (a.hr || 0) - (b.hr || 0);
+        default: return 0;
+      }
+    });
+    return sorted;
+  }, [periodLogs, sortBy]);
+
+  function deleteLog(id) {
+    setConfirmDelete({ type: "log", id });
+  }
+
+  function bulkDeleteSelected() {
+    if (selectedIds.size === 0) return;
+    setConfirmDelete({ type: "logs", ids: Array.from(selectedIds) });
+  }
+
+  function toggleSelectMode() {
+    setSelectMode(!selectMode);
+    setSelectedIds(new Set());
+    setEditingId(null);
+  }
+
+  function toggleSelected(id) {
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setSelectedIds(next);
+  }
+
+  function selectAll() {
+    setSelectedIds(new Set(displayedLogs.map(l => l.id)));
+  }
+  function clearSelection() {
+    setSelectedIds(new Set());
+  }
+
+  function handleAddSubmit(logData) {
+    setLogs([{ id: Date.now(), ...logData }, ...logs]);
+    setShowAdd(false);
+  }
+
+  function handleEditSubmit(id, logData) {
+    setLogs(logs.map(l => l.id === id ? { ...l, ...logData } : l));
+    setEditingId(null);
+  }
+
+  function handleFileSelect(e) {
+    const f = e.target.files[0];
+    if (!f) return;
+    const name = f.name.toLowerCase();
+    if (name.endsWith(".csv")) {
+      const reader = new FileReader();
+      reader.onload = (ev) => parseGarminCSV(ev.target.result);
+      reader.readAsText(f);
+    } else if (name.endsWith(".fit")) {
+      parseFitFile(f);
+    } else {
+      setUploadMsg("Unsupported. Use .csv (bulk export) or .fit (single activity).");
+    }
+    e.target.value = "";
+  }
+
+  async function parseFitFile(file) {
+    setUploadMsg("Loading FIT parser...");
+    try {
+      if (!window.FitParser) {
+        const cdnUrls = [
+          "https://cdn.jsdelivr.net/npm/fit-file-parser@1.9.4/dist/fit-parser.js",
+          "https://unpkg.com/fit-file-parser@1.9.4/dist/fit-parser.js",
+          "https://cdn.jsdelivr.net/npm/fit-file-parser/dist/fit-parser.js",
+        ];
+        let loaded = false;
+        let lastErr = null;
+        for (const url of cdnUrls) {
+          try {
+            await new Promise((resolve, reject) => {
+              const script = document.createElement("script");
+              script.src = url;
+              script.onload = resolve;
+              script.onerror = () => reject(new Error(`CDN failed: ${url}`));
+              document.head.appendChild(script);
+            });
+            if (window.FitParser || window.fitParser) { loaded = true; break; }
+          } catch (e) { lastErr = e; }
+        }
+        if (!loaded) {
+          throw lastErr || new Error("All CDN sources failed");
+        }
+      }
+
+      const FitParserClass = window.FitParser
+        || (window.fitParser && window.fitParser.default)
+        || (window.fitParser && window.fitParser.FitParser)
+        || window.fitParser;
+
+      if (!FitParserClass || typeof FitParserClass !== "function") {
+        setUploadMsg("FIT parser library loaded but constructor not found. Try uploading CSV from Garmin Connect instead.");
+        return;
+      }
+
+      const buf = await file.arrayBuffer();
+      const fitParser = new FitParserClass({
+        force: true, speedUnit: "km/h", lengthUnit: "km",
+        temperatureUnit: "celsius", elapsedRecordField: true, mode: "list",
+      });
+
+      fitParser.parse(buf, (err, data) => {
+        if (err) {
+          setUploadMsg(`FIT parse error: ${err.message || JSON.stringify(err) || "unknown"}`);
+          return;
+        }
+        if (!data) { setUploadMsg("FIT file produced no data."); return; }
+
+        const session = data.sessions?.[0]
+          || data.activity?.sessions?.[0]
+          || (Array.isArray(data.activity?.events) && data.activity);
+
+        let sport, distance, duration, hr, ascent, startTime;
+        if (session && session.total_distance !== undefined) {
+          sport = (session.sport || "").toLowerCase();
+          const subSport = (session.sub_sport || "").toLowerCase();
+          if (sport === "running" && subSport.includes("trail")) sport = "trail";
+          distance = +(session.total_distance || 0).toFixed(2);
+          duration = Math.round(session.total_timer_time || session.total_elapsed_time || 0);
+          hr = Math.round(session.avg_heart_rate || 0);
+          ascent = Math.round(session.total_ascent || 0);
+          startTime = session.start_time;
+        } else {
+          const records = data.records || data.activity?.records || [];
+          if (records.length === 0) {
+            setUploadMsg("FIT file parsed but no session or records found.");
+            return;
+          }
+          sport = "running";
+          const distArr = records.filter(r => r.distance != null);
+          distance = distArr.length ? +(distArr[distArr.length - 1].distance).toFixed(2) : 0;
+          const first = records[0], last = records[records.length - 1];
+          duration = first.timestamp && last.timestamp ? Math.round((new Date(last.timestamp) - new Date(first.timestamp)) / 1000) : 0;
+          const hrArr = records.filter(r => r.heart_rate).map(r => r.heart_rate);
+          hr = hrArr.length ? Math.round(hrArr.reduce((a, b) => a + b, 0) / hrArr.length) : 0;
+          let asc = 0; const alts = records.filter(r => r.altitude != null).map(r => r.altitude);
+          for (let i = 1; i < alts.length; i++) if (alts[i] > alts[i - 1]) asc += alts[i] - alts[i - 1];
+          ascent = Math.round(asc);
+          startTime = first.timestamp;
+        }
+
+        let type = "Running";
+        if (sport.includes("trail")) type = "Trail Running";
+        else if (sport === "running") type = "Running";
+        else if (["cycling", "swimming", "training", "fitness_equipment"].includes(sport)) type = "Strength";
+
+        const pace = (type !== "Strength" && type !== "HIIT" && distance > 0) ? Math.round(duration / distance) : 0;
+        const date = (startTime ? new Date(startTime) : new Date()).toISOString().slice(0, 10);
+        const subTypes = type === "Running" ? [autoClassifyRun(hr, false)] : [];
+
+        const newRow = { id: Date.now(), date, type, subTypes, distance, duration, pace, hr, ascent };
+
+        const dup = logs.find(l => isDuplicate(l, newRow));
+        if (dup) {
+          setDuplicateWarning({ existing: dup, incoming: [newRow], source: "fit" });
+        } else {
+          setLogs([newRow, ...logs]);
+          setUploadMsg(`✓ Imported: ${distance}km · ${formatDuration(duration)} · HR ${hr || "—"}`);
+          setTimeout(() => setUploadMsg(""), 5000);
+        }
+      });
+    } catch (err) {
+      setUploadMsg(`FIT parser error: ${err.message || "unknown"}. Try exporting as CSV from Garmin Connect instead.`);
+    }
+  }
+
+  function parseGarminCSV(text) {
+    const lines = text.split(/\r?\n/).filter(l => l.trim());
+    if (lines.length < 2) { setUploadMsg("CSV is empty."); return; }
+    const parseLine = (line) => {
+      const out = []; let cur = ""; let inQ = false;
+      for (const ch of line) {
+        if (ch === '"') inQ = !inQ;
+        else if (ch === "," && !inQ) { out.push(cur); cur = ""; } else cur += ch;
+      }
+      out.push(cur);
+      return out.map(v => v.replace(/^"|"$/g, "").trim());
+    };
+    const header = parseLine(lines[0]);
+    const idx = (n) => header.findIndex(h => h.toLowerCase() === n.toLowerCase());
+    const iType = idx("Activity Type"), iDate = idx("Date");
+    const iDist = idx("Distance"), iTime = idx("Time"), iAvgHR = idx("Avg HR"), iAscent = idx("Total Ascent");
+
+    const rows = [];
+    for (let i = 1; i < lines.length; i++) {
+      const c = parseLine(lines[i]);
+      if (!c[iDate]) continue;
+      const at = (c[iType] || "").toLowerCase();
+      let type = "Running";
+      if (at.includes("trail")) type = "Trail Running";
+      else if (at.includes("hiit") || at.includes("interval training") || at.includes("crossfit")) type = "HIIT";
+      else if (at.includes("strength") || at.includes("cardio") || at.includes("yoga") || !at.includes("run")) type = "Strength";
+
+      const distance = parseFloat(c[iDist]) || 0;
+      const duration = parseTimeToSeconds(c[iTime]);
+      const hr = parseInt(c[iAvgHR]) || 0;
+      const ascent = parseInt(String(c[iAscent] || "0").replace(/,/g, "")) || 0;
+      const isAerobicLike = type === "Strength" || type === "HIIT";
+      const pace = (!isAerobicLike && distance > 0) ? Math.round(duration / distance) : 0;
+      const date = c[iDate].split(" ")[0];
+      const subTypes = type === "Running" ? [autoClassifyRun(hr, false)] : [];
+
+      rows.push({ id: Date.now() + i, date, type, subTypes, distance, duration, pace, hr, ascent, _selected: true });
+    }
+    const dups = rows.filter(r => logs.some(l => isDuplicate(l, r)));
+    if (dups.length > 0) {
+      setDuplicateWarning({ existing: null, incoming: rows, dupIds: dups.map(d => d.id), source: "csv" });
+    } else {
+      setParsedRows(rows);
+      setUploadMsg(`Parsed ${rows.length} activities. Review and import.`);
+    }
+  }
+
+  function confirmDuplicates(skipDups) {
+    if (duplicateWarning.source === "fit") {
+      if (!skipDups) setLogs([...duplicateWarning.incoming, ...logs]);
+      setUploadMsg(skipDups ? "Skipped duplicate." : "✓ Added.");
+      setDuplicateWarning(null);
+      setTimeout(() => setUploadMsg(""), 4000);
+    } else {
+      let rows = duplicateWarning.incoming;
+      if (skipDups) rows = rows.filter(r => !duplicateWarning.dupIds.includes(r.id));
+      setParsedRows(rows);
+      setUploadMsg(`Ready to import ${rows.length} activities.`);
+      setDuplicateWarning(null);
+    }
+  }
+
+  function importParsed() {
+    const toAdd = parsedRows.filter(r => r._selected).map(r => { const { _selected, ...rest } = r; return rest; });
+    setLogs([...toAdd, ...logs]);
+    setParsedRows(null);
+    setUploadMsg(`✓ Imported ${toAdd.length} activities.`);
+    setTimeout(() => setUploadMsg(""), 4000);
+  }
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
+        <button onClick={() => fileRef.current.click()} style={s.btnGhost}>↑ Upload (.csv / .fit)</button>
+        <input ref={fileRef} type="file" accept=".csv,.fit" style={{ display: "none" }} onChange={handleFileSelect} />
+        <button onClick={() => { setShowAdd(!showAdd); setEditingId(null); }} style={s.btn}>+ Add Manually</button>
+        <button onClick={toggleSelectMode} style={selectMode ? s.btn : s.btnGhost}>
+          {selectMode ? `✓ Selecting (${selectedIds.size})` : "☐ Select"}
+        </button>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center" }}>
+          <span style={{ ...s.muted }}>Sort:</span>
+          <select value={sortBy} onChange={e => setSortBy(e.target.value)}
+            style={{ ...s.input, width: "auto", padding: "5px 8px", fontSize: 12 }}>
+            {SORT_OPTIONS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {selectMode && (
+        <div style={{ ...s.cardDark, marginBottom: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <span style={s.muted}>{selectedIds.size} selected</span>
+          <button onClick={selectAll} style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px" }}>Select All</button>
+          <button onClick={clearSelection} style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px" }}>Clear</button>
+          <button onClick={bulkDeleteSelected} disabled={selectedIds.size === 0}
+            style={{ ...s.btn, fontSize: 12, padding: "5px 12px", background: "#c0392b", borderColor: "#c0392b", opacity: selectedIds.size === 0 ? 0.5 : 1 }}>
+            Delete Selected
+          </button>
+        </div>
+      )}
+
+      {uploadMsg && (
+        <div style={{ fontSize: 12, color: "#555", background: "#f0f0f0", borderRadius: 6, padding: "8px 12px", marginBottom: 14, lineHeight: 1.6 }}>{uploadMsg}</div>
+      )}
+
+      {duplicateWarning && (
+        <div style={{ ...s.cardDark, marginBottom: 14, border: "1px solid #d4a017", background: "#fffbea" }}>
+          <div style={{ ...s.section, color: "#7a5a00" }}>⚠ Possible Duplicates</div>
+          <div style={{ fontSize: 13, color: "#555", marginBottom: 10 }}>
+            {duplicateWarning.source === "fit"
+              ? `An activity on ${formatDateShort(duplicateWarning.incoming[0].date)} (${duplicateWarning.incoming[0].distance}km, ${formatDuration(duplicateWarning.incoming[0].duration)}) matches an existing entry.`
+              : `${duplicateWarning.dupIds.length} of ${duplicateWarning.incoming.length} activities match existing entries.`}
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button onClick={() => confirmDuplicates(true)} style={s.btn}>Skip Duplicates</button>
+            <button onClick={() => confirmDuplicates(false)} style={s.btnGhost}>Add Anyway</button>
+            <button onClick={() => setDuplicateWarning(null)} style={s.btnGhost}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {parsedRows && (
+        <div style={{ ...s.cardDark, marginBottom: 14 }}>
+          <div style={{ ...s.section, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span>Review ({parsedRows.filter(r => r._selected).length} of {parsedRows.length} selected)</span>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button onClick={() => setParsedRows(null)} style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px" }}>Cancel</button>
+              <button onClick={importParsed} style={{ ...s.btn, fontSize: 12, padding: "5px 12px" }}>Import</button>
+            </div>
+          </div>
+          <div style={{ maxHeight: 320, overflowY: "auto" }}>
+            {parsedRows.map(r => (
+              <div key={r.id} style={{ background: "#fff", borderRadius: 6, padding: "8px 10px", marginBottom: 6, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <input type="checkbox" checked={r._selected} onChange={() => setParsedRows(parsedRows.map(x => x.id === r.id ? { ...x, _selected: !x._selected } : x))} style={{ width: 16, height: 16 }} />
+                <div style={{ minWidth: 60, fontSize: 11, color: "#888" }}>{formatDateShort(r.date)}</div>
+                <div style={s.tag(r.type)}>{r.type}</div>
+                <div style={{ fontSize: 12, flex: 1 }}>
+                  {r.distance > 0 && <span>{r.distance}km · </span>}
+                  {formatDuration(r.duration)} {r.hr > 0 && `· HR ${r.hr}`} {r.ascent > 0 && `· +${r.ascent}m`}
+                </div>
+                {r.type === "Running" && (
+                  <select value={r.subTypes[0] || ""} onChange={(e) => setParsedRows(parsedRows.map(x => x.id === r.id ? { ...x, subTypes: [e.target.value] } : x))}
+                    style={{ ...s.input, width: "auto", padding: "3px 6px", fontSize: 11 }}>
+                    {RUN_SUBTYPES.map(t => <option key={t}>{t}</option>)}
+                  </select>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {showAdd && (
+        <ActivityForm
+          mode="add"
+          initial={null}
+          onSave={handleAddSubmit}
+          onCancel={() => setShowAdd(false)}
+        />
+      )}
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {displayedLogs.length === 0 && (
+          <div style={{ ...s.cardDark, textAlign: "center", color: "#888", padding: "30px 16px", fontSize: 13 }}>
+            No activities match your filters
+          </div>
+        )}
+        {displayedLogs.map(l => {
+          const isEditing = editingId === l.id;
+          const isSelected = selectedIds.has(l.id);
+          if (isEditing) {
+            return (
+              <ActivityForm
+                key={l.id}
+                mode="edit"
+                initial={l}
+                onSave={(data) => handleEditSubmit(l.id, data)}
+                onCancel={() => setEditingId(null)}
+              />
+            );
+          }
+          // In selectMode: clicking anywhere on the card toggles selection.
+          // Outside selectMode: clicking anywhere on the card (except the delete button) opens edit.
+          const onCardClick = () => {
+            if (selectMode) {
+              toggleSelected(l.id);
+            } else {
+              setEditingId(l.id);
+              setShowAdd(false);
+            }
+          };
+          return (
+            <div key={l.id}
+              onClick={onCardClick}
+              style={{
+                ...s.card,
+                display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+                cursor: "pointer",
+                ...(isSelected ? { background: "#eef5ff", borderColor: "#7aa8e0" } : {}),
+              }}>
+              {selectMode && (
+                <input type="checkbox" checked={isSelected} readOnly
+                  style={{ width: 16, height: 16, pointerEvents: "none" }} />
+              )}
+              <div style={{ minWidth: 50, fontSize: 12, color: "#888", fontVariantNumeric: "tabular-nums" }}>{formatDateShort(l.date)}</div>
+              <div style={s.tag(l.type)}>{l.type}</div>
+              {l.subTypes.map(st => {
+                const isFlag = RUN_FLAGS.includes(st);
+                return (
+                  <div key={st} style={isFlag
+                    ? { ...s.subTag, background: "#fff5e6", color: "#b35900", borderColor: "#e8c897" }
+                    : s.subTag}>
+                    {isFlag ? "🏆 " : ""}{st}
+                  </div>
+                );
+              })}
+              <div style={{ flex: 1, minWidth: 120 }}>
+                <span style={{ fontWeight: 500, fontSize: 14 }}>
+                  {l.distance > 0 ? l.distance + " km" : formatDuration(l.duration)}
+                </span>
+                {l.distance > 0 && (
+                  <span style={{ ...s.muted, marginLeft: 8 }}>{formatDuration(l.duration)} {l.pace ? "· " + formatPaceFromSec(l.pace) + "/km" : ""}</span>
+                )}
+                {l.hr > 0 && <span style={{ ...s.muted, marginLeft: 8 }}>♥ {l.hr}</span>}
+                {l.ascent > 0 && <span style={{ ...s.muted, marginLeft: 8 }}>+{l.ascent}m</span>}
+              </div>
+              {!selectMode && (
+                <button onClick={(e) => { e.stopPropagation(); deleteLog(l.id); }}
+                  style={{ border: "none", background: "none", color: "#bbb", cursor: "pointer", fontSize: 14, padding: "0 4px" }}
+                  title="Delete">✕</button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
