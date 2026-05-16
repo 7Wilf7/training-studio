@@ -33,3 +33,6 @@ dist-ssr
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Local launch script
+启动.bat

@@ -1,14 +1,15 @@
 import { s } from "../styles";
 import { FILTER_GROUPS } from "../constants";
+import { useT } from "../i18n/LanguageContext";
 
 /**
  * Filter state shape (held in App):
  *   {
- *     all: boolean,                          // when true, everything matches; other fields ignored
+ *     all: boolean,
  *     groups: {
- *       run:      { enabled, subs: string[] },  // subs: [] = ALL children selected; non-empty = explicit subset
+ *       run:      { enabled, subs: string[] },
  *       strength: { enabled, subs: string[] },
- *       hiit:     { enabled, subs: string[] },  // HIIT has no children, subs stays []
+ *       hiit:     { enabled, subs: string[] },
  *     }
  *   }
  */
@@ -36,19 +37,18 @@ export function logMatchesFilter(log, filter) {
   return false;
 }
 
-function pillLabel(group, state) {
-  if (!state.enabled) return group.label;
+function pillLabel(groupKey, group, state, t) {
+  const groupLabel = t(`filter.group.${groupKey}`);
+  if (!state.enabled) return groupLabel;
   if (state.subs.length === 0 || state.subs.length === group.children.length) {
-    return group.label;
+    return groupLabel;
   }
-  const labels = state.subs.map(id => {
-    const child = group.children.find(c => c.id === id);
-    return child ? child.label : id;
-  });
+  const labels = state.subs.map(id => t(`filter.child.${id}`));
   return labels.join("+");
 }
 
 export function GlobalFilter({ filter, setFilter, openDropdown, setOpenDropdown }) {
+  const t = useT();
 
   function setAll() {
     setFilter({
@@ -67,7 +67,6 @@ export function GlobalFilter({ filter, setFilter, openDropdown, setOpenDropdown 
       ...filter,
       groups: { ...filter.groups, [key]: { enabled: false, subs: [] } },
     };
-    // If after disabling, nothing is enabled, fall back to "all"
     const stillEnabled = Object.values(next.groups).some(g => g.enabled);
     if (!stillEnabled) next.all = true;
     setFilter(next);
@@ -78,7 +77,6 @@ export function GlobalFilter({ filter, setFilter, openDropdown, setOpenDropdown 
     const cur = filter.groups[key];
     const group = FILTER_GROUPS[key];
 
-    // For groups without children (HIIT): just toggle on/off
     if (group.children.length === 0) {
       if (cur.enabled) {
         disableGroup(key);
@@ -93,8 +91,6 @@ export function GlobalFilter({ filter, setFilter, openDropdown, setOpenDropdown 
       return;
     }
 
-    // For groups with children: clicking the pill always opens (or closes) the dropdown,
-    // and turns the group on if it wasn't already.
     if (!cur.enabled) {
       setFilter({
         ...filter,
@@ -111,7 +107,6 @@ export function GlobalFilter({ filter, setFilter, openDropdown, setOpenDropdown 
     const cur = filter.groups[key];
     const group = FILTER_GROUPS[key];
 
-    // Translate the stored "[] = all" shorthand into an explicit list so toggle behaves intuitively
     let effective = cur.subs.length === 0
       ? group.children.map(c => c.id)
       : [...cur.subs];
@@ -122,12 +117,10 @@ export function GlobalFilter({ filter, setFilter, openDropdown, setOpenDropdown 
       effective.push(subId);
     }
 
-    // Don't allow the impossible 0-selection state; treat that as "back to all"
     if (effective.length === 0) {
       effective = group.children.map(c => c.id);
     }
 
-    // Normalize: if all children selected, store [] for cleaner display
     if (effective.length === group.children.length) effective = [];
 
     setFilter({
@@ -141,7 +134,7 @@ export function GlobalFilter({ filter, setFilter, openDropdown, setOpenDropdown 
     const group = FILTER_GROUPS[key];
     const state = filter.groups[key];
     const active = state.enabled;
-    const label = pillLabel(group, state);
+    const label = pillLabel(key, group, state, t);
 
     return (
       <div key={key} style={{ position: "relative" }}>
@@ -169,14 +162,14 @@ export function GlobalFilter({ filter, setFilter, openDropdown, setOpenDropdown 
                   <input type="checkbox" checked={checked}
                     onChange={() => toggleSub(key, child.id)}
                     style={{ width: 14, height: 14 }} />
-                  {child.label}
+                  {t(`filter.child.${child.id}`)}
                 </label>
               );
             })}
             <div style={{ borderTop: "1px solid #eee", marginTop: 4, paddingTop: 4 }}>
               <button onClick={() => disableGroup(key)}
                 style={{ display: "block", width: "100%", border: "none", background: "transparent", padding: "5px 10px", textAlign: "left", fontSize: 12, color: "#c0392b", cursor: "pointer", borderRadius: 4 }}>
-                ✕ Disable this filter
+                {t("filter.disable")}
               </button>
             </div>
           </div>
@@ -187,8 +180,8 @@ export function GlobalFilter({ filter, setFilter, openDropdown, setOpenDropdown 
 
   return (
     <div data-global-filter style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap", alignItems: "center", position: "relative" }}>
-      <span style={{ ...s.muted, marginRight: 4 }}>Type:</span>
-      <button onClick={setAll} style={s.chip(filter.all)}>All</button>
+      <span style={{ ...s.muted, marginRight: 4 }}>{t("filter.type_label")}</span>
+      <button onClick={setAll} style={s.chip(filter.all)}>{t("filter.all")}</button>
       <span style={{ color: "#ccc", fontSize: 12 }}>|</span>
       {renderPill("run")}
       {renderPill("strength")}

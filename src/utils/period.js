@@ -28,24 +28,25 @@ export function getPeriodRange(period) {
   return [new Date(2000, 0, 1), new Date(2100, 0, 1)];
 }
 
-export function getPeriodLabel(period) {
+// Takes the i18n `t` function so labels respect the current language.
+// Passing the function (not a lang code) keeps this module ignorant of the dict layout.
+export function getPeriodLabel(period, t) {
   const now = new Date();
-  if (period.type === "all") return "All Time";
+  if (period.type === "all") return t("period.all_time");
   if (period.type === "week") {
-    if (period.offset === 0) return "This Week";
-    if (period.offset === -1) return "Last Week";
-    return `${Math.abs(period.offset)} weeks ago`;
+    if (period.offset === 0) return t("period.this_week");
+    if (period.offset === -1) return t("period.last_week");
+    return t("period.weeks_ago", { n: Math.abs(period.offset) });
   }
   if (period.type === "month") {
     const yy = period.year ?? now.getFullYear();
     const mm = period.month ?? now.getMonth();
-    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    if (yy === now.getFullYear() && mm === now.getMonth()) return "This Month";
-    return `${monthNames[mm]} ${yy}`;
+    if (yy === now.getFullYear() && mm === now.getMonth()) return t("period.this_month");
+    return t("period.month_year", { month: t(`period.month_short.${mm}`), year: yy });
   }
   if (period.type === "year") {
     const yy = period.year ?? now.getFullYear();
-    if (yy === now.getFullYear()) return "This Year";
+    if (yy === now.getFullYear()) return t("period.this_year");
     return String(yy);
   }
   return "";

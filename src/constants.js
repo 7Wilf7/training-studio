@@ -142,6 +142,7 @@ export const DEFAULT_SYSTEM_PROMPT = FIXED_SYSTEM_PROMPT;
 
 // ===== Personal Profile =====
 export const DEFAULT_PROFILE = {
+  displayName: "",        // shown in page title; required at first-run setup
   birthDate: "",          // YYYY-MM-DD; age is computed from this
   gender: "",
   city: "",
@@ -156,7 +157,10 @@ export const DEFAULT_PROFILE = {
   notes: "",              // free-form extra context
 };
 
-export const PROFILE_REQUIRED_FIELDS = ["birthDate", "gender", "city", "experience"];
+export const PROFILE_REQUIRED_FIELDS = ["displayName", "birthDate", "gender", "city", "experience"];
+
+// ===== UI language =====
+export const DEFAULT_LANG = "en";
 
 export const GENDERS = [
   { id: "male", label: "Male" },

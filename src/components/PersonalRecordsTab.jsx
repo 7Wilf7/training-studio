@@ -1,13 +1,13 @@
 import { useMemo, useState } from "react";
 import { s } from "../styles";
 import { RACE_CATEGORIES, RACE_CATEGORY_COLOR } from "../constants";
+import { useT } from "../i18n/LanguageContext";
 
-// Sum H:M:S into seconds for comparison; treat all-empty as Infinity (no result)
 function resultSeconds(r) {
   const h = parseInt(r.resultH) || 0;
   const m = parseInt(r.resultM) || 0;
-  const s = parseInt(r.resultS) || 0;
-  const total = h * 3600 + m * 60 + s;
+  const sec = parseInt(r.resultS) || 0;
+  const total = h * 3600 + m * 60 + sec;
   return total > 0 ? total : Infinity;
 }
 
@@ -20,9 +20,9 @@ function formatHMS(sec) {
 }
 
 export function PersonalRecordsTab({ races, itraPI, setItraPI }) {
+  const t = useT();
   const [itraDraft, setItraDraft] = useState(itraPI ?? "");
 
-  // Group history races by category, find best result per category
   const records = useMemo(() => {
     const history = races.filter(r => !r.isTarget);
     const byCategory = {};
@@ -31,7 +31,6 @@ export function PersonalRecordsTab({ races, itraPI, setItraPI }) {
       if (!byCategory[cat]) byCategory[cat] = [];
       byCategory[cat].push(r);
     }
-    // For each category, sort by result asc and keep the best
     const out = [];
     const allCats = [...RACE_CATEGORIES, "Uncategorized"];
     for (const cat of allCats) {
@@ -56,12 +55,11 @@ export function PersonalRecordsTab({ races, itraPI, setItraPI }) {
 
   return (
     <div>
-      <div style={s.section}>Personal Records</div>
+      <div style={s.section}>{t("pr.title")}</div>
 
-      {/* PR cards by category */}
       {records.length === 0 ? (
         <div style={{ ...s.cardDark, textAlign: "center", color: "#888", padding: "30px 16px", fontSize: 13 }}>
-          No race history yet. Add finished races on the <strong>Races</strong> tab to see your PBs here.
+          {t("pr.empty")}
         </div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10, marginBottom: 22 }}>
@@ -70,7 +68,7 @@ export function PersonalRecordsTab({ races, itraPI, setItraPI }) {
               ...s.card,
               borderLeft: `4px solid ${RACE_CATEGORY_COLOR[rec.category] || "#ccc"}`,
             }}>
-              <div style={{ ...s.label, marginBottom: 2 }}>{rec.category}</div>
+              <div style={{ ...s.label, marginBottom: 2 }}>{t(`enum.race_cat.${rec.category}`)}</div>
               {rec.best ? (
                 <>
                   <div style={{ ...s.metricVal, fontSize: 24 }}>
@@ -82,12 +80,12 @@ export function PersonalRecordsTab({ races, itraPI, setItraPI }) {
                   </div>
                 </>
               ) : (
-                <div style={{ ...s.muted, marginTop: 2 }}>{rec.all.length} race(s), no times recorded</div>
+                <div style={{ ...s.muted, marginTop: 2 }}>{t("pr.no_times", { n: rec.all.length })}</div>
               )}
               {rec.all.length > 1 && (
                 <details style={{ marginTop: 8 }}>
                   <summary style={{ ...s.muted, cursor: "pointer", fontSize: 11 }}>
-                    {rec.all.length - 1} other finish{rec.all.length > 2 ? "es" : ""}
+                    {t("pr.other_finishes", { n: rec.all.length - 1, plural: rec.all.length > 2 ? "es" : "" })}
                   </summary>
                   <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6 }}>
                     {rec.all.slice(1).map(r => (
@@ -103,25 +101,22 @@ export function PersonalRecordsTab({ races, itraPI, setItraPI }) {
         </div>
       )}
 
-      {/* ITRA Performance Index */}
       <div style={{ ...s.cardDark, marginBottom: 14 }}>
-        <div style={s.section}>ITRA Performance Index</div>
-        <div style={{ ...s.muted, marginBottom: 8, lineHeight: 1.6 }}>
-          Your global ITRA Performance Index (跑步指数). Enter manually for now. Future: pull from itra.run automatically.
-        </div>
+        <div style={s.section}>{t("pr.itra_title")}</div>
+        <div style={{ ...s.muted, marginBottom: 8, lineHeight: 1.6 }}>{t("pr.itra_desc")}</div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <input
             type="number"
-            placeholder="e.g. 580"
+            placeholder={t("pr.itra_placeholder")}
             value={itraDraft}
             onChange={e => setItraDraft(e.target.value)}
             style={{ ...s.input, maxWidth: 120 }}
           />
           <button onClick={saveItra}
             disabled={itraDraft === (itraPI ?? "")}
-            style={{ ...s.btn, opacity: itraDraft === (itraPI ?? "") ? 0.5 : 1 }}>Save</button>
+            style={{ ...s.btn, opacity: itraDraft === (itraPI ?? "") ? 0.5 : 1 }}>{t("common.save")}</button>
           {itraPI && (
-            <span style={{ ...s.muted, fontFamily: "var(--font-mono)" }}>Saved: {itraPI}</span>
+            <span style={{ ...s.muted, fontFamily: "var(--font-mono)" }}>{t("pr.itra_saved", { v: itraPI })}</span>
           )}
         </div>
       </div>

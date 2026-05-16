@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { s } from "../styles";
 import { ACTIVITY_TYPES, RUN_PACE_TYPES, RUN_FLAGS, STRENGTH_SUBS } from "../constants";
+import { useT } from "../i18n/LanguageContext";
+import { parseTimeToSeconds, formatPaceFromSec } from "../utils/format";
 
 // Decompose seconds into {h,m,s} strings for the duration inputs
 function splitDuration(totalSec) {
@@ -27,8 +29,11 @@ function buildEmpty() {
     subTypes: ["Easy Run"],
     distance: "",
     durationH: "", durationM: "", durationS: "",
-    hr: "",
+    hr: "", maxHR: "",
     ascent: "",
+    cadence: "",
+    aerobicTE: "",
+    gapText: "",
   };
 }
 
@@ -40,31 +45,28 @@ function fromLog(log) {
     subTypes: Array.isArray(log.subTypes) ? log.subTypes : [],
     distance: log.distance ? String(log.distance) : "",
     durationH: d.h, durationM: d.m, durationS: d.s,
-    hr: log.hr ? String(log.hr) : "",
-    ascent: log.ascent ? String(log.ascent) : "",
+    hr:        log.hr        ? String(log.hr)        : "",
+    maxHR:     log.maxHR     ? String(log.maxHR)     : "",
+    ascent:    log.ascent    ? String(log.ascent)    : "",
+    cadence:   log.cadence   ? String(log.cadence)   : "",
+    aerobicTE: log.aerobicTE ? String(log.aerobicTE) : "",
+    gapText:   log.gap       ? formatPaceFromSec(log.gap) : "",
   };
 }
 
-// Small labeled input for grid layouts — keeps unit visible after the user types
-function LabeledInput({ label, unit, value, onChange, placeholder, type = "number" }) {
+function LabeledInput({ label, unit, value, onChange, placeholder, type = "number", step }) {
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
       <span style={{ fontSize: 11, color: "#666", fontWeight: 500 }}>
         {label}{unit && <span style={{ color: "#aaa", fontWeight: 400 }}> ({unit})</span>}
       </span>
-      <input type={type} placeholder={placeholder} value={value} onChange={onChange} style={s.input} />
+      <input type={type} step={step} placeholder={placeholder} value={value} onChange={onChange} style={s.input} />
     </label>
   );
 }
 
-/**
- * Reusable form for adding/editing an activity.
- *   mode: "add" | "edit"
- *   initial: log object (for edit) or null (for add)
- *   onSave(logData): called with normalized log fields (no id) on save
- *   onCancel(): called on cancel
- */
 export function ActivityForm({ mode, initial, onSave, onCancel }) {
+  const t = useT();
   const [form, setForm] = useState(() => initial ? fromLog(initial) : buildEmpty());
 
   useEffect(() => {
@@ -108,17 +110,17 @@ export function ActivityForm({ mode, initial, onSave, onCancel }) {
   }
 
   function handleSave() {
-    if (!form.date) { alert("Please pick a date."); return; }
+    if (!form.date) { alert(t("form.alert_date")); return; }
     const dur = (parseInt(form.durationH) || 0) * 3600
       + (parseInt(form.durationM) || 0) * 60
       + (parseInt(form.durationS) || 0);
-    if (!dur) { alert("Please enter duration."); return; }
+    if (!dur) { alert(t("form.alert_duration")); return; }
     if (form.type === "Strength" && form.subTypes.length === 0) {
-      alert("Select at least one body part for Strength.");
+      alert(t("form.alert_body"));
       return;
     }
     if (form.type === "Running" && !pickedPace) {
-      alert("Pick a run type (Easy / Aerobic / Tempo / Interval).");
+      alert(t("form.alert_run"));
       return;
     }
     const dist = parseFloat(form.distance) || 0;
@@ -132,27 +134,31 @@ export function ActivityForm({ mode, initial, onSave, onCancel }) {
       distance: dist,
       duration: dur,
       pace,
-      hr: parseInt(form.hr) || 0,
-      ascent: parseInt(form.ascent) || 0,
+      hr:        parseInt(form.hr)         || 0,
+      maxHR:     parseInt(form.maxHR)      || 0,
+      ascent:    parseInt(form.ascent)     || 0,
+      cadence:   parseInt(form.cadence)    || 0,
+      aerobicTE: parseFloat(form.aerobicTE)|| 0,
+      gap:       parseTimeToSeconds(form.gapText) || 0,
     });
   }
 
   return (
     <div style={{ ...s.cardDark, marginBottom: 14 }}>
-      <div style={s.section}>{mode === "edit" ? "Edit Activity" : "Add Activity"}</div>
+      <div style={s.section}>{mode === "edit" ? t("form.edit_title") : t("form.add_title")}</div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
         <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <span style={{ fontSize: 11, color: "#666", fontWeight: 500 }}>Date</span>
+          <span style={{ fontSize: 11, color: "#666", fontWeight: 500 }}>{t("form.date")}</span>
           <input type="date" value={form.date}
             onChange={e => setForm({ ...form, date: e.target.value })}
             onClick={e => e.currentTarget.showPicker?.()}
             style={{ ...s.input, cursor: "pointer" }} />
         </label>
         <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <span style={{ fontSize: 11, color: "#666", fontWeight: 500 }}>Type</span>
+          <span style={{ fontSize: 11, color: "#666", fontWeight: 500 }}>{t("form.type")}</span>
           <select value={form.type} onChange={e => changeType(e.target.value)} style={s.input}>
-            {ACTIVITY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+            {ACTIVITY_TYPES.map(at => <option key={at} value={at}>{t(`enum.activity.${at}`)}</option>)}
           </select>
         </label>
       </div>
@@ -161,23 +167,23 @@ export function ActivityForm({ mode, initial, onSave, onCancel }) {
         <>
           <div style={{ marginBottom: 10 }}>
             <div style={{ ...s.label, marginBottom: 6 }}>
-              Run Type {form.type === "Running" ? "(required)" : "(optional)"}
+              {t("form.run_type")} {form.type === "Running" ? t("form.run_type_required") : t("form.run_type_optional")}
             </div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {RUN_PACE_TYPES.map(sub => (
                 <button key={sub} type="button"
                   onClick={() => setPace(pickedPace === sub ? "" : sub)}
-                  style={s.chip(pickedPace === sub)}>{sub}</button>
+                  style={s.chip(pickedPace === sub)}>{t(`enum.subtype.${sub}`)}</button>
               ))}
             </div>
           </div>
           <div style={{ marginBottom: 12 }}>
-            <div style={{ ...s.label, marginBottom: 6 }}>Flags</div>
+            <div style={{ ...s.label, marginBottom: 6 }}>{t("form.flags")}</div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {RUN_FLAGS.map(flag => (
                 <button key={flag} type="button"
                   onClick={() => toggleFlag(flag)}
-                  style={s.chip(pickedFlags.includes(flag))}>🏆 {flag}</button>
+                  style={s.chip(pickedFlags.includes(flag))}>🏆 {t(`enum.subtype.${flag}`)}</button>
               ))}
             </div>
           </div>
@@ -186,43 +192,59 @@ export function ActivityForm({ mode, initial, onSave, onCancel }) {
 
       {isStrength && (
         <div style={{ marginBottom: 12 }}>
-          <div style={{ ...s.label, marginBottom: 6 }}>Body Parts (multi-select)</div>
+          <div style={{ ...s.label, marginBottom: 6 }}>{t("form.body_parts")}</div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {STRENGTH_SUBS.map(sub => (
               <button key={sub} type="button"
                 onClick={() => toggleStrengthSub(sub)}
-                style={s.chip(form.subTypes.includes(sub))}>{sub}</button>
+                style={s.chip(form.subTypes.includes(sub))}>{t(`enum.subtype.${sub}`)}</button>
             ))}
           </div>
         </div>
       )}
 
-      {/* Duration — three labeled inputs */}
+      {/* Duration */}
       <div style={{ marginBottom: 12 }}>
-        <div style={{ ...s.label, marginBottom: 6 }}>Duration</div>
+        <div style={{ ...s.label, marginBottom: 6 }}>{t("form.duration")}</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
-          <LabeledInput label="Hours" unit="h" placeholder="0"
+          <LabeledInput label={t("form.hours")}   unit="h" placeholder="0"
             value={form.durationH} onChange={e => setForm({ ...form, durationH: e.target.value })} />
-          <LabeledInput label="Minutes" unit="m" placeholder="0"
+          <LabeledInput label={t("form.minutes")} unit="m" placeholder="0"
             value={form.durationM} onChange={e => setForm({ ...form, durationM: e.target.value })} />
-          <LabeledInput label="Seconds" unit="s" placeholder="0"
+          <LabeledInput label={t("form.seconds")} unit="s" placeholder="0"
             value={form.durationS} onChange={e => setForm({ ...form, durationS: e.target.value })} />
         </div>
       </div>
 
-      {/* Distance / HR / Ascent — each with its own label + unit */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 14 }}>
-        <LabeledInput label="Distance" unit="km" placeholder="0"
+      {/* Core metrics: distance / heart rate */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
+        <LabeledInput label={t("form.distance")} unit="km" placeholder="0"
           value={form.distance} onChange={e => setForm({ ...form, distance: e.target.value })} />
-        <LabeledInput label="Avg HR" unit="bpm" placeholder="0"
+        <LabeledInput label={t("form.avg_hr")} unit="bpm" placeholder="0"
           value={form.hr} onChange={e => setForm({ ...form, hr: e.target.value })} />
-        <LabeledInput label="Ascent" unit="m" placeholder="0"
+        <LabeledInput label={t("form.max_hr")} unit="bpm" placeholder="0"
+          value={form.maxHR} onChange={e => setForm({ ...form, maxHR: e.target.value })} />
+      </div>
+
+      {/* Advanced metrics: ascent / cadence / TE */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
+        <LabeledInput label={t("form.ascent")} unit="m" placeholder="0"
           value={form.ascent} onChange={e => setForm({ ...form, ascent: e.target.value })} />
+        <LabeledInput label={t("form.cadence")} unit="spm" placeholder="0"
+          value={form.cadence} onChange={e => setForm({ ...form, cadence: e.target.value })} />
+        <LabeledInput label={t("form.te")} unit="1–5" placeholder="0" step="0.1"
+          value={form.aerobicTE} onChange={e => setForm({ ...form, aerobicTE: e.target.value })} />
+      </div>
+
+      {/* GAP — pace-format mm:ss text input */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 14 }}>
+        <LabeledInput label={t("form.gap")} unit="min/km" placeholder="6:30" type="text"
+          value={form.gapText} onChange={e => setForm({ ...form, gapText: e.target.value })} />
       </div>
 
       <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={handleSave} style={s.btn}>{mode === "edit" ? "Save Changes" : "Save"}</button>
-        <button onClick={onCancel} style={s.btnGhost}>Cancel</button>
+        <button onClick={handleSave} style={s.btn}>{mode === "edit" ? t("common.save_changes") : t("common.save")}</button>
+        <button onClick={onCancel} style={s.btnGhost}>{t("common.cancel")}</button>
       </div>
     </div>
   );

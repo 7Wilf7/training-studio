@@ -1,22 +1,21 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { s } from "../styles";
 import { getPeriodRange } from "../utils/period";
+import { useT } from "../i18n/LanguageContext";
 import { GlobalFilter, logMatchesFilter } from "./GlobalFilter";
 import { PeriodSelector } from "./PeriodSelector";
 import { ActivitiesTab } from "./ActivitiesTab";
 import { ChartsTab } from "./ChartsTab";
 
-/**
- * Training tab — Wilf's daily work area.
- * Contains: type filter + period + stats overview + charts + activity list.
- * All in one scrollable tab so the user sees a complete view of training state.
- */
 export function TrainingTab({
   logs, setLogs,
   filter, setFilter, filterDropdown, setFilterDropdown,
   period, setPeriod, periodDropdown, setPeriodDropdown,
   setConfirmDelete,
 }) {
+  const t = useT();
+  const [view, setView] = useState("activities"); // "activities" | "charts"
+
   const filteredAllLogs = useMemo(
     () => logs.filter(l => logMatchesFilter(l, filter)),
     [logs, filter]
@@ -55,35 +54,47 @@ export function TrainingTab({
         setPeriodDropdown={setPeriodDropdown}
       />
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 24 }}>
-        {[
-          { label: "Sessions", val: periodSessions, unit: "" },
-          { label: "Total Distance", val: periodKm.toFixed(1), unit: "km" },
-          { label: "Total Ascent", val: periodAscent.toLocaleString(), unit: "m" },
-          { label: "Avg HR", val: periodAvgHR || "—", unit: periodAvgHR ? "bpm" : "" },
-        ].map(c => (
-          <div key={c.label} style={s.cardDark}>
-            <div style={s.label}>{c.label}</div>
-            <div style={s.metricVal}>
-              {c.val}
-              {c.unit && <span style={{ fontSize: 14, color: "#888", fontWeight: 400, marginLeft: 4 }}>{c.unit}</span>}
-            </div>
+      {/* Sub-view toggle — Activities ↔ Charts */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
+        <button onClick={() => setView("activities")} style={s.chip(view === "activities")}>
+          {t("training.view.activities")}
+        </button>
+        <button onClick={() => setView("charts")} style={s.chip(view === "charts")}>
+          {t("training.view.charts")}
+        </button>
+      </div>
+
+      {view === "activities" && (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 24 }}>
+            {[
+              { label: t("training.sessions"),       val: periodSessions,                  unit: "" },
+              { label: t("training.total_distance"), val: periodKm.toFixed(1),             unit: "km" },
+              { label: t("training.total_ascent"),   val: periodAscent.toLocaleString(),   unit: "m" },
+              { label: t("training.avg_hr"),         val: periodAvgHR || t("common.no_data"), unit: periodAvgHR ? "bpm" : "" },
+            ].map(c => (
+              <div key={c.label} style={s.cardDark}>
+                <div style={s.label}>{c.label}</div>
+                <div style={s.metricVal}>
+                  {c.val}
+                  {c.unit && <span style={{ fontSize: 14, color: "#888", fontWeight: 400, marginLeft: 4 }}>{c.unit}</span>}
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
 
-      {/* Charts section */}
-      <div style={{ marginBottom: 28 }}>
+          <ActivitiesTab
+            logs={logs}
+            setLogs={setLogs}
+            periodLogs={periodLogs}
+            setConfirmDelete={setConfirmDelete}
+          />
+        </>
+      )}
+
+      {view === "charts" && (
         <ChartsTab filteredAllLogs={filteredAllLogs} />
-      </div>
-
-      {/* Activities section */}
-      <ActivitiesTab
-        logs={logs}
-        setLogs={setLogs}
-        periodLogs={periodLogs}
-        setConfirmDelete={setConfirmDelete}
-      />
+      )}
     </div>
   );
 }

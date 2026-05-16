@@ -18,6 +18,12 @@ export function migrateLog(log) {
     out.subTypes = [...new Set(out.subTypes)];
   }
 
+  // Backfill Garmin metrics (added later) — keep 0 = "not recorded" for clean display
+  if (out.maxHR == null) out.maxHR = 0;
+  if (out.cadence == null) out.cadence = 0;
+  if (out.aerobicTE == null) out.aerobicTE = 0;
+  if (out.gap == null) out.gap = 0; // seconds per km, same convention as `pace`
+
   return out;
 }
 

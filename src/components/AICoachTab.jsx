@@ -4,6 +4,7 @@ import {
   DEFAULT_DAILY_TEMPLATE,
   COACH_STYLES, OUTPUT_LENGTHS, INTERVENTION_LEVELS,
 } from "../constants";
+import { useT } from "../i18n/LanguageContext";
 import { formatDuration, formatPaceFromSec } from "../utils/format";
 import { buildSystemPrompt } from "../utils/profile";
 
@@ -12,6 +13,7 @@ export function AICoachTab({
   chatMessages, setChatMessages, now, setConfirmDelete,
   apiKey, apiEndpoint, apiModel, onEditProfile,
 }) {
+  const t = useT();
   const [showCoachConfig, setShowCoachConfig] = useState(false);
   const [showPromptPreview, setShowPromptPreview] = useState(false);
   const [chatInput, setChatInput] = useState(DEFAULT_DAILY_TEMPLATE);
@@ -25,10 +27,11 @@ export function AICoachTab({
   function setOutputLength(id) { setCoachConfig({ ...coachConfig, outputLength: id }); }
   function setIntervention(id) { setCoachConfig({ ...coachConfig, intervention: id }); }
 
-  // Dynamic data block injected into the system prompt for every message
+  // Dynamic data block injected into the system prompt. Always sent in English to
+  // keep prompt structure stable across languages; the model replies in user's language.
   function buildDataBlock() {
     const recentLogs = logs.slice(0, 10).map(l =>
-      `${l.date} ${l.type}${l.subTypes.length ? "(" + l.subTypes.join(",") + ")" : ""} ${l.distance > 0 ? l.distance + "km" : ""} ${formatDuration(l.duration)}${l.pace ? " " + formatPaceFromSec(l.pace) + "/km" : ""}${l.hr ? " HR" + l.hr : ""}${l.ascent ? " +" + l.ascent + "m" : ""}`
+      `${l.date} ${l.type}${l.subTypes.length ? "(" + l.subTypes.join(",") + ")" : ""} ${l.distance > 0 ? l.distance + "km" : ""} ${formatDuration(l.duration)}${l.pace ? " " + formatPaceFromSec(l.pace) + "/km" : ""}${l.hr ? " HR" + l.hr : ""}${l.maxHR ? "/" + l.maxHR : ""}${l.ascent ? " +" + l.ascent + "m" : ""}${l.cadence ? " cad" + l.cadence : ""}${l.aerobicTE ? " TE" + l.aerobicTE : ""}${l.gap ? " GAP" + formatPaceFromSec(l.gap) : ""}`
     ).join("\n");
     const targetRaces = races.filter(r => r.isTarget).map(r => {
       const goal = [r.resultH, r.resultM, r.resultS].some(Boolean) ? `${r.resultH || "0"}h${r.resultM || "0"}m${r.resultS || "0"}s` : "—";
@@ -56,7 +59,7 @@ ${recentLogs}`;
   async function sendChat() {
     if (!chatInput.trim() || chatLoading) return;
     if (!apiKey) {
-      setChatMessages([...chatMessages, { role: "assistant", content: "⚠ No Anthropic API key configured. Click the 🔑 API button in the top-right and set one." }]);
+      setChatMessages([...chatMessages, { role: "assistant", content: t("coach.no_key") }]);
       return;
     }
     const userMsg = chatInput.trim();
@@ -88,16 +91,16 @@ ${recentLogs}`;
       if (!resp.ok || data.error) {
         const msg = data.error?.message || `HTTP ${resp.status}`;
         console.error("[AI Coach] API error:", data);
-        setChatMessages([...newMessages, { role: "assistant", content: `API error: ${msg}` }]);
+        setChatMessages([...newMessages, { role: "assistant", content: t("coach.api_error", { msg }) }]);
       } else {
-        const reply = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || "No response.";
+        const reply = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || t("coach.no_response");
         setChatMessages([...newMessages, { role: "assistant", content: reply }]);
       }
     } catch (err) {
       console.error("[AI Coach] Network error fetching", apiEndpoint, err);
       setChatMessages([
         ...newMessages,
-        { role: "assistant", content: `Network error: ${err.message}\nURL used: ${apiEndpoint}\n\nOpen DevTools (F12) → Network tab → try Send again to see the failing request.` },
+        { role: "assistant", content: t("coach.network_error", { msg: err.message, url: apiEndpoint }) },
       ]);
     }
     setChatLoading(false);
@@ -105,81 +108,72 @@ ${recentLogs}`;
 
   return (
     <div>
-      {/* Top toolbar — left→right: Edit Profile, Coach Config, Preview Prompt, Clear Chat */}
       <div style={{ marginBottom: 14, display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button onClick={onEditProfile} style={s.btnGhost}>⚙ Edit Profile</button>
+        <button onClick={onEditProfile} style={s.btnGhost}>{t("coach.edit_profile")}</button>
         <button onClick={() => setShowCoachConfig(!showCoachConfig)} style={s.btnGhost}>
-          {showCoachConfig ? "Hide" : "Coach"} Config
+          {showCoachConfig ? t("coach.hide_config") : t("coach.show_config")}
         </button>
         <button onClick={() => setShowPromptPreview(!showPromptPreview)} style={s.btnGhost}>
-          {showPromptPreview ? "Hide" : "Preview"} Prompt
+          {showPromptPreview ? t("coach.hide_prompt") : t("coach.show_prompt")}
         </button>
         {chatMessages.length > 0 && (
-          <button onClick={clearChat} style={s.btnGhost}>Clear Chat</button>
+          <button onClick={clearChat} style={s.btnGhost}>{t("coach.clear_chat")}</button>
         )}
       </div>
 
-      {/* Coach Config */}
       {showCoachConfig && (
         <div style={{ ...s.cardDark, marginBottom: 14 }}>
-          <div style={s.section}>Coach Behavior</div>
-          <div style={{ ...s.muted, marginBottom: 12, lineHeight: 1.5 }}>
-            Each axis has 3 levels — pick what fits today, change anytime.
-          </div>
+          <div style={s.section}>{t("coach.behavior")}</div>
+          <div style={{ ...s.muted, marginBottom: 12, lineHeight: 1.5 }}>{t("coach.behavior_hint")}</div>
 
           <div style={{ marginBottom: 12 }}>
-            <div style={{ ...s.label, marginBottom: 6 }}>Coaching Style</div>
+            <div style={{ ...s.label, marginBottom: 6 }}>{t("coach.style")}</div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {COACH_STYLES.map(o => (
                 <button key={o.id} onClick={() => setStyle(o.id)}
-                  style={s.chip(coachConfig.style === o.id)}>{o.label}</button>
+                  style={s.chip(coachConfig.style === o.id)}>{t(`enum.coach.${o.id}`)}</button>
               ))}
             </div>
           </div>
 
           <div style={{ marginBottom: 12 }}>
-            <div style={{ ...s.label, marginBottom: 6 }}>Output Length</div>
+            <div style={{ ...s.label, marginBottom: 6 }}>{t("coach.length")}</div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {OUTPUT_LENGTHS.map(o => (
                 <button key={o.id} onClick={() => setOutputLength(o.id)}
-                  style={s.chip(coachConfig.outputLength === o.id)}>{o.label}</button>
+                  style={s.chip(coachConfig.outputLength === o.id)}>{t(`enum.length.${o.id}`)}</button>
               ))}
             </div>
           </div>
 
           <div style={{ marginBottom: 4 }}>
-            <div style={{ ...s.label, marginBottom: 6 }}>Risk Reminder Intensity</div>
+            <div style={{ ...s.label, marginBottom: 6 }}>{t("coach.intervention")}</div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {INTERVENTION_LEVELS.map(o => (
                 <button key={o.id} onClick={() => setIntervention(o.id)}
-                  style={s.chip(coachConfig.intervention === o.id)}>{o.label}</button>
+                  style={s.chip(coachConfig.intervention === o.id)}>{t(`enum.intervention.${o.id}`)}</button>
               ))}
             </div>
           </div>
         </div>
       )}
 
-      {/* Prompt preview */}
       {showPromptPreview && (
         <div style={{ ...s.cardDark, marginBottom: 14 }}>
-          <div style={s.section}>System Prompt Preview (auto-assembled, read-only)</div>
+          <div style={s.section}>{t("coach.prompt_title")}</div>
           <pre style={{
             ...s.input, fontFamily: "var(--font-mono)", fontSize: 11,
             whiteSpace: "pre-wrap", lineHeight: 1.5, maxHeight: 360, overflowY: "auto",
             color: "#444", background: "#fafafa",
           }}>{previewPrompt}</pre>
-          <div style={{ ...s.muted, marginTop: 6 }}>
-            This is sent as the system prompt with every message. Change it via Edit Profile or Coach Config.
-          </div>
+          <div style={{ ...s.muted, marginTop: 6 }}>{t("coach.prompt_hint")}</div>
         </div>
       )}
 
-      {/* Chat history */}
       <div style={{ ...s.card, marginBottom: 12, minHeight: 200, maxHeight: 500, overflowY: "auto" }}>
         {chatMessages.length === 0 ? (
-          <div style={{ color: "#888", textAlign: "center", padding: 30, fontSize: 13 }}>
-            Daily check-in with your AI coach.<br />
-            Your profile, coach config, target races, and recent activities are sent automatically with each message.
+          <div style={{ color: "#888", textAlign: "center", padding: 30, fontSize: 13, whiteSpace: "pre-line" }}>
+            {t("coach.empty")}
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -192,20 +186,19 @@ ${recentLogs}`;
                 borderRadius: 10, padding: "10px 14px", fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-wrap",
               }}>{m.content}</div>
             ))}
-            {chatLoading && <div style={{ alignSelf: "flex-start", color: "#888", fontSize: 13 }}>Coach is thinking...</div>}
+            {chatLoading && <div style={{ alignSelf: "flex-start", color: "#888", fontSize: 13 }}>{t("coach.thinking")}</div>}
           </div>
         )}
       </div>
 
-      {/* Input — tall enough to show the full default template at once */}
       <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
-        <textarea rows={9} placeholder="Today's check-in..." value={chatInput}
+        <textarea rows={9} placeholder={t("coach.input_placeholder")} value={chatInput}
           onChange={e => setChatInput(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) sendChat(); }}
           style={{ ...s.input, resize: "vertical", fontFamily: "var(--font-sans)", flex: 1, lineHeight: 1.5 }} />
-        <button onClick={sendChat} disabled={chatLoading || !chatInput.trim()} style={{ ...s.btn, padding: "10px 20px", opacity: chatLoading || !chatInput.trim() ? 0.5 : 1 }}>Send</button>
+        <button onClick={sendChat} disabled={chatLoading || !chatInput.trim()} style={{ ...s.btn, padding: "10px 20px", opacity: chatLoading || !chatInput.trim() ? 0.5 : 1 }}>{t("coach.send")}</button>
       </div>
-      <div style={{ ...s.muted, marginTop: 6, fontSize: 11 }}>Tip: Ctrl/⌘+Enter to send · Chat history saved locally</div>
+      <div style={{ ...s.muted, marginTop: 6, fontSize: 11 }}>{t("coach.tip")}</div>
     </div>
   );
 }

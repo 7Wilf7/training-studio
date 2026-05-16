@@ -1,6 +1,7 @@
 import { useState, useRef, useMemo } from "react";
 import { s } from "../styles";
 import { RUN_SUBTYPES, RUN_FLAGS, SORT_OPTIONS } from "../constants";
+import { useT } from "../i18n/LanguageContext";
 import {
   autoClassifyRun, parseTimeToSeconds,
   formatDuration, formatPaceFromSec, formatDateShort, isDuplicate,
@@ -8,6 +9,7 @@ import {
 import { ActivityForm } from "./ActivityForm";
 
 export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
+  const t = useT();
   const [sortBy, setSortBy] = useState("date_desc");
   const [showAdd, setShowAdd] = useState(false);
   const [editingId, setEditingId] = useState(null); // log.id currently being edited inline
@@ -85,7 +87,7 @@ export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
     } else if (name.endsWith(".fit")) {
       parseFitFile(f);
     } else {
-      setUploadMsg("Unsupported. Use .csv (bulk export) or .fit (single activity).");
+      setUploadMsg(t("activities.unsupported"));
     }
     e.target.value = "";
   }
@@ -145,7 +147,7 @@ export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
           || data.activity?.sessions?.[0]
           || (Array.isArray(data.activity?.events) && data.activity);
 
-        let sport, distance, duration, hr, ascent, startTime;
+        let sport, distance, duration, hr, maxHR, cadence, ascent, startTime;
         if (session && session.total_distance !== undefined) {
           sport = (session.sport || "").toLowerCase();
           const subSport = (session.sub_sport || "").toLowerCase();
@@ -153,6 +155,8 @@ export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
           distance = +(session.total_distance || 0).toFixed(2);
           duration = Math.round(session.total_timer_time || session.total_elapsed_time || 0);
           hr = Math.round(session.avg_heart_rate || 0);
+          maxHR = Math.round(session.max_heart_rate || 0);
+          cadence = Math.round((session.avg_running_cadence || 0) * 2) || Math.round(session.avg_cadence || 0);
           ascent = Math.round(session.total_ascent || 0);
           startTime = session.start_time;
         } else {
@@ -168,6 +172,8 @@ export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
           duration = first.timestamp && last.timestamp ? Math.round((new Date(last.timestamp) - new Date(first.timestamp)) / 1000) : 0;
           const hrArr = records.filter(r => r.heart_rate).map(r => r.heart_rate);
           hr = hrArr.length ? Math.round(hrArr.reduce((a, b) => a + b, 0) / hrArr.length) : 0;
+          maxHR = hrArr.length ? Math.max(...hrArr) : 0;
+          cadence = 0;
           let asc = 0; const alts = records.filter(r => r.altitude != null).map(r => r.altitude);
           for (let i = 1; i < alts.length; i++) if (alts[i] > alts[i - 1]) asc += alts[i] - alts[i - 1];
           ascent = Math.round(asc);
@@ -183,14 +189,14 @@ export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
         const date = (startTime ? new Date(startTime) : new Date()).toISOString().slice(0, 10);
         const subTypes = type === "Running" ? [autoClassifyRun(hr, false)] : [];
 
-        const newRow = { id: Date.now(), date, type, subTypes, distance, duration, pace, hr, ascent };
+        const newRow = { id: Date.now(), date, type, subTypes, distance, duration, pace, hr, maxHR, ascent, cadence, aerobicTE: 0, gap: 0 };
 
         const dup = logs.find(l => isDuplicate(l, newRow));
         if (dup) {
           setDuplicateWarning({ existing: dup, incoming: [newRow], source: "fit" });
         } else {
           setLogs([newRow, ...logs]);
-          setUploadMsg(`✓ Imported: ${distance}km · ${formatDuration(duration)} · HR ${hr || "—"}`);
+          setUploadMsg(t("activities.import_one", { dist: distance, dur: formatDuration(duration), hr: hr || "—" }));
           setTimeout(() => setUploadMsg(""), 5000);
         }
       });
@@ -201,7 +207,7 @@ export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
 
   function parseGarminCSV(text) {
     const lines = text.split(/\r?\n/).filter(l => l.trim());
-    if (lines.length < 2) { setUploadMsg("CSV is empty."); return; }
+    if (lines.length < 2) { setUploadMsg(t("activities.csv_empty")); return; }
     const parseLine = (line) => {
       const out = []; let cur = ""; let inQ = false;
       for (const ch of line) {
@@ -214,7 +220,19 @@ export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
     const header = parseLine(lines[0]);
     const idx = (n) => header.findIndex(h => h.toLowerCase() === n.toLowerCase());
     const iType = idx("Activity Type"), iDate = idx("Date");
-    const iDist = idx("Distance"), iTime = idx("Time"), iAvgHR = idx("Avg HR"), iAscent = idx("Total Ascent");
+    const iDist = idx("Distance"), iTime = idx("Time");
+    const iAvgHR = idx("Avg HR"), iMaxHR = idx("Max HR");
+    const iAscent = idx("Total Ascent");
+    const iCadence = idx("Avg Run Cadence");
+    const iTE = idx("Aerobic TE");
+    const iGAP = idx("Avg GAP");
+
+    const num = (raw) => {
+      const s = String(raw || "").replace(/,/g, "").trim();
+      if (!s || s === "--") return 0;
+      const n = parseFloat(s);
+      return isFinite(n) ? n : 0;
+    };
 
     const rows = [];
     for (let i = 1; i < lines.length; i++) {
@@ -226,37 +244,41 @@ export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
       else if (at.includes("hiit") || at.includes("interval training") || at.includes("crossfit")) type = "HIIT";
       else if (at.includes("strength") || at.includes("cardio") || at.includes("yoga") || !at.includes("run")) type = "Strength";
 
-      const distance = parseFloat(c[iDist]) || 0;
+      const distance = num(c[iDist]);
       const duration = parseTimeToSeconds(c[iTime]);
-      const hr = parseInt(c[iAvgHR]) || 0;
-      const ascent = parseInt(String(c[iAscent] || "0").replace(/,/g, "")) || 0;
+      const hr = Math.round(num(c[iAvgHR]));
+      const maxHR = iMaxHR >= 0 ? Math.round(num(c[iMaxHR])) : 0;
+      const ascent = Math.round(num(c[iAscent]));
+      const cadence = iCadence >= 0 ? Math.round(num(c[iCadence])) : 0;
+      const aerobicTE = iTE >= 0 ? +num(c[iTE]).toFixed(1) : 0;
+      const gap = iGAP >= 0 ? parseTimeToSeconds(c[iGAP]) : 0;
       const isAerobicLike = type === "Strength" || type === "HIIT";
       const pace = (!isAerobicLike && distance > 0) ? Math.round(duration / distance) : 0;
       const date = c[iDate].split(" ")[0];
       const subTypes = type === "Running" ? [autoClassifyRun(hr, false)] : [];
 
-      rows.push({ id: Date.now() + i, date, type, subTypes, distance, duration, pace, hr, ascent, _selected: true });
+      rows.push({ id: Date.now() + i, date, type, subTypes, distance, duration, pace, hr, maxHR, ascent, cadence, aerobicTE, gap, _selected: true });
     }
     const dups = rows.filter(r => logs.some(l => isDuplicate(l, r)));
     if (dups.length > 0) {
       setDuplicateWarning({ existing: null, incoming: rows, dupIds: dups.map(d => d.id), source: "csv" });
     } else {
       setParsedRows(rows);
-      setUploadMsg(`Parsed ${rows.length} activities. Review and import.`);
+      setUploadMsg(t("activities.parsed", { n: rows.length }));
     }
   }
 
   function confirmDuplicates(skipDups) {
     if (duplicateWarning.source === "fit") {
       if (!skipDups) setLogs([...duplicateWarning.incoming, ...logs]);
-      setUploadMsg(skipDups ? "Skipped duplicate." : "✓ Added.");
+      setUploadMsg(skipDups ? t("activities.skipped_one") : t("activities.added_one"));
       setDuplicateWarning(null);
       setTimeout(() => setUploadMsg(""), 4000);
     } else {
       let rows = duplicateWarning.incoming;
       if (skipDups) rows = rows.filter(r => !duplicateWarning.dupIds.includes(r.id));
       setParsedRows(rows);
-      setUploadMsg(`Ready to import ${rows.length} activities.`);
+      setUploadMsg(t("activities.ready", { n: rows.length }));
       setDuplicateWarning(null);
     }
   }
@@ -265,36 +287,36 @@ export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
     const toAdd = parsedRows.filter(r => r._selected).map(r => { const { _selected, ...rest } = r; return rest; });
     setLogs([...toAdd, ...logs]);
     setParsedRows(null);
-    setUploadMsg(`✓ Imported ${toAdd.length} activities.`);
+    setUploadMsg(t("activities.import_done", { n: toAdd.length }));
     setTimeout(() => setUploadMsg(""), 4000);
   }
 
   return (
     <div>
       <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
-        <button onClick={() => fileRef.current.click()} style={s.btnGhost}>↑ Upload (.csv / .fit)</button>
+        <button onClick={() => fileRef.current.click()} style={s.btnGhost}>{t("activities.upload")}</button>
         <input ref={fileRef} type="file" accept=".csv,.fit" style={{ display: "none" }} onChange={handleFileSelect} />
-        <button onClick={() => { setShowAdd(!showAdd); setEditingId(null); }} style={s.btn}>+ Add Manually</button>
+        <button onClick={() => { setShowAdd(!showAdd); setEditingId(null); }} style={s.btn}>{t("activities.add_manual")}</button>
         <button onClick={toggleSelectMode} style={selectMode ? s.btn : s.btnGhost}>
-          {selectMode ? `✓ Selecting (${selectedIds.size})` : "☐ Select"}
+          {selectMode ? t("activities.select_on", { n: selectedIds.size }) : t("activities.select_off")}
         </button>
         <div style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center" }}>
-          <span style={{ ...s.muted }}>Sort:</span>
+          <span style={{ ...s.muted }}>{t("activities.sort")}</span>
           <select value={sortBy} onChange={e => setSortBy(e.target.value)}
             style={{ ...s.input, width: "auto", padding: "5px 8px", fontSize: 12 }}>
-            {SORT_OPTIONS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+            {SORT_OPTIONS.map(o => <option key={o.id} value={o.id}>{t(`activities.sort.${o.id}`)}</option>)}
           </select>
         </div>
       </div>
 
       {selectMode && (
         <div style={{ ...s.cardDark, marginBottom: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          <span style={s.muted}>{selectedIds.size} selected</span>
-          <button onClick={selectAll} style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px" }}>Select All</button>
-          <button onClick={clearSelection} style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px" }}>Clear</button>
+          <span style={s.muted}>{t("activities.selected", { n: selectedIds.size })}</span>
+          <button onClick={selectAll} style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px" }}>{t("activities.select_all")}</button>
+          <button onClick={clearSelection} style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px" }}>{t("activities.clear_sel")}</button>
           <button onClick={bulkDeleteSelected} disabled={selectedIds.size === 0}
             style={{ ...s.btn, fontSize: 12, padding: "5px 12px", background: "#c0392b", borderColor: "#c0392b", opacity: selectedIds.size === 0 ? 0.5 : 1 }}>
-            Delete Selected
+            {t("activities.delete_sel")}
           </button>
         </div>
       )}
@@ -305,16 +327,16 @@ export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
 
       {duplicateWarning && (
         <div style={{ ...s.cardDark, marginBottom: 14, border: "1px solid #d4a017", background: "#fffbea" }}>
-          <div style={{ ...s.section, color: "#7a5a00" }}>⚠ Possible Duplicates</div>
+          <div style={{ ...s.section, color: "#7a5a00" }}>{t("activities.duplicate_title")}</div>
           <div style={{ fontSize: 13, color: "#555", marginBottom: 10 }}>
             {duplicateWarning.source === "fit"
-              ? `An activity on ${formatDateShort(duplicateWarning.incoming[0].date)} (${duplicateWarning.incoming[0].distance}km, ${formatDuration(duplicateWarning.incoming[0].duration)}) matches an existing entry.`
-              : `${duplicateWarning.dupIds.length} of ${duplicateWarning.incoming.length} activities match existing entries.`}
+              ? t("activities.duplicate_fit", { date: formatDateShort(duplicateWarning.incoming[0].date), dist: duplicateWarning.incoming[0].distance, dur: formatDuration(duplicateWarning.incoming[0].duration) })
+              : t("activities.duplicate_csv", { dups: duplicateWarning.dupIds.length, total: duplicateWarning.incoming.length })}
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button onClick={() => confirmDuplicates(true)} style={s.btn}>Skip Duplicates</button>
-            <button onClick={() => confirmDuplicates(false)} style={s.btnGhost}>Add Anyway</button>
-            <button onClick={() => setDuplicateWarning(null)} style={s.btnGhost}>Cancel</button>
+            <button onClick={() => confirmDuplicates(true)} style={s.btn}>{t("activities.skip_dups")}</button>
+            <button onClick={() => confirmDuplicates(false)} style={s.btnGhost}>{t("activities.add_anyway")}</button>
+            <button onClick={() => setDuplicateWarning(null)} style={s.btnGhost}>{t("common.cancel")}</button>
           </div>
         </div>
       )}
@@ -322,10 +344,10 @@ export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
       {parsedRows && (
         <div style={{ ...s.cardDark, marginBottom: 14 }}>
           <div style={{ ...s.section, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span>Review ({parsedRows.filter(r => r._selected).length} of {parsedRows.length} selected)</span>
+            <span>{t("activities.review", { sel: parsedRows.filter(r => r._selected).length, total: parsedRows.length })}</span>
             <div style={{ display: "flex", gap: 6 }}>
-              <button onClick={() => setParsedRows(null)} style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px" }}>Cancel</button>
-              <button onClick={importParsed} style={{ ...s.btn, fontSize: 12, padding: "5px 12px" }}>Import</button>
+              <button onClick={() => setParsedRows(null)} style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px" }}>{t("common.cancel")}</button>
+              <button onClick={importParsed} style={{ ...s.btn, fontSize: 12, padding: "5px 12px" }}>{t("activities.import")}</button>
             </div>
           </div>
           <div style={{ maxHeight: 320, overflowY: "auto" }}>
@@ -333,15 +355,15 @@ export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
               <div key={r.id} style={{ background: "#fff", borderRadius: 6, padding: "8px 10px", marginBottom: 6, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                 <input type="checkbox" checked={r._selected} onChange={() => setParsedRows(parsedRows.map(x => x.id === r.id ? { ...x, _selected: !x._selected } : x))} style={{ width: 16, height: 16 }} />
                 <div style={{ minWidth: 60, fontSize: 11, color: "#888" }}>{formatDateShort(r.date)}</div>
-                <div style={s.tag(r.type)}>{r.type}</div>
+                <div style={s.tag(r.type)}>{t(`enum.activity.${r.type}`)}</div>
                 <div style={{ fontSize: 12, flex: 1 }}>
                   {r.distance > 0 && <span>{r.distance}km · </span>}
-                  {formatDuration(r.duration)} {r.hr > 0 && `· HR ${r.hr}`} {r.ascent > 0 && `· +${r.ascent}m`}
+                  {formatDuration(r.duration)} {r.hr > 0 && `· HR ${r.hr}`} {r.ascent > 0 && `· +${r.ascent}m`} {r.aerobicTE > 0 && `· TE ${r.aerobicTE}`}
                 </div>
                 {r.type === "Running" && (
                   <select value={r.subTypes[0] || ""} onChange={(e) => setParsedRows(parsedRows.map(x => x.id === r.id ? { ...x, subTypes: [e.target.value] } : x))}
                     style={{ ...s.input, width: "auto", padding: "3px 6px", fontSize: 11 }}>
-                    {RUN_SUBTYPES.map(t => <option key={t}>{t}</option>)}
+                    {RUN_SUBTYPES.map(st => <option key={st} value={st}>{t(`enum.subtype.${st}`)}</option>)}
                   </select>
                 )}
               </div>
@@ -362,7 +384,7 @@ export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {displayedLogs.length === 0 && (
           <div style={{ ...s.cardDark, textAlign: "center", color: "#888", padding: "30px 16px", fontSize: 13 }}>
-            No activities match your filters
+            {t("activities.empty")}
           </div>
         )}
         {displayedLogs.map(l => {
@@ -379,8 +401,6 @@ export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
               />
             );
           }
-          // In selectMode: clicking anywhere on the card toggles selection.
-          // Outside selectMode: clicking anywhere on the card (except the delete button) opens edit.
           const onCardClick = () => {
             if (selectMode) {
               toggleSelected(l.id);
@@ -403,31 +423,36 @@ export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
                   style={{ width: 16, height: 16, pointerEvents: "none" }} />
               )}
               <div style={{ minWidth: 50, fontSize: 12, color: "#888", fontVariantNumeric: "tabular-nums" }}>{formatDateShort(l.date)}</div>
-              <div style={s.tag(l.type)}>{l.type}</div>
+              <div style={s.tag(l.type)}>{t(`enum.activity.${l.type}`)}</div>
               {l.subTypes.map(st => {
                 const isFlag = RUN_FLAGS.includes(st);
                 return (
                   <div key={st} style={isFlag
                     ? { ...s.subTag, background: "#fff5e6", color: "#b35900", borderColor: "#e8c897" }
                     : s.subTag}>
-                    {isFlag ? "🏆 " : ""}{st}
+                    {isFlag ? "🏆 " : ""}{t(`enum.subtype.${st}`)}
                   </div>
                 );
               })}
-              <div style={{ flex: 1, minWidth: 120 }}>
+              <div style={{ flex: 1, minWidth: 120, display: "flex", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
                 <span style={{ fontWeight: 500, fontSize: 14 }}>
                   {l.distance > 0 ? l.distance + " km" : formatDuration(l.duration)}
                 </span>
                 {l.distance > 0 && (
-                  <span style={{ ...s.muted, marginLeft: 8 }}>{formatDuration(l.duration)} {l.pace ? "· " + formatPaceFromSec(l.pace) + "/km" : ""}</span>
+                  <span style={s.muted}>{formatDuration(l.duration)} {l.pace ? "· " + formatPaceFromSec(l.pace) + "/km" : ""}</span>
                 )}
-                {l.hr > 0 && <span style={{ ...s.muted, marginLeft: 8 }}>♥ {l.hr}</span>}
-                {l.ascent > 0 && <span style={{ ...s.muted, marginLeft: 8 }}>+{l.ascent}m</span>}
+                {l.hr > 0 && (
+                  <span style={s.muted}>♥ {l.hr}{l.maxHR > 0 ? ` / ${l.maxHR}` : ""}</span>
+                )}
+                {l.ascent > 0 && <span style={s.muted}>+{l.ascent}m</span>}
+                {l.cadence > 0 && <span style={s.muted}>🦶 {l.cadence}</span>}
+                {l.aerobicTE > 0 && <span style={s.muted}>TE {l.aerobicTE}</span>}
+                {l.gap > 0 && <span style={s.muted}>GAP {formatPaceFromSec(l.gap)}</span>}
               </div>
               {!selectMode && (
                 <button onClick={(e) => { e.stopPropagation(); deleteLog(l.id); }}
                   style={{ border: "none", background: "none", color: "#bbb", cursor: "pointer", fontSize: 14, padding: "0 4px" }}
-                  title="Delete">✕</button>
+                  title={t("activities.delete_tooltip")}>✕</button>
               )}
             </div>
           );

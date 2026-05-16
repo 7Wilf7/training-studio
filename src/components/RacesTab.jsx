@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { s } from "../styles";
 import { RACE_PRIORITY, RACE_CATEGORIES, RACE_CATEGORY_COLOR } from "../constants";
+import { useT } from "../i18n/LanguageContext";
 import { inferRaceCategory } from "../utils/migrate";
 
 const EMPTY_RACE = (isTarget) => ({
@@ -10,6 +11,7 @@ const EMPTY_RACE = (isTarget) => ({
 });
 
 export function RacesTab({ races, setRaces, now, setConfirmDelete, apiKey, apiEndpoint, apiModel }) {
+  const t = useT();
   const [showRaceAdd, setShowRaceAdd] = useState(false);
   const [raceMode, setRaceMode] = useState("target");
   const [newRace, setNewRace] = useState(EMPTY_RACE(true));
@@ -34,40 +36,33 @@ export function RacesTab({ races, setRaces, now, setConfirmDelete, apiKey, apiEn
     setRaces(races.map(r => r.id === id ? { ...r, category } : r));
   }
 
-  // True when we're hitting Anthropic's official API and can safely use
-  // the server-side web_search tool. Third-party relays (DeepSeek etc.)
-  // don't support that tool, so we fall back to AI-knowledge-only mode.
-  const canUseWebSearch = apiEndpoint && apiEndpoint.startsWith("https://api.anthropic.com");
-
   async function lookupRaceWithCategories(input) {
     if (!apiKey) {
-      setRaceLookupMsg("No API key set. Click the 🔑 API button (top-right) first.");
+      setRaceLookupMsg(t("races.lookup_no_key"));
       setTimeout(() => setRaceLookupMsg(""), 6000);
       return;
     }
     setRaceLookupLoading(true);
-    setRaceLookupMsg(canUseWebSearch ? "Searching the web…" : "Looking up from AI knowledge…");
+    setRaceLookupMsg(t("races.lookup_searching_web"));
     try {
       const currentDate = now.toISOString().slice(0, 10);
       const searchHint = raceMode === "target"
         ? `The user is adding a FUTURE target race. Today is ${currentDate}. Prefer the NEXT upcoming edition if you know its date; otherwise omit the date and let the user fill it in.`
         : `The user is adding a HISTORICAL race result. Today is ${currentDate}. The edition is in the past.`;
 
-      // Build prompt based on whether we have live web search or rely on the model's knowledge
-      const promptInstructions = canUseWebSearch
-        ? `Search the web and return ONE LINE of JSON:`
-        : `IMPORTANT: You do NOT have web access. Answer based ONLY on your training knowledge. NEVER invent specific dates — if you don't know the exact date for the requested edition, return an empty "date" field. It's fine to return category structure (distances, typical ascent) based on past editions you know.`;
-
+      // Always attach the Anthropic web_search tool. If the user's endpoint doesn't
+      // support it, the API will surface a clear error and they can pick another.
       const requestBody = {
         model: apiModel,
         max_tokens: 1000,
+        tools: [{ type: "web_search_20250305", name: "web_search" }],
         messages: [{
           role: "user",
           content: `Today's date is ${currentDate}. The user entered race name: "${input}".
 
 ${searchHint}
 
-${promptInstructions}
+Search the web and return ONE LINE of JSON:
 
 Return one JSON object:
 {"baseName": "Official base name without year", "year": "YYYY", "isTrail": true/false, "raceFamily": "<one of: Half Marathon | Marathon | 10K | Trail | Spartan | Hyrox | Other>", "categories": [{"name": "Category", "distance": "Distance with km/miles", "category": "<one of the raceFamily values>", "ascent": "Number only or empty", "date": "YYYY-MM-DD or empty"}]}
@@ -82,12 +77,6 @@ JSON ONLY, no explanation around it.`,
         }],
       };
 
-      // Only attach the server-side web_search tool when hitting Anthropic-official —
-      // third-party relays will 400 if they receive an unknown tool block
-      if (canUseWebSearch) {
-        requestBody.tools = [{ type: "web_search_20250305", name: "web_search" }];
-      }
-
       const resp = await fetch(apiEndpoint, {
         method: "POST",
         headers: {
@@ -101,7 +90,7 @@ JSON ONLY, no explanation around it.`,
       const data = await resp.json();
       if (!resp.ok || data.error) {
         const msg = data.error?.message || `HTTP ${resp.status}`;
-        setRaceLookupMsg(`API error: ${msg}`);
+        setRaceLookupMsg(t("races.lookup_api_error", { msg }));
         setTimeout(() => setRaceLookupMsg(""), 6000);
         setRaceLookupLoading(false);
         return;
@@ -114,9 +103,7 @@ JSON ONLY, no explanation around it.`,
         setNewRace(prev => ({ ...prev, isTrailDetected: parsed.isTrail, category: family || prev.category }));
         if (parsed.categories && parsed.categories.length > 0) {
           setRaceCategoryModal(parsed);
-          setRaceLookupMsg(canUseWebSearch
-            ? `✓ Found ${parsed.categories.length} category(s) via web search.`
-            : `✓ ${parsed.categories.length} category(s) from AI knowledge — verify date manually.`);
+          setRaceLookupMsg(t("races.lookup_categories_web", { n: parsed.categories.length }));
         } else {
           setNewRace(prev => ({
             ...prev,
@@ -124,18 +111,16 @@ JSON ONLY, no explanation around it.`,
             isTrailDetected: parsed.isTrail,
             category: family || prev.category,
           }));
-          setRaceLookupMsg(canUseWebSearch
-            ? "✓ Name updated (no categories found)."
-            : "✓ Name updated from AI knowledge. Verify details manually.");
+          setRaceLookupMsg(t("races.lookup_name_web"));
           setTimeout(() => setRaceLookupMsg(""), 5000);
         }
       } else {
-        setRaceLookupMsg("Could not parse response. Fill the form manually.");
+        setRaceLookupMsg(t("races.lookup_parse_fail"));
         setTimeout(() => setRaceLookupMsg(""), 4000);
       }
     } catch (err) {
       console.error("[Race Lookup] Network error fetching", apiEndpoint, err);
-      setRaceLookupMsg(`Search failed: ${err.message}`);
+      setRaceLookupMsg(t("races.lookup_search_fail", { msg: err.message }));
       setTimeout(() => setRaceLookupMsg(""), 5000);
     }
     setRaceLookupLoading(false);
@@ -155,7 +140,7 @@ JSON ONLY, no explanation around it.`,
       isTrailDetected: raceCategoryModal.isTrail,
     }));
     setRaceCategoryModal(null);
-    setRaceLookupMsg("✓ Filled from official source.");
+    setRaceLookupMsg(t("races.lookup_filled"));
     setTimeout(() => setRaceLookupMsg(""), 4000);
   }
 
@@ -169,7 +154,6 @@ JSON ONLY, no explanation around it.`,
   }
 
   function commitRace(asTarget) {
-    // If user hasn't picked a category, try inferring one last time from name+distance
     const finalCategory = newRace.category || inferRaceCategory(newRace) || "";
     setRaces([
       { id: Date.now(), ...newRace, category: finalCategory, isTarget: asTarget, priority: asTarget ? newRace.priority : null },
@@ -191,40 +175,38 @@ JSON ONLY, no explanation around it.`,
         fontSize: 11, padding: "2px 8px", borderRadius: 10,
         background: RACE_CATEGORY_COLOR[cat] || "#f0f0f0",
         color: "#333", fontWeight: 500, whiteSpace: "nowrap",
-      }}>{cat}</span>
+      }}>{t(`enum.race_cat.${cat}`)}</span>
     );
   }
 
   return (
     <div>
       <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
-        <button onClick={() => setRaceMode("target")} style={s.chip(raceMode === "target")}>Target Races ({targetRacesList.length})</button>
-        <button onClick={() => setRaceMode("history")} style={s.chip(raceMode === "history")}>History ({historyRacesList.length})</button>
+        <button onClick={() => setRaceMode("target")} style={s.chip(raceMode === "target")}>{t("races.target_tab", { n: targetRacesList.length })}</button>
+        <button onClick={() => setRaceMode("history")} style={s.chip(raceMode === "history")}>{t("races.history_tab", { n: historyRacesList.length })}</button>
       </div>
 
       <div style={{ marginBottom: 14 }}>
         <button onClick={() => {
           setNewRace(EMPTY_RACE(raceMode === "target"));
           setShowRaceAdd(!showRaceAdd);
-        }} style={s.btn}>+ Add {raceMode === "target" ? "Target Race" : "Race Result"}</button>
+        }} style={s.btn}>{raceMode === "target" ? t("races.add_target") : t("races.add_history")}</button>
       </div>
 
       {pastRaceWarning && (
         <div style={{ ...s.cardDark, marginBottom: 14, border: "1px solid #d4a017", background: "#fffbea" }}>
-          <div style={{ ...s.section, color: "#7a5a00" }}>⚠ Race Date Already Passed</div>
-          <div style={{ fontSize: 13, color: "#555", marginBottom: 10 }}>
-            This date is in the past. Move it to Race History instead?
-          </div>
+          <div style={{ ...s.section, color: "#7a5a00" }}>{t("races.past_warn_title")}</div>
+          <div style={{ fontSize: 13, color: "#555", marginBottom: 10 }}>{t("races.past_warn_body")}</div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button onClick={() => { setRaceMode("history"); commitRace(false); }} style={s.btn}>Move to History</button>
-            <button onClick={() => setPastRaceWarning(null)} style={s.btnGhost}>Cancel</button>
+            <button onClick={() => { setRaceMode("history"); commitRace(false); }} style={s.btn}>{t("races.past_warn_move")}</button>
+            <button onClick={() => setPastRaceWarning(null)} style={s.btnGhost}>{t("common.cancel")}</button>
           </div>
         </div>
       )}
 
       {raceCategoryModal && (
         <div style={{ ...s.cardDark, marginBottom: 14, border: "1px solid #888" }}>
-          <div style={s.section}>Select a category for "{raceCategoryModal.baseName}"</div>
+          <div style={s.section}>{t("races.cat_modal_title", { name: raceCategoryModal.baseName })}</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {raceCategoryModal.categories.map((cat, i) => (
               <button key={i} onClick={() => selectRaceCategory(cat)}
@@ -235,46 +217,42 @@ JSON ONLY, no explanation around it.`,
                 </div>
               </button>
             ))}
-            <button onClick={() => setRaceCategoryModal(null)} style={{ ...s.btnGhost, fontSize: 12, marginTop: 6 }}>Cancel</button>
+            <button onClick={() => setRaceCategoryModal(null)} style={{ ...s.btnGhost, fontSize: 12, marginTop: 6 }}>{t("common.cancel")}</button>
           </div>
         </div>
       )}
 
       {showRaceAdd && (
         <div style={{ ...s.cardDark, marginBottom: 14 }}>
-          <div style={s.section}>{raceMode === "target" ? "New Target Race" : "New Race Result"}</div>
+          <div style={s.section}>{raceMode === "target" ? t("races.new_target") : t("races.new_history")}</div>
 
           {raceMode === "target" && (
             <div style={{ marginBottom: 10 }}>
-              <div style={{ ...s.label, marginBottom: 6 }}>Priority</div>
+              <div style={{ ...s.label, marginBottom: 6 }}>{t("races.priority")}</div>
               <div style={{ display: "flex", gap: 6 }}>
                 {RACE_PRIORITY.map(p => (
                   <button key={p} onClick={() => setNewRace({ ...newRace, priority: p })}
-                    style={s.chip(newRace.priority === p)}>{p} Race</button>
+                    style={s.chip(newRace.priority === p)}>{p}{t("races.priority_suffix")}</button>
                 ))}
               </div>
-              <div style={{ ...s.muted, marginTop: 4, fontSize: 11 }}>
-                A = top priority · B = important tune-up · C = training race
-              </div>
+              <div style={{ ...s.muted, marginTop: 4, fontSize: 11 }}>{t("races.priority_hint")}</div>
             </div>
           )}
 
           <div style={{ marginBottom: 10 }}>
             <div style={{ display: "flex", gap: 8 }}>
-              <input placeholder="Race name (e.g. UTMB, 柴古唐斯)" value={newRace.name}
+              <input placeholder={t("races.name_placeholder")} value={newRace.name}
                 onChange={e => setNewRace({ ...newRace, name: e.target.value })}
                 style={{ ...s.input, flex: 1 }} />
               <button onClick={() => lookupRaceWithCategories(newRace.name)}
                 disabled={raceLookupLoading || !newRace.name.trim()}
-                title={canUseWebSearch ? "Look up via Anthropic web search" : "Look up from AI knowledge (DeepSeek / third-party — dates may be inaccurate)"}
+                title={t("races.lookup_web")}
                 style={{ ...s.btnGhost, padding: "9px 14px", opacity: raceLookupLoading ? 0.5 : 1 }}>
-                {raceLookupLoading ? "..." : (canUseWebSearch ? "🔍" : "🤖")}
+                {raceLookupLoading ? "..." : "🔍"}
               </button>
             </div>
             <div style={{ fontSize: 11, color: "#888", marginTop: 6, lineHeight: 1.5 }}>
-              {canUseWebSearch
-                ? "🔍 Live web search via Anthropic — full accuracy."
-                : "🤖 AI-knowledge lookup (no web access). Category structure is reliable; dates may be off — verify manually."}
+              {t("races.lookup_web_hint")}
             </div>
             {raceLookupMsg && <div style={{ fontSize: 11, color: "#444", marginTop: 4 }}>{raceLookupMsg}</div>}
           </div>
@@ -284,41 +262,41 @@ JSON ONLY, no explanation around it.`,
               onChange={e => setNewRace({ ...newRace, date: e.target.value })}
               onClick={e => e.currentTarget.showPicker?.()}
               style={{ ...s.input, cursor: "pointer" }} />
-            <input placeholder="Distance" value={newRace.distance} onChange={e => setNewRace({ ...newRace, distance: e.target.value })} style={s.input} />
+            <input placeholder={t("races.distance_placeholder")} value={newRace.distance} onChange={e => setNewRace({ ...newRace, distance: e.target.value })} style={s.input} />
             <select value={newRace.category}
               onChange={e => setNewRace({ ...newRace, category: e.target.value })}
               style={s.input}>
-              <option value="">Category…</option>
-              {RACE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              <option value="">{t("races.category_placeholder")}</option>
+              {RACE_CATEGORIES.map(c => <option key={c} value={c}>{t(`enum.race_cat.${c}`)}</option>)}
             </select>
           </div>
 
           {newRace.isTrailDetected !== false && (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
-              <input placeholder="Ascent (m)" value={newRace.ascent} onChange={e => setNewRace({ ...newRace, ascent: e.target.value })} style={s.input} />
-              <input placeholder="ITRA Score (trail only)" value={newRace.itraScore} onChange={e => setNewRace({ ...newRace, itraScore: e.target.value })} style={s.input} />
+              <input placeholder={t("races.ascent_placeholder")} value={newRace.ascent} onChange={e => setNewRace({ ...newRace, ascent: e.target.value })} style={s.input} />
+              <input placeholder={t("races.itra_placeholder")} value={newRace.itraScore} onChange={e => setNewRace({ ...newRace, itraScore: e.target.value })} style={s.input} />
             </div>
           )}
 
           <div style={{ marginBottom: 10 }}>
-            <div style={{ ...s.label, marginBottom: 6 }}>{raceMode === "target" ? "Goal Time" : "Result Time"}</div>
+            <div style={{ ...s.label, marginBottom: 6 }}>{raceMode === "target" ? t("races.goal_time") : t("races.result_time")}</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
-              <input type="number" placeholder="h" value={newRace.resultH} onChange={e => setNewRace({ ...newRace, resultH: e.target.value })} style={s.input} />
-              <input type="number" placeholder="m" value={newRace.resultM} onChange={e => setNewRace({ ...newRace, resultM: e.target.value })} style={s.input} />
-              <input type="number" placeholder="s" value={newRace.resultS} onChange={e => setNewRace({ ...newRace, resultS: e.target.value })} style={s.input} />
+              <input type="number" placeholder={t("races.h")} value={newRace.resultH} onChange={e => setNewRace({ ...newRace, resultH: e.target.value })} style={s.input} />
+              <input type="number" placeholder={t("races.m")} value={newRace.resultM} onChange={e => setNewRace({ ...newRace, resultM: e.target.value })} style={s.input} />
+              <input type="number" placeholder={t("races.s")} value={newRace.resultS} onChange={e => setNewRace({ ...newRace, resultS: e.target.value })} style={s.input} />
             </div>
           </div>
 
           <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={tryAddRace} style={s.btn}>Save</button>
-            <button onClick={() => { setShowRaceAdd(false); setRaceLookupMsg(""); }} style={s.btnGhost}>Cancel</button>
+            <button onClick={tryAddRace} style={s.btn}>{t("common.save")}</button>
+            <button onClick={() => { setShowRaceAdd(false); setRaceLookupMsg(""); }} style={s.btnGhost}>{t("common.cancel")}</button>
           </div>
         </div>
       )}
 
       {(raceMode === "target" ? targetRacesList : historyRacesList).length === 0 ? (
         <div style={{ ...s.cardDark, textAlign: "center", color: "#888", padding: "30px 16px" }}>
-          No {raceMode === "target" ? "target races" : "race history"} yet
+          {raceMode === "target" ? t("races.empty_target") : t("races.empty_history")}
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -350,8 +328,8 @@ JSON ONLY, no explanation around it.`,
                     <select value=""
                       onChange={e => updateRaceCategory(r.id, e.target.value)}
                       style={{ ...s.input, width: "auto", padding: "3px 6px", fontSize: 11, color: "#888" }}>
-                      <option value="">Set category…</option>
-                      {RACE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                      <option value="">{t("races.set_category")}</option>
+                      {RACE_CATEGORIES.map(c => <option key={c} value={c}>{t(`enum.race_cat.${c}`)}</option>)}
                     </select>
                   )}
                 </div>

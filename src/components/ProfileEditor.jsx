@@ -5,6 +5,7 @@ import {
   INJURY_HISTORY, EQUIPMENT_AVAILABLE, DEFAULT_PROFILE,
 } from "../constants";
 import { calculateAge, isProfileComplete } from "../utils/profile";
+import { useT } from "../i18n/LanguageContext";
 
 function toggleArr(arr, id) {
   const a = Array.isArray(arr) ? arr : [];
@@ -12,6 +13,7 @@ function toggleArr(arr, id) {
 }
 
 export function ProfileEditor({ profile, setProfile, onClose, mode = "edit" }) {
+  const t = useT();
   // Backfill any missing fields with defaults so the form is robust against older saved data
   const [draft, setDraft] = useState({ ...DEFAULT_PROFILE, ...(profile || {}) });
   const age = calculateAge(draft.birthDate);
@@ -30,23 +32,33 @@ export function ProfileEditor({ profile, setProfile, onClose, mode = "edit" }) {
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
           <h2 style={{ fontSize: 20, fontWeight: 500, margin: 0 }}>
-            {mode === "setup" ? "Welcome! Set up your profile" : "Personal Profile"}
+            {mode === "setup" ? t("profile.title_setup") : t("profile.title_edit")}
           </h2>
           {mode === "edit" && (
             <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, color: "#888", cursor: "pointer" }}>×</button>
           )}
         </div>
         <p style={{ ...s.muted, marginBottom: 18, lineHeight: 1.5 }}>
-          {mode === "setup"
-            ? "This data shapes how AI Coach gives advice. Filled once, edit anytime via the ⚙ icon."
-            : "Updated values are used in the next AI Coach message."}
+          {mode === "setup" ? t("profile.desc_setup") : t("profile.desc_edit")}
         </p>
+
+        {/* Display name — shown first, required */}
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ ...s.label, marginBottom: 4 }}>
+            {t("profile.display_name")} <span style={{ color: "#c0392b" }}>*</span>
+            <span style={{ ...s.muted, marginLeft: 6 }}>{t("profile.display_name_hint")}</span>
+          </div>
+          <input type="text" value={draft.displayName}
+            placeholder={t("profile.display_name_placeholder")}
+            onChange={e => setDraft({ ...draft, displayName: e.target.value })}
+            style={{ ...s.input, maxWidth: 320 }} />
+        </div>
 
         {/* Birth date */}
         <div style={{ marginBottom: 14 }}>
           <div style={{ ...s.label, marginBottom: 4 }}>
-            Birth Date <span style={{ color: "#c0392b" }}>*</span>
-            {age != null && <span style={{ color: "#888", marginLeft: 8 }}>→ Age {age}</span>}
+            {t("profile.birth_date")} <span style={{ color: "#c0392b" }}>*</span>
+            {age != null && <span style={{ color: "#888", marginLeft: 8 }}>{t("profile.age_suffix", { age })}</span>}
           </div>
           <input type="date" value={draft.birthDate}
             onChange={e => setDraft({ ...draft, birthDate: e.target.value })}
@@ -57,13 +69,13 @@ export function ProfileEditor({ profile, setProfile, onClose, mode = "edit" }) {
         {/* Gender */}
         <div style={{ marginBottom: 14 }}>
           <div style={{ ...s.label, marginBottom: 6 }}>
-            Gender <span style={{ color: "#c0392b" }}>*</span>
+            {t("profile.gender")} <span style={{ color: "#c0392b" }}>*</span>
           </div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             {GENDERS.map(g => (
               <button key={g.id} type="button"
                 onClick={() => setDraft({ ...draft, gender: g.id })}
-                style={s.chip(draft.gender === g.id)}>{g.label}</button>
+                style={s.chip(draft.gender === g.id)}>{t(`enum.gender.${g.id}`)}</button>
             ))}
           </div>
         </div>
@@ -71,124 +83,121 @@ export function ProfileEditor({ profile, setProfile, onClose, mode = "edit" }) {
         {/* City */}
         <div style={{ marginBottom: 14 }}>
           <div style={{ ...s.label, marginBottom: 4 }}>
-            City <span style={{ color: "#c0392b" }}>*</span>
-            <span style={{ ...s.muted, marginLeft: 6 }}>(e.g. 广州 — used for terrain/venue suggestions)</span>
+            {t("profile.city")} <span style={{ color: "#c0392b" }}>*</span>
+            <span style={{ ...s.muted, marginLeft: 6 }}>{t("profile.city_hint")}</span>
           </div>
-          <input type="text" value={draft.city} placeholder="City"
+          <input type="text" value={draft.city} placeholder={t("profile.city_placeholder")}
             onChange={e => setDraft({ ...draft, city: e.target.value })}
             style={{ ...s.input, maxWidth: 280 }} />
         </div>
 
         {/* Occupation (with Other free-text) */}
         <div style={{ marginBottom: 14 }}>
-          <div style={{ ...s.label, marginBottom: 6 }}>Day Job</div>
+          <div style={{ ...s.label, marginBottom: 6 }}>{t("profile.day_job")}</div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             {OCCUPATIONS.map(o => (
               <button key={o.id} type="button"
                 onClick={() => setDraft({ ...draft, occupation: o.id })}
-                style={s.chip(draft.occupation === o.id)}>{o.label}</button>
+                style={s.chip(draft.occupation === o.id)}>{t(`enum.occ.${o.id}`)}</button>
             ))}
           </div>
           {draft.occupation === "other" && (
             <input type="text"
-              placeholder="Describe your job…"
+              placeholder={t("profile.occupation_other_placeholder")}
               value={draft.occupationOther}
               onChange={e => setDraft({ ...draft, occupationOther: e.target.value })}
               style={{ ...s.input, marginTop: 8, maxWidth: 360 }} />
           )}
         </div>
 
-        {/* Years of training (renamed from "experience") */}
+        {/* Years of training */}
         <div style={{ marginBottom: 14 }}>
           <div style={{ ...s.label, marginBottom: 6 }}>
-            Years of Running Training <span style={{ color: "#c0392b" }}>*</span>
-            <span style={{ ...s.muted, marginLeft: 6 }}>(how long you've been training)</span>
+            {t("profile.years_training")} <span style={{ color: "#c0392b" }}>*</span>
+            <span style={{ ...s.muted, marginLeft: 6 }}>{t("profile.years_training_hint")}</span>
           </div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             {RUN_EXPERIENCE.map(o => (
               <button key={o.id} type="button"
                 onClick={() => setDraft({ ...draft, experience: o.id })}
-                style={s.chip(draft.experience === o.id)}>{o.label}</button>
+                style={s.chip(draft.experience === o.id)}>{t(`enum.exp.${o.id}`)}</button>
             ))}
           </div>
         </div>
 
-        {/* Race types done (multi) */}
+        {/* Race types done */}
         <div style={{ marginBottom: 14 }}>
-          <div style={{ ...s.label, marginBottom: 6 }}>Race Types You've Done (multi-select)</div>
+          <div style={{ ...s.label, marginBottom: 6 }}>{t("profile.race_types_done")}</div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             {RACE_TYPES_DONE.map(o => (
               <button key={o.id} type="button"
                 onClick={() => setDraft({ ...draft, raceTypes: toggleArr(draft.raceTypes, o.id) })}
-                style={s.chip(draft.raceTypes?.includes(o.id))}>{o.label}</button>
+                style={s.chip(draft.raceTypes?.includes(o.id))}>{t(`enum.race_done.${o.id}`)}</button>
             ))}
           </div>
         </div>
 
-        {/* Recent injuries (last 6 months) — only inform AI of current/recent issues */}
+        {/* Recent injuries */}
         <div style={{ marginBottom: 8 }}>
           <div style={{ ...s.label, marginBottom: 6 }}>
-            Recent Injuries (last 6 months)
-            <span style={{ ...s.muted, marginLeft: 6 }}>— AI will treat these as active</span>
+            {t("profile.recent_injuries")}
+            <span style={{ ...s.muted, marginLeft: 6 }}>{t("profile.recent_injuries_note")}</span>
           </div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             {INJURY_HISTORY.map(o => (
               <button key={o.id} type="button"
                 onClick={() => setDraft({ ...draft, recentInjuries: toggleArr(draft.recentInjuries, o.id) })}
-                style={s.chip(draft.recentInjuries?.includes(o.id))}>{o.label}</button>
+                style={s.chip(draft.recentInjuries?.includes(o.id))}>{t(`enum.injury.${o.id}`)}</button>
             ))}
           </div>
         </div>
         <div style={{ marginBottom: 14 }}>
-          <div style={{ ...s.muted, marginBottom: 4 }}>
-            Older injuries / context (optional — AI won't over-weight this):
-          </div>
+          <div style={{ ...s.muted, marginBottom: 4 }}>{t("profile.injury_older_label")}</div>
           <textarea rows={2}
-            placeholder="e.g. 'knee surgery 3 years ago, fully recovered' or '左脚跟腱半年前小问题，目前正常'"
+            placeholder={t("profile.injury_older_placeholder")}
             value={draft.injuriesNote}
             onChange={e => setDraft({ ...draft, injuriesNote: e.target.value })}
             style={{ ...s.input, resize: "vertical" }} />
         </div>
 
-        {/* Equipment (multi + Other) */}
+        {/* Equipment */}
         <div style={{ marginBottom: 14 }}>
-          <div style={{ ...s.label, marginBottom: 6 }}>Available Equipment (multi-select)</div>
+          <div style={{ ...s.label, marginBottom: 6 }}>{t("profile.equipment")}</div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             {EQUIPMENT_AVAILABLE.map(o => (
               <button key={o.id} type="button"
                 onClick={() => setDraft({ ...draft, equipment: toggleArr(draft.equipment, o.id) })}
-                style={s.chip(draft.equipment?.includes(o.id))}>{o.label}</button>
+                style={s.chip(draft.equipment?.includes(o.id))}>{t(`enum.equip.${o.id}`)}</button>
             ))}
           </div>
           <input type="text"
-            placeholder="Other equipment (free-text, e.g. TRX、瑜伽垫、battle rope)"
+            placeholder={t("profile.equipment_other_placeholder")}
             value={draft.equipmentOther}
             onChange={e => setDraft({ ...draft, equipmentOther: e.target.value })}
             style={{ ...s.input, marginTop: 8 }} />
         </div>
 
-        {/* Free-form notes */}
+        {/* Notes */}
         <div style={{ marginBottom: 18 }}>
-          <div style={{ ...s.label, marginBottom: 4 }}>Anything Else (optional)</div>
+          <div style={{ ...s.label, marginBottom: 4 }}>{t("profile.notes")}</div>
           <textarea rows={3} value={draft.notes}
-            placeholder="e.g. preferred training time, dietary preferences, recent goals…"
+            placeholder={t("profile.notes_placeholder")}
             onChange={e => setDraft({ ...draft, notes: e.target.value })}
             style={{ ...s.input, resize: "vertical" }} />
         </div>
 
-        {/* Actions */}
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
           {!complete && (
             <span style={{ ...s.muted, color: "#c0392b", marginRight: "auto", fontSize: 12 }}>
-              ⚠ Required fields missing
+              {t("common.required")}
             </span>
           )}
           {mode === "edit" && (
-            <button onClick={onClose} style={s.btnGhost}>Cancel</button>
+            <button onClick={onClose} style={s.btnGhost}>{t("common.cancel")}</button>
           )}
           <button onClick={save} disabled={!complete}
             style={{ ...s.btn, opacity: complete ? 1 : 0.5 }}>
-            {mode === "setup" ? "Get Started" : "Save"}
+            {mode === "setup" ? t("profile.get_started") : t("common.save")}
           </button>
         </div>
       </div>

@@ -1,10 +1,12 @@
 import { useState, useMemo } from "react";
 import { s } from "../styles";
 import { RUN_SUBTYPES } from "../constants";
+import { useT } from "../i18n/LanguageContext";
 import { formatDateShort } from "../utils/format";
 import { getPeriodLabel } from "../utils/period";
 
 export function ChartsTab({ filteredAllLogs }) {
+  const t = useT();
   const [chartPeriod, setChartPeriod] = useState({ type: "week", count: 8 });
 
   const chartData = useMemo(() => {
@@ -39,7 +41,7 @@ export function ChartsTab({ filteredAllLogs }) {
         }).reduce((sum, l) => sum + l.distance, 0);
         buckets.push({
           label: `${start.getFullYear()}-${start.getMonth() + 1}`,
-          rangeText: getPeriodLabel({ type: "month", year: start.getFullYear(), month: start.getMonth() }),
+          rangeText: getPeriodLabel({ type: "month", year: start.getFullYear(), month: start.getMonth() }, t),
           km: +km.toFixed(1),
         });
       }
@@ -56,7 +58,7 @@ export function ChartsTab({ filteredAllLogs }) {
       }
     }
     return buckets;
-  }, [filteredAllLogs, chartPeriod]);
+  }, [filteredAllLogs, chartPeriod, t]);
 
   const chartRangeLogs = useMemo(() => {
     const nowD = new Date();
@@ -86,38 +88,40 @@ export function ChartsTab({ filteredAllLogs }) {
   }, [chartRangeLogs]);
 
   function chartPeriodLabel() {
-    if (chartPeriod.type === "week") return `Last ${chartPeriod.count} Weeks`;
-    if (chartPeriod.type === "month") return `Last ${chartPeriod.count} Months`;
-    if (chartPeriod.type === "year") return `Last ${chartPeriod.count} Years`;
+    if (chartPeriod.type === "week")  return t("charts.last_weeks",  { n: chartPeriod.count });
+    if (chartPeriod.type === "month") return t("charts.last_months", { n: chartPeriod.count });
+    if (chartPeriod.type === "year")  return t("charts.last_years",  { n: chartPeriod.count });
     return "";
   }
 
   const chartMax = Math.max(...chartData.map(w => w.km), 1);
   const totalRunsForPie = runTypeDist.reduce((sum, [, c]) => sum + c, 0);
 
+  const presets = [
+    { type: "week",  count: 4,  label: t("charts.weeks",  { n: 4 }) },
+    { type: "week",  count: 8,  label: t("charts.weeks",  { n: 8 }) },
+    { type: "month", count: 6,  label: t("charts.months", { n: 6 }) },
+    { type: "month", count: 12, label: t("charts.months", { n: 12 }) },
+    { type: "year",  count: 5,  label: t("charts.years",  { n: 5 }) },
+  ];
+
   return (
     <div>
       <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
-        <span style={{ ...s.muted }}>Show:</span>
-        {[
-          { type: "week", count: 4, label: "4 Weeks" },
-          { type: "week", count: 8, label: "8 Weeks" },
-          { type: "month", count: 6, label: "6 Months" },
-          { type: "month", count: 12, label: "12 Months" },
-          { type: "year", count: 5, label: "5 Years" },
-        ].map(opt => {
+        <span style={{ ...s.muted }}>{t("charts.show")}</span>
+        {presets.map(opt => {
           const active = chartPeriod.type === opt.type && chartPeriod.count === opt.count;
           return (
-            <button key={opt.label} onClick={() => setChartPeriod({ type: opt.type, count: opt.count })}
+            <button key={`${opt.type}-${opt.count}`} onClick={() => setChartPeriod({ type: opt.type, count: opt.count })}
               style={s.chip(active)}>{opt.label}</button>
           );
         })}
       </div>
 
       <div style={s.section}>
-        Distance Trend
+        {t("charts.distance_trend")}
         {chartPeriod.type === "week" && (
-          <span style={{ ...s.muted, fontWeight: 400, marginLeft: 8 }}>· week starts on Monday</span>
+          <span style={{ ...s.muted, fontWeight: 400, marginLeft: 8 }}>{t("charts.week_note")}</span>
         )}
       </div>
       <div style={{ ...s.card, marginBottom: 20 }}>
@@ -132,7 +136,7 @@ export function ChartsTab({ filteredAllLogs }) {
               </g>
             );
           })}
-          <text x="20" y="14" fontSize="10" fill="#aaa">km</text>
+          <text x="20" y="14" fontSize="10" fill="#aaa">{t("charts.km_axis")}</text>
           {(() => {
             const xStep = chartData.length > 1 ? 640 / (chartData.length - 1) : 0;
             const points = chartData.map((w, i) => ({
@@ -161,10 +165,10 @@ export function ChartsTab({ filteredAllLogs }) {
         </svg>
       </div>
 
-      <div style={s.section}>Run Type Distribution — {chartPeriodLabel()}</div>
+      <div style={s.section}>{t("charts.run_type_title", { label: chartPeriodLabel() })}</div>
       <div style={s.card}>
         {totalRunsForPie === 0 ? (
-          <div style={{ color: "#888", textAlign: "center", padding: 20, fontSize: 13 }}>No classified runs in this period</div>
+          <div style={{ color: "#888", textAlign: "center", padding: 20, fontSize: 13 }}>{t("charts.no_classified")}</div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {runTypeDist.map(([name, count], i) => {
@@ -173,7 +177,7 @@ export function ChartsTab({ filteredAllLogs }) {
               return (
                 <div key={name}>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3 }}>
-                    <span style={{ color: "#444" }}>{name}</span>
+                    <span style={{ color: "#444" }}>{t(`enum.subtype.${name}`)}</span>
                     <span style={{ color: "#888" }}>{count} · {pct.toFixed(0)}%</span>
                   </div>
                   <div style={{ background: "#f0f0f0", borderRadius: 3, height: 6, overflow: "hidden" }}>
