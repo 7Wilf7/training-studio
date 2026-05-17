@@ -10,7 +10,9 @@ const EMPTY_RACE = (isTarget) => ({
   itraScore: "", isTrailDetected: null,
 });
 
-export function RacesTab({ races, setRaces, now, setConfirmDelete, apiKey, apiEndpoint, apiModel }) {
+const BOCHA_ENDPOINT = "https://api.bochaai.com/v1/web-search";
+
+export function RacesTab({ races, setRaces, now, setConfirmDelete, apiKey, apiEndpoint, apiModel, bochaApiKey }) {
   const t = useT();
   const [showRaceAdd, setShowRaceAdd] = useState(false);
   const [raceMode, setRaceMode] = useState("target");
@@ -37,46 +39,100 @@ export function RacesTab({ races, setRaces, now, setConfirmDelete, apiKey, apiEn
   }
 
   async function lookupRaceWithCategories(input) {
+    // Two-step lookup: Bocha web search → AI Coach LLM parses results into JSON.
+    // Both keys are required; warn early if either is missing.
+    if (!bochaApiKey) {
+      setRaceLookupMsg(t("races.lookup_no_bocha"));
+      setTimeout(() => setRaceLookupMsg(""), 6000);
+      return;
+    }
     if (!apiKey) {
-      setRaceLookupMsg(t("races.lookup_no_key"));
+      setRaceLookupMsg(t("races.lookup_no_coach"));
       setTimeout(() => setRaceLookupMsg(""), 6000);
       return;
     }
     setRaceLookupLoading(true);
     setRaceLookupMsg(t("races.lookup_searching_web"));
-    try {
-      const currentDate = now.toISOString().slice(0, 10);
-      const searchHint = raceMode === "target"
-        ? `The user is adding a FUTURE target race. Today is ${currentDate}. Prefer the NEXT upcoming edition if you know its date; otherwise omit the date and let the user fill it in.`
-        : `The user is adding a HISTORICAL race result. Today is ${currentDate}. The edition is in the past.`;
 
-      // Always attach the Anthropic web_search tool. If the user's endpoint doesn't
-      // support it, the API will surface a clear error and they can pick another.
-      const requestBody = {
-        model: apiModel,
-        max_tokens: 1000,
-        tools: [{ type: "web_search_20250305", name: "web_search" }],
-        messages: [{
-          role: "user",
-          content: `Today's date is ${currentDate}. The user entered race name: "${input}".
+    const currentDate = now.toISOString().slice(0, 10);
+    const searchHint = raceMode === "target"
+      ? `The user is adding a FUTURE target race. Today is ${currentDate}. Prefer the NEXT upcoming edition if you know its date; otherwise omit the date and let the user fill it in.`
+      : `The user is adding a HISTORICAL race result. Today is ${currentDate}. The edition is in the past.`;
+
+    // --- Step 1: Bocha web search ---
+    let searchResults;
+    try {
+      const bochaResp = await fetch(BOCHA_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${bochaApiKey}`,
+        },
+        body: JSON.stringify({
+          query: input,
+          freshness: "noLimit",
+          summary: true,
+          count: 8,
+        }),
+      });
+      const bochaData = await bochaResp.json();
+      if (!bochaResp.ok || bochaData.code && bochaData.code !== 200) {
+        const msg = bochaData.msg || bochaData.message || `HTTP ${bochaResp.status}`;
+        setRaceLookupMsg(t("races.lookup_bocha_error", { msg }));
+        setTimeout(() => setRaceLookupMsg(""), 6000);
+        setRaceLookupLoading(false);
+        return;
+      }
+      searchResults = bochaData?.data?.webPages?.value || [];
+      if (searchResults.length === 0) {
+        setRaceLookupMsg(t("races.lookup_no_results"));
+        setTimeout(() => setRaceLookupMsg(""), 5000);
+        setRaceLookupLoading(false);
+        return;
+      }
+    } catch (err) {
+      console.error("[Race Lookup] Bocha error:", err);
+      setRaceLookupMsg(t("races.lookup_bocha_error", { msg: err.message }));
+      setTimeout(() => setRaceLookupMsg(""), 5000);
+      setRaceLookupLoading(false);
+      return;
+    }
+
+    // --- Step 2: hand snippets to AI Coach LLM for structured extraction ---
+    setRaceLookupMsg(t("races.lookup_parsing"));
+    const snippets = searchResults.slice(0, 8).map((r, i) =>
+      `[${i + 1}] ${r.name || ""}\nURL: ${r.url || ""}\n${r.summary || r.snippet || ""}`
+    ).join("\n\n");
+
+    const parseBody = {
+      model: apiModel,
+      max_tokens: 1000,
+      messages: [{
+        role: "user",
+        content: `Today's date is ${currentDate}. The user entered race name: "${input}".
 
 ${searchHint}
 
-Search the web and return ONE LINE of JSON:
+Below are web search results about this race. Extract structured info from them.
 
-Return one JSON object:
+WEB RESULTS:
+${snippets}
+
+Return one JSON object only (no prose, no markdown):
 {"baseName": "Official base name without year", "year": "YYYY", "isTrail": true/false, "raceFamily": "<one of: Half Marathon | Marathon | 10K | Trail | Spartan | Hyrox | Other>", "categories": [{"name": "Category", "distance": "Distance with km/miles", "category": "<one of the raceFamily values>", "ascent": "Number only or empty", "date": "YYYY-MM-DD or empty"}]}
 
 - raceFamily = overall classification of the race event.
 - For each category, same raceFamily applies (e.g. UTMB has Trail family, CCC/OCC/UTMB-main are all Trail).
 - isTrail: true if it's off-road/mountain.
-- For trail races: list all distance categories with typical ascent.
+- For trail races: list all distance categories with typical ascent (numbers only, e.g. "1200").
 - For road races: list distance options, ascent empty.
-- If you don't recognize this race at all: {"baseName": "${input}", "year": "", "isTrail": false, "raceFamily": "Other", "categories": []}
-JSON ONLY, no explanation around it.`,
-        }],
-      };
+- Only output dates you can verify from the search snippets above. If unsure, leave date empty.
+- If the snippets don't cover this race: {"baseName": "${input}", "year": "", "isTrail": false, "raceFamily": "Other", "categories": []}
+JSON ONLY.`,
+      }],
+    };
 
+    try {
       const resp = await fetch(apiEndpoint, {
         method: "POST",
         headers: {
@@ -85,7 +141,7 @@ JSON ONLY, no explanation around it.`,
           "anthropic-version": "2023-06-01",
           "anthropic-dangerous-direct-browser-access": "true",
         },
-        body: JSON.stringify(requestBody),
+        body: JSON.stringify(parseBody),
       });
       const data = await resp.json();
       if (!resp.ok || data.error) {
@@ -119,7 +175,7 @@ JSON ONLY, no explanation around it.`,
         setTimeout(() => setRaceLookupMsg(""), 4000);
       }
     } catch (err) {
-      console.error("[Race Lookup] Network error fetching", apiEndpoint, err);
+      console.error("[Race Lookup] LLM parse error:", err);
       setRaceLookupMsg(t("races.lookup_search_fail", { msg: err.message }));
       setTimeout(() => setRaceLookupMsg(""), 5000);
     }
