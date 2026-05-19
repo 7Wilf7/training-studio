@@ -233,6 +233,7 @@ function AppShell({
           periodDropdown={periodDropdown}
           setPeriodDropdown={setPeriodDropdown}
           setConfirmDelete={setConfirmDelete}
+          profile={profile}
         />
       )}
       {tab === 1 && (

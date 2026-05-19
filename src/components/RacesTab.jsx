@@ -5,7 +5,7 @@ import { useT } from "../i18n/LanguageContext";
 import { inferRaceCategory } from "../utils/migrate";
 import { parseDistanceKm } from "../utils/format";
 import { useClickOutside } from "../utils/useClickOutside";
-import { RouteIcon, PeakIcon, ClockIcon } from "./Icons";
+import { PeakIcon, ClockIcon } from "./Icons";
 
 const EMPTY_RACE = (isTarget) => ({
   isTarget, priority: "A", name: "", date: "",
@@ -131,9 +131,12 @@ export function RacesTab({ races, setRaces, now, setConfirmDelete }) {
     if (!cat) return null;
     return (
       <span style={{
-        fontSize: 11, padding: "2px 8px", borderRadius: 10,
-        background: RACE_CATEGORY_COLOR[cat] || "#f0f0f0",
-        color: "#333", fontWeight: 500, whiteSpace: "nowrap",
+        fontFamily: "var(--font-mono)",
+        fontSize: 11, padding: "2px 8px", borderRadius: 2,
+        background: RACE_CATEGORY_COLOR[cat] || "var(--rule-soft)",
+        color: "var(--ink-1)", fontWeight: 500, whiteSpace: "nowrap",
+        textTransform: "uppercase", letterSpacing: "0.05em",
+        flexShrink: 0,
       }}>{t(`enum.race_cat.${cat}`)}</span>
     );
   }
@@ -181,11 +184,17 @@ export function RacesTab({ races, setRaces, now, setConfirmDelete }) {
             if (editingRaceId === r.id) {
               return <div key={r.id} ref={editFormRef}>{renderRaceForm("edit")}</div>;
             }
+            // Whether a second metric row is needed at all.
+            // Distance is no longer shown on the card (the category + name implies it for
+            // road races, and trail races have it in the form). Time goes on row 1.
+            // Only ascent + ITRA need a dedicated row when present.
+            const hasRow2 = (r.ascent && parseInt(r.ascent) > 0) || r.itraScore;
             return (
               <div key={r.id} onClick={() => startEdit(r)}
                 style={{ ...s.card, cursor: "pointer" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+                {/* Row 1: priority + category tag + name (truncated) | time? + date + ✕ */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: hasRow2 ? 8 : 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
                     {r.isTarget && r.priority && (
                       <span style={{
                         fontFamily: "var(--font-mono)",
@@ -195,47 +204,50 @@ export function RacesTab({ races, setRaces, now, setConfirmDelete }) {
                         background: r.priority === "A" ? "var(--ink-1)" : r.priority === "B" ? "var(--moss-bg)" : "transparent",
                         border: "1px solid " + (r.priority === "A" ? "var(--ink-1)" : "var(--rule)"),
                         padding: "2px 8px",
+                        flexShrink: 0,
                       }}>▲ {r.priority}</span>
                     )}
-                    <div style={{ fontWeight: 500, fontSize: 15, color: "var(--ink-1)" }}>{r.name}</div>
                     {renderCategoryTag(r.category)}
+                    {/* Race name — constrained max-width with ellipsis so the row stays tidy */}
+                    <div style={{
+                      fontWeight: 500, fontSize: 15, color: "var(--ink-1)",
+                      maxWidth: 380, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    }}>{r.name}</div>
+                    {!r.category && (
+                      <select value=""
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={e => updateRaceCategory(r.id, e.target.value)}
+                        style={{ ...s.input, width: "auto", padding: "3px 6px", fontSize: 11, color: "#888", flexShrink: 0 }}>
+                        <option value="">{t("races.set_category")}</option>
+                        {RACE_CATEGORIES.map(c => <option key={c} value={c}>{t(`enum.race_cat.${c}`)}</option>)}
+                      </select>
+                    )}
                   </div>
-                  <div style={{ display: "flex", gap: 12, alignItems: "baseline" }}>
-                    <div style={{ ...s.dataNum, fontSize: 13, color: "var(--ink-3)" }}>{r.date}</div>
+                  <div style={{ display: "flex", gap: 14, alignItems: "center", flexShrink: 0, fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
+                    {timeStr && (
+                      <span style={{ fontSize: 16, fontWeight: 500, color: "var(--ink-1)", letterSpacing: "-0.01em", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                        <span style={{ color: "var(--ink-3)" }}><ClockIcon size={13} /></span>
+                        {timeStr}
+                      </span>
+                    )}
+                    <div style={{ fontSize: 13, color: "var(--ink-3)" }}>{r.date}</div>
                     <button onClick={(e) => { e.stopPropagation(); deleteRace(r.id); }}
                       style={{ border: "none", background: "none", color: "var(--ink-3)", cursor: "pointer", fontSize: 14, padding: 0, lineHeight: 1 }}>✕</button>
                   </div>
                 </div>
-                <div style={{ display: "flex", gap: 18, alignItems: "center", flexWrap: "wrap", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
-                  {r.distance > 0 && (
-                    <span style={{ fontSize: 14, color: "var(--ink-1)", display: "inline-flex", alignItems: "center", gap: 5 }}>
-                      <span style={{ color: "var(--ink-3)" }}><RouteIcon size={13} /></span>
-                      {r.distance}<span style={{ color: "var(--ink-3)", marginLeft: 1, fontSize: 11 }}>km</span>
-                    </span>
-                  )}
-                  {r.ascent && (
-                    <span style={{ fontSize: 14, color: "var(--moss-deep)", display: "inline-flex", alignItems: "center", gap: 5 }}>
-                      <span style={{ color: "var(--moss)" }}><PeakIcon size={13} /></span>
-                      +{r.ascent}<span style={{ color: "var(--ink-3)", marginLeft: 1, fontSize: 11 }}>m</span>
-                    </span>
-                  )}
-                  {timeStr && (
-                    <span style={{ fontSize: 17, fontWeight: 500, color: "var(--ink-1)", letterSpacing: "-0.01em", display: "inline-flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ color: "var(--ink-3)" }}><ClockIcon size={13} /></span>
-                      {timeStr}
-                    </span>
-                  )}
-                  {r.itraScore && <span style={s.subTag}>ITRA {r.itraScore}</span>}
-                  {!r.category && (
-                    <select value=""
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={e => updateRaceCategory(r.id, e.target.value)}
-                      style={{ ...s.input, width: "auto", padding: "3px 6px", fontSize: 11, color: "#888" }}>
-                      <option value="">{t("races.set_category")}</option>
-                      {RACE_CATEGORIES.map(c => <option key={c} value={c}>{t(`enum.race_cat.${c}`)}</option>)}
-                    </select>
-                  )}
-                </div>
+                {/* Row 2 (only when something useful to show): ascent ▲ + ITRA.
+                    Road + Hyrox cards skip this row entirely. */}
+                {hasRow2 && (
+                  <div style={{ display: "flex", gap: 18, alignItems: "center", flexWrap: "wrap", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
+                    {r.ascent && parseInt(r.ascent) > 0 && (
+                      <span style={{ fontSize: 13, color: "var(--moss-deep)", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                        <span style={{ color: "var(--moss)" }}><PeakIcon size={13} /></span>
+                        +{r.ascent}<span style={{ color: "var(--ink-3)", marginLeft: 1, fontSize: 10 }}>m</span>
+                      </span>
+                    )}
+                    {r.itraScore && <span style={s.subTag}>ITRA {r.itraScore}</span>}
+                  </div>
+                )}
               </div>
             );
           })}

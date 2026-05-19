@@ -514,32 +514,39 @@ export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
                 <input type="checkbox" checked={isSelected} readOnly
                   style={{ width: 16, height: 16, pointerEvents: "none", flexShrink: 0 }} />
               )}
-              {/* Left-side identifiers: date + type tag + (variable) sub-type chips.
-                  Sub-types box flexes to take leftover space; the metrics grid below stays right-aligned. */}
-              <div style={{ minWidth: 54, fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--ink-3)", fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{formatDateShort(l.date)}</div>
-              <div style={{ ...s.tag(l.type), flexShrink: 0 }}>{t(`enum.activity.${l.type}`)}</div>
-              <div style={{ flex: 1, minWidth: 0, display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {l.subTypes.filter(st => {
-                  if (RUN_FLAGS.includes(st)) return true;
-                  if (RUN_PACE_TYPES.includes(st)) return l.type === "Road Run";
-                  return l.type === "Strength";
-                }).map(st => {
-                  const isFlag = RUN_FLAGS.includes(st);
-                  return (
-                    <div key={st} style={isFlag
-                      ? { ...s.subTag, background: "rgba(181,78,26,0.08)", color: "var(--warn)", borderColor: "rgba(181,78,26,0.3)" }
-                      : s.subTag}>
-                      {isFlag ? "▲ " : ""}{t(`enum.subtype.${st}`)}
-                    </div>
-                  );
-                })}
+              {/* Left identifiers: date + type tag + sub-type chips.
+                  Fixed-width container so the metrics grid below starts at the SAME x
+                  on every row (columns align), but without the giant leftover gap that
+                  flex:1 caused before. Sub-types overflow gets ellipsised. */}
+              <div style={{
+                width: 300, minWidth: 300, flexShrink: 0,
+                display: "flex", alignItems: "center", gap: 10,
+                overflow: "hidden",
+              }}>
+                <div style={{ minWidth: 50, fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--ink-3)", fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{formatDateShort(l.date)}</div>
+                <div style={{ ...s.tag(l.type), flexShrink: 0 }}>{t(`enum.activity.${l.type}`)}</div>
+                <div style={{ flex: 1, minWidth: 0, display: "flex", gap: 6, flexWrap: "nowrap", overflow: "hidden" }}>
+                  {l.subTypes.filter(st => {
+                    if (RUN_FLAGS.includes(st)) return true;
+                    if (RUN_PACE_TYPES.includes(st)) return l.type === "Road Run";
+                    return l.type === "Strength";
+                  }).map(st => {
+                    const isFlag = RUN_FLAGS.includes(st);
+                    return (
+                      <div key={st} style={isFlag
+                        ? { ...s.subTag, background: "rgba(181,78,26,0.08)", color: "var(--warn)", borderColor: "rgba(181,78,26,0.3)" }
+                        : s.subTag}>
+                        {isFlag ? "▲ " : ""}{t(`enum.subtype.${st}`)}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-              {/* Metrics grid — fixed column widths so the same metric lines up
-                  vertically across every row. Empty cells when a metric isn't
-                  available for this activity type (cadence on trail, etc.). */}
+              {/* Metrics grid — fixed columns so each metric stacks vertically across rows.
+                  Duration column widened to 170px so "4h 23m 45s · 10:46" stays single-line. */}
               <div style={{
                 display: "grid",
-                gridTemplateColumns: "90px 140px 80px 90px 80px 55px 85px",
+                gridTemplateColumns: "90px 170px 80px 90px 80px 55px 85px",
                 gap: 8,
                 alignItems: "center",
                 fontFamily: "var(--font-mono)",
@@ -611,6 +618,8 @@ export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
                   )}
                 </div>
               </div>
+              {/* Spacer pushes the delete button to the far right edge */}
+              <div style={{ flex: 1 }} />
               {!selectMode && (
                 <button onClick={(e) => { e.stopPropagation(); deleteLog(l.id); }}
                   style={{ border: "none", background: "none", color: "var(--ink-3)", cursor: "pointer", fontSize: 14, padding: "0 4px", flexShrink: 0 }}

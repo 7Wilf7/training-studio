@@ -241,6 +241,11 @@ const dict = {
   "charts.km_axis":           { en: "km",                   zh: "公里" },
   "charts.run_type_title":    { en: "Run Type Distribution — {label}", zh: "跑步类型分布 —— {label}" },
   "charts.no_classified":     { en: "No classified runs in this period", zh: "本时段内无已分类跑步记录" },
+  "charts.hr_zone_title":     { en: "Heart Rate Zone Distribution — {label}", zh: "心率区间分布 —— {label}" },
+  "charts.hr_zone_need_profile":{ en: "Set Resting HR and Max HR in your profile to see zone distribution.", zh: "请先在个人资料中填写静息心率和最大心率，才能看到心率区间分布。" },
+  "charts.hr_zone_no_data":   { en: "No heart-rate data in this period.", zh: "本时段内没有心率数据。" },
+  "charts.hr_zone_below":     { en: "Below Z1",                zh: "Z1 以下" },
+  "charts.hr_zone_above":     { en: "Above Z5",                zh: "Z5 以上" },
 
   // ===== Activities tab =====
   "activities.upload":        { en: "↑ Upload (.csv / .fit)", zh: "↑ 上传 (.csv / .fit)" },

@@ -12,7 +12,7 @@ export function TrainingTab({
   logs, setLogs,
   filter, setFilter, filterDropdown, setFilterDropdown,
   period, setPeriod, periodDropdown, setPeriodDropdown,
-  setConfirmDelete,
+  setConfirmDelete, profile,
 }) {
   const t = useT();
   const [view, setView] = useState("activities"); // "activities" | "charts"
@@ -118,7 +118,7 @@ export function TrainingTab({
       )}
 
       {view === "charts" && (
-        <ChartsTab filteredAllLogs={filteredAllLogs} />
+        <ChartsTab filteredAllLogs={filteredAllLogs} profile={profile} />
       )}
     </div>
   );

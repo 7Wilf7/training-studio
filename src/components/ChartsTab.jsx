@@ -1,19 +1,25 @@
 import { useState, useMemo } from "react";
 import { s } from "../styles";
-import { RUN_SUBTYPES, RUN_GROUP_TYPES } from "../constants";
+import { RUN_SUBTYPES, RUN_GROUP_TYPES, HR_ZONE_METHODS } from "../constants";
 import { useT } from "../i18n/LanguageContext";
-import { formatDateShort, formatDuration } from "../utils/format";
+import { formatDuration } from "../utils/format";
+import { computeHRZones } from "../utils/profile";
 import { getPeriodLabel } from "../utils/period";
 
-// "5-11~5-17" style label for a week bucket. Both endpoints are formatted
-// short (year omitted when current) so the axis stays compact.
+// Compact week-bucket label like "5-18~24" (same month) or "5-30~6-5" (cross-month).
+// Uses LOCAL date components — going through toISOString() would shift the date
+// by the timezone offset (e.g. May 18 GMT+8 → May 17 UTC), causing off-by-one days
+// for any user east of UTC.
 function weekRangeLabel(start, endExclusive) {
   const endDisplay = new Date(endExclusive);
   endDisplay.setDate(endDisplay.getDate() - 1);
-  return `${formatDateShort(start.toISOString().slice(0, 10))}~${formatDateShort(endDisplay.toISOString().slice(0, 10))}`;
+  const sm = start.getMonth() + 1, sd = start.getDate();
+  const em = endDisplay.getMonth() + 1, ed = endDisplay.getDate();
+  if (sm === em) return `${sm}-${sd}~${ed}`;
+  return `${sm}-${sd}~${em}-${ed}`;
 }
 
-export function ChartsTab({ filteredAllLogs }) {
+export function ChartsTab({ filteredAllLogs, profile }) {
   const t = useT();
   const [chartPeriod, setChartPeriod] = useState({ type: "week", count: 8 });
 
@@ -109,6 +115,36 @@ export function ChartsTab({ filteredAllLogs }) {
   // totalRunsForPie now holds total DURATION in seconds (not session count).
   const totalRunsForPie = runTypeDist.reduce((sum, [, c]) => sum + c, 0);
 
+  // Heart-rate-zone distribution by duration. Uses the user's Karvonen zones
+  // from profile (Resting HR + Max HR + chosen method).
+  //
+  // APPROXIMATION: we only store avg HR per activity (not time-in-zone), so
+  // each activity's full duration is bucketed into the zone its avg HR falls into.
+  // For mixed-intensity sessions this under-represents the zone diversity, but
+  // it's the right approximation given the data we capture.
+  const hrZones = useMemo(() => {
+    return computeHRZones(profile?.restingHR, profile?.maxHR, profile?.hrZoneMethod);
+  }, [profile?.restingHR, profile?.maxHR, profile?.hrZoneMethod]);
+
+  const hrZoneDist = useMemo(() => {
+    if (!hrZones) return null;
+    const buckets = {};
+    hrZones.forEach(z => buckets[z.id] = 0);
+    let belowZ1 = 0;  // avg HR lower than Z1 low (very easy / warm-up only)
+    let aboveZ5 = 0;  // avg HR above Z5 high (rare but possible)
+    chartRangeLogs.forEach(l => {
+      if (!l.hr || l.duration <= 0) return;
+      const z = hrZones.find(zz => l.hr >= zz.low && l.hr <= zz.high);
+      if (z) buckets[z.id] += l.duration;
+      else if (l.hr < hrZones[0].low) belowZ1 += l.duration;
+      else aboveZ5 += l.duration;
+    });
+    const total = hrZones.reduce((sum, z) => sum + buckets[z.id], 0) + belowZ1 + aboveZ5;
+    return { buckets, belowZ1, aboveZ5, total };
+  }, [chartRangeLogs, hrZones]);
+
+  const hrZoneMethod = profile && HR_ZONE_METHODS.find(m => m.id === profile.hrZoneMethod);
+
   const presets = [
     { type: "week",  count: 4,  label: t("charts.weeks",  { n: 4 }) },
     { type: "week",  count: 8,  label: t("charts.weeks",  { n: 8 }) },
@@ -137,20 +173,22 @@ export function ChartsTab({ filteredAllLogs }) {
         )}
       </div>
       <div style={{ ...s.card, marginBottom: 22 }}>
+        {/* Right padding bumped (chart spans 50→640 instead of 50→690) so the rightmost
+            week label (~9 chars) doesn't get clipped at the viewBox edge. */}
         <svg viewBox="0 0 700 240" style={{ width: "100%", height: "auto", display: "block", fontFamily: "var(--font-mono)" }}>
           {[0, 0.25, 0.5, 0.75, 1].map((p, i) => {
             const y = 190 - p * 160;
             const val = (chartMax * p).toFixed(0);
             return (
               <g key={i}>
-                <line x1="40" y1={y} x2="690" y2={y} stroke="var(--rule-soft)" strokeWidth="0.5" strokeDasharray={p === 0 ? "none" : "2 4"} />
+                <line x1="40" y1={y} x2="660" y2={y} stroke="var(--rule-soft)" strokeWidth="0.5" strokeDasharray={p === 0 ? "none" : "2 4"} />
                 <text x="34" y={y + 3.5} fontSize="9" fill="var(--ink-3)" textAnchor="end" letterSpacing="0.04em">{val}</text>
               </g>
             );
           })}
           <text x="20" y="14" fontSize="9" fill="var(--ink-3)" textTransform="uppercase" letterSpacing="0.1em">{t("charts.km_axis")}</text>
           {(() => {
-            const xStep = chartData.length > 1 ? 640 / (chartData.length - 1) : 0;
+            const xStep = chartData.length > 1 ? 610 / (chartData.length - 1) : 0;
             const points = chartData.map((w, i) => ({
               x: 50 + i * xStep,
               y: 190 - (w.km / chartMax) * 160,
@@ -202,6 +240,57 @@ export function ChartsTab({ filteredAllLogs }) {
                 </div>
               );
             })}
+          </div>
+        )}
+      </div>
+
+      {/* HR Zone Distribution — only when Karvonen zones are configured in profile.
+          Zone time is approximated by bucketing each activity's full duration
+          into the zone that its avg HR falls into. */}
+      <div style={{ ...s.section, marginTop: 22 }}>
+        {t("charts.hr_zone_title", { label: chartPeriodLabel() })}
+        {hrZoneMethod && <span style={{ ...s.muted, fontWeight: 400, marginLeft: 8 }}>· {hrZoneMethod.label}</span>}
+      </div>
+      <div style={s.card}>
+        {!hrZones ? (
+          <div style={{ color: "var(--ink-3)", textAlign: "center", padding: 20, fontSize: 13, lineHeight: 1.6 }}>
+            {t("charts.hr_zone_need_profile")}
+          </div>
+        ) : !hrZoneDist || hrZoneDist.total === 0 ? (
+          <div style={{ color: "var(--ink-3)", textAlign: "center", padding: 20, fontSize: 13 }}>
+            {t("charts.hr_zone_no_data")}
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {hrZones.map((z, i) => {
+              const dur = hrZoneDist.buckets[z.id] || 0;
+              const pct = hrZoneDist.total ? (dur / hrZoneDist.total) * 100 : 0;
+              // Bar shade: Z1 lightest moss → Z5 deepest ink (intensity ramp).
+              const shade = ["var(--moss-light)", "var(--moss)", "var(--moss-deep)", "var(--ink-2)", "var(--ink-1)"][i] || "var(--ink-2)";
+              return (
+                <div key={z.id}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 5, alignItems: "baseline" }}>
+                    <span style={{ color: "var(--ink-1)" }}>
+                      {z.id}
+                      <span style={{ ...s.muted, fontFamily: "var(--font-mono)", marginLeft: 8 }}>{z.low}–{z.high} bpm</span>
+                    </span>
+                    <span style={{ color: "var(--ink-3)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
+                      {dur > 0 ? formatDuration(dur) : "—"} · {pct.toFixed(0)}%
+                    </span>
+                  </div>
+                  <div style={{ background: "var(--bg-sunken)", height: 5, overflow: "hidden" }}>
+                    <div style={{ background: shade, height: "100%", width: `${pct}%`, transition: "width 0.3s" }} />
+                  </div>
+                </div>
+              );
+            })}
+            {/* Below Z1 / Above Z5 — informational, shown only when non-zero */}
+            {(hrZoneDist.belowZ1 > 0 || hrZoneDist.aboveZ5 > 0) && (
+              <div style={{ ...s.muted, fontSize: 11, marginTop: 4, paddingTop: 8, borderTop: "1px solid var(--rule-soft)" }}>
+                {hrZoneDist.belowZ1 > 0 && <span style={{ marginRight: 14 }}>{t("charts.hr_zone_below")}: <span style={{ fontFamily: "var(--font-mono)" }}>{formatDuration(hrZoneDist.belowZ1)}</span></span>}
+                {hrZoneDist.aboveZ5 > 0 && <span>{t("charts.hr_zone_above")}: <span style={{ fontFamily: "var(--font-mono)" }}>{formatDuration(hrZoneDist.aboveZ5)}</span></span>}
+              </div>
+            )}
           </div>
         )}
       </div>
