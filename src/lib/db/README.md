@@ -75,7 +75,7 @@ silent retry, etc.). Don't swallow errors inside the DAL.
 | `userSettings.js` | ✅ 3.3b | `coach_config` is `jsonb` — never `JSON.stringify` it on the JS side |
 | `workouts.js` | ✅ 3.3c | See below |
 | `races.js` | ✅ 3.3d | See below |
-| `coachMessages.js` | ⏳ scaffold | 3.3e |
+| `coachMessages.js` | ✅ 3.3e | Append-only chat history; see below |
 
 ### `workouts.js` notes
 
@@ -119,3 +119,18 @@ silent retry, etc.). Don't swallow errors inside the DAL.
   `toRow` always emits `priority = null`, even if the caller forgot to clear
   the field. Single-field updates that don't touch `isTarget` (e.g.
   `updateRaceCategory`) pass through without altering `priority`.
+
+### `coachMessages.js` notes
+
+- Append-only at the row level — no `update` / single-row `delete`. The three
+  exported functions are `listMyMessages`, `appendMessage(role, content)`,
+  `clearAllMessages`.
+- `listMyMessages()` orders by `created_at ASC` (oldest first) so chat UIs can
+  render top-to-bottom without sorting.
+- `clearAllMessages()` deletes with an explicit `.eq('user_id', uid)` filter
+  in addition to RLS — defence-in-depth in case RLS is ever misconfigured.
+- The current DeepSeek call in `AICoachTab.sendChat` is **non-streaming** —
+  `resp.json()` returns the full assistant turn at once, so one `appendMessage`
+  call per assistant reply is correct. If streaming is ever added, do NOT
+  call `appendMessage` per token: hold the partial text in local state and
+  commit one row at completion.

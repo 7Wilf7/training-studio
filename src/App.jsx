@@ -16,6 +16,7 @@ import { LoginScreen } from "./components/Auth/LoginScreen";
 import { useAuth } from "./hooks/useAuth";
 import * as db from "./lib/db";
 
+// eslint-disable-next-line no-unused-vars -- retained until 3.4 cleanup
 function loadFromStorage(key, fallback) {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -23,7 +24,7 @@ function loadFromStorage(key, fallback) {
       const parsed = JSON.parse(saved);
       if (parsed[key] !== undefined) return parsed[key];
     }
-  } catch {}
+  } catch { /* corrupt blob — fall through to fallback */ }
   return fallback;
 }
 
@@ -53,12 +54,10 @@ export default function App() {
 }
 
 function AuthedApp({ user, signOut }) {
-  // ── localStorage-backed (not yet migrated — 3.3e for chatMessages) ──────
-  const [chatMessages, setChatMessages] = useState(() => loadFromStorage("chatMessages", []));
-
-  // ── Supabase-backed: workouts (3.3c) + races (3.3d) ─────────────────────
+  // ── Supabase-backed: workouts (3.3c) + races (3.3d) + chatMessages (3.3e)
   const [logs, setLogs] = useState([]);
   const [races, setRaces] = useState([]);
+  const [chatMessages, setChatMessages] = useState([]);
 
   // ── Supabase-backed (loaded async on mount) ─────────────────────────────
   const [profile, setProfileState] = useState(null);
@@ -75,11 +74,12 @@ function AuthedApp({ user, signOut }) {
     let cancelled = false;
     (async () => {
       try {
-        const [profileData, settingsData, workoutsData, racesData] = await Promise.all([
+        const [profileData, settingsData, workoutsData, racesData, messagesData] = await Promise.all([
           db.profiles.getMyProfile(),
           db.userSettings.getMySettings(),
           db.workouts.listMyWorkouts(),
           db.races.listMyRaces(),
+          db.coachMessages.listMyMessages(),
         ]);
         if (cancelled) return;
 
@@ -109,6 +109,9 @@ function AuthedApp({ user, signOut }) {
         // Races — DAL returns created_at desc; RacesTab re-sorts internally
         // (target by date asc, history by date desc).
         setRaces(racesData);
+
+        // Coach messages — DAL returns created_at asc (oldest first).
+        setChatMessages(messagesData);
       } catch (err) {
         console.error("Failed to load user data:", err);
         if (!cancelled) {
@@ -120,17 +123,6 @@ function AuthedApp({ user, signOut }) {
     })();
     return () => { cancelled = true; };
   }, [user.id]);
-
-  // localStorage still persists the not-yet-migrated fields. profile/user_settings
-  // (3.3b), workouts (3.3c) and races (3.3d) all live in Supabase now —
-  // chatMessages is the only blob field left until 3.3e lands.
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        chatMessages,
-      }));
-    } catch {}
-  }, [chatMessages]);
 
   // ── Setter wrappers: optimistic local update + remote write ─────────────
   async function updateProfile(patch) {
@@ -248,6 +240,43 @@ function AuthedApp({ user, signOut }) {
     }
   }
 
+  // ── Coach message mutations (3.3e). Chat is append-only at the row level;
+  // streaming responses are NOT used (DeepSeek call is one-shot await
+  // resp.json), so a single append per assistant turn is correct. ─────────
+  async function appendChatMessage(role, content) {
+    try {
+      const msg = await db.coachMessages.appendMessage(role, content);
+      setChatMessages(prev => [...prev, msg]);
+      return msg;
+    } catch (err) {
+      window.alert("Failed to save message: " + err.message);
+      throw err;
+    }
+  }
+
+  async function clearAllChatMessages() {
+    try {
+      await db.coachMessages.clearAllMessages();
+      setChatMessages([]);
+    } catch (err) {
+      window.alert("Failed to clear messages: " + err.message);
+      throw err;
+    }
+  }
+
+  // Transient, in-memory only — used for error fallback bubbles (API error,
+  // network error, missing key). Refreshing the page clears them since they
+  // never reach the DB. `isLocal` lets downstream code identify them.
+  function appendLocalChatMessage(role, content) {
+    setChatMessages(prev => [...prev, {
+      id: `local-${Date.now()}`,
+      role,
+      content,
+      createdAt: new Date().toISOString(),
+      isLocal: true,
+    }]);
+  }
+
   if (dataLoading) return <LoadingScreen />;
 
   return (
@@ -258,7 +287,10 @@ function AuthedApp({ user, signOut }) {
         addLog={addLog} updateLog={updateLog} bulkAddLogs={bulkAddLogs} deleteLogs={deleteLogs}
         races={races}
         addRace={addRace} updateRace={updateRace} deleteRace={deleteRace}
-        chatMessages={chatMessages} setChatMessages={setChatMessages}
+        chatMessages={chatMessages}
+        appendChatMessage={appendChatMessage}
+        appendLocalChatMessage={appendLocalChatMessage}
+        clearAllChatMessages={clearAllChatMessages}
         apiKey={apiKey} setApiKey={setApiKey}
         apiModel={apiModel} setApiModel={setApiModel}
         itraPI={itraPI} setItraPI={setItraPI}
@@ -275,7 +307,7 @@ function AppShell({
   user, signOut,
   logs, addLog, updateLog, bulkAddLogs, deleteLogs,
   races, addRace, updateRace, deleteRace,
-  chatMessages, setChatMessages,
+  chatMessages, appendChatMessage, appendLocalChatMessage, clearAllChatMessages,
   apiKey, setApiKey, apiModel, setApiModel,
   itraPI, setItraPI, profile, setProfile, coachConfig, setCoachConfig,
   coachMemory, setCoachMemory,
@@ -326,7 +358,7 @@ function AppShell({
       await deleteRace(confirmDelete.id);
     }
     if (confirmDelete.type === "chat") {
-      setChatMessages([]);
+      await clearAllChatMessages();
     }
     setConfirmDelete(null);
   }
@@ -473,7 +505,8 @@ function AppShell({
           coachMemory={coachMemory}
           setCoachMemory={setCoachMemory}
           chatMessages={chatMessages}
-          setChatMessages={setChatMessages}
+          appendChatMessage={appendChatMessage}
+          appendLocalChatMessage={appendLocalChatMessage}
           now={now}
           setConfirmDelete={setConfirmDelete}
           apiKey={apiKey}

@@ -1,14 +1,53 @@
-/* eslint-disable no-unused-vars -- scaffold stage; remove when implementing */
 import { supabase } from '../supabase';
+import { getCurrentUserId } from './_auth';
+
+function fromRow(row) {
+  if (!row) return null;
+  return {
+    id:        row.id,
+    role:      row.role,        // 'user' | 'assistant'
+    content:   row.content,
+    createdAt: row.created_at,
+  };
+}
 
 export async function listMyMessages() {
-  throw new Error('listMyMessages: not implemented yet');
+  // Ascending order — chat history reads oldest-first (top → bottom).
+  const { data, error } = await supabase
+    .from('coach_messages')
+    .select('*')
+    .order('created_at', { ascending: true });
+  if (error) {
+    console.error('listMyMessages failed:', error);
+    throw new Error(error.message);
+  }
+  return (data ?? []).map(fromRow);
 }
 
 export async function appendMessage(role, content) {
-  throw new Error('appendMessage: not implemented yet');
+  const userId = await getCurrentUserId();
+  const { data, error } = await supabase
+    .from('coach_messages')
+    .insert({ user_id: userId, role, content })
+    .select('*')
+    .single();
+  if (error) {
+    console.error('appendMessage failed:', error);
+    throw new Error(error.message);
+  }
+  return fromRow(data);
 }
 
 export async function clearAllMessages() {
-  throw new Error('clearAllMessages: not implemented yet');
+  // Explicit user_id filter — RLS would also constrain this, but the explicit
+  // predicate is defence-in-depth in case RLS is ever misconfigured.
+  const userId = await getCurrentUserId();
+  const { error } = await supabase
+    .from('coach_messages')
+    .delete()
+    .eq('user_id', userId);
+  if (error) {
+    console.error('clearAllMessages failed:', error);
+    throw new Error(error.message);
+  }
 }

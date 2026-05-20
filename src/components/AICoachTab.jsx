@@ -33,7 +33,7 @@ const DATA_LABELS = {
 export function AICoachTab({
   logs, races, profile, coachConfig, setCoachConfig,
   coachMemory, setCoachMemory,
-  chatMessages, setChatMessages, now, setConfirmDelete,
+  chatMessages, appendChatMessage, appendLocalChatMessage, now, setConfirmDelete,
   apiKey, apiModel, onEditProfile,
 }) {
   // DeepSeek is the only supported provider now; endpoint is hardcoded.
@@ -198,7 +198,8 @@ ${recentLogs}`;
   async function sendChat() {
     if (!chatInput.trim() || chatLoading) return;
     if (!apiKey) {
-      setChatMessages([...chatMessages, { role: "assistant", content: t("coach.no_key") }]);
+      // Transient — refreshing should clear this hint, not pollute history.
+      appendLocalChatMessage("assistant", t("coach.no_key"));
       return;
     }
     const userMsg = chatInput.trim();
@@ -211,9 +212,20 @@ ${recentLogs}`;
       dataBlock: buildDataBlock("en"),
       lang: "en",
     });
-    const newMessages = [...chatMessages, { role: "user", content: userMsg }];
-    setChatMessages(newMessages);
+    // Snapshot the history + this turn's user message for the API call. The
+    // closure value of chatMessages matches what the user sees right now;
+    // appending to the live state happens via the wrapper just below.
+    const messagesToSend = [...chatMessages, { role: "user", content: userMsg }];
     setChatInput("");
+
+    // Persist the user turn first. If this fails, the wrapper has already
+    // alerted — bail out before spending an API call.
+    try {
+      await appendChatMessage("user", userMsg);
+    } catch {
+      setChatLoading(false);
+      return;
+    }
 
     console.log("[AI Coach] POST to:", apiEndpoint, "key length:", apiKey.length, "prompt length:", systemPrompt.length);
     try {
@@ -229,24 +241,25 @@ ${recentLogs}`;
           model: apiModel,
           max_tokens: 1200,
           system: systemPrompt,
-          messages: newMessages,
+          messages: messagesToSend,
         }),
       });
       const data = await resp.json();
       if (!resp.ok || data.error) {
         const msg = data.error?.message || `HTTP ${resp.status}`;
         console.error("[AI Coach] API error:", data);
-        setChatMessages([...newMessages, { role: "assistant", content: t("coach.api_error", { msg }) }]);
+        // Transient error bubble — kept out of the DB.
+        appendLocalChatMessage("assistant", t("coach.api_error", { msg }));
       } else {
         const reply = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || t("coach.no_response");
-        setChatMessages([...newMessages, { role: "assistant", content: reply }]);
+        try {
+          await appendChatMessage("assistant", reply);
+        } catch { /* alerted by wrapper */ }
       }
     } catch (err) {
       console.error("[AI Coach] Network error fetching", apiEndpoint, err);
-      setChatMessages([
-        ...newMessages,
-        { role: "assistant", content: t("coach.network_error", { msg: err.message, url: apiEndpoint }) },
-      ]);
+      // Transient error bubble — kept out of the DB.
+      appendLocalChatMessage("assistant", t("coach.network_error", { msg: err.message, url: apiEndpoint }));
     }
     setChatLoading(false);
   }
