@@ -8,6 +8,7 @@ const FIELD_MAP = {
   date:          'date',
   distance:      'distance',
   category:      'category',
+  subtype:       'subtype',         // generic second-level tag — currently used by Spartan (Sprint/Super/Beast/Ultra)
   ascent:        'ascent',
   itraScore:     'itra_score',
   resultSeconds: 'result_seconds',
@@ -47,6 +48,7 @@ function fromRow(row) {
     date:      row.date ?? '',
     distance:  row.distance ?? null,        // numeric, kept as number — fresh start, no string units
     category:  row.category ?? '',
+    subtype:   row.subtype ?? '',           // text; '' when unused
     ascent:    row.ascent ?? null,          // int, kept as number
     itraScore: row.itra_score ?? null,      // int, kept as number
     resultSeconds,
@@ -60,7 +62,7 @@ function toRow(patch) {
   const out = {};
 
   // Plain passthrough fields. Bool / text / date — Supabase handles the types.
-  for (const camel of ['isTarget', 'name', 'date', 'category']) {
+  for (const camel of ['isTarget', 'name', 'date', 'category', 'subtype']) {
     if (camel in patch && patch[camel] !== undefined) {
       out[FIELD_MAP[camel]] = patch[camel];
     }

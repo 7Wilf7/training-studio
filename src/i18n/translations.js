@@ -144,6 +144,10 @@ const dict = {
   "enum.race_cat.Hyrox":          { en: "Hyrox",            zh: "Hyrox" },
   "enum.race_cat.Other":          { en: "Other",            zh: "其他" },
   "enum.race_cat.Uncategorized":  { en: "Uncategorized",    zh: "未分类" },
+  "enum.spartan.Sprint":          { en: "Sprint",           zh: "Sprint" },
+  "enum.spartan.Super":           { en: "Super",            zh: "Super" },
+  "enum.spartan.Beast":           { en: "Beast",            zh: "Beast" },
+  "enum.spartan.Ultra":           { en: "Ultra",            zh: "Ultra" },
 
   // ===== Enum: Coach behavior =====
   "enum.coach.soft":              { en: "Soft & encouraging", zh: "温和鼓励" },
@@ -333,6 +337,7 @@ const dict = {
   "races.distance_label":     { en: "Distance (km)",        zh: "距离 (km)" },
   "races.ascent_label":       { en: "Ascent (m)",           zh: "爬升 (m)" },
   "races.category_label":     { en: "Category",             zh: "组别" },
+  "races.spartan_tier":       { en: "Spartan tier",         zh: "斯巴达级别" },
   "races.itra_label":         { en: "ITRA Score",           zh: "ITRA 分数" },
   "races.category_placeholder":{ en: "Category…",           zh: "组别……" },
   "races.set_category":       { en: "Set category…",        zh: "设置组别……" },
@@ -360,6 +365,8 @@ const dict = {
   "pr.itra_placeholder":      { en: "e.g. 580",             zh: "例如 580" },
   "pr.itra_saved":            { en: "Saved: {v}",           zh: "已保存：{v}" },
   "pr.itra_edit_hint":        { en: "click to edit",        zh: "点击编辑" },
+  "pr.longest":               { en: "Longest distance",     zh: "最长距离" },
+  "pr.toughest":              { en: "Toughest tier",        zh: "最高难度" },
 
   // ===== AI Coach tab =====
   "coach.edit_profile":       { en: "⚙ Edit Profile",       zh: "⚙ 编辑资料" },

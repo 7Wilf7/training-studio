@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { s } from "../styles";
-import { RACE_PRIORITY, RACE_CATEGORIES, RACE_CATEGORY_COLOR } from "../constants";
+import { RACE_PRIORITY, RACE_CATEGORIES, RACE_CATEGORY_COLOR, SPARTAN_SUBTYPES } from "../constants";
 import { useT } from "../i18n/LanguageContext";
 import { parseDistanceKm, inferRaceCategory } from "../utils/format";
 import { useClickOutside } from "../utils/useClickOutside";
-import { PeakIcon, ClockIcon } from "./Icons";
+import { PeakIcon, ClockIcon, RouteIcon } from "./Icons";
 
 const EMPTY_RACE = (isTarget) => ({
   isTarget, priority: "A", name: "", date: "",
-  distance: "", category: "", ascent: "", resultH: "", resultM: "", resultS: "",
+  distance: "", category: "", subtype: "", ascent: "", resultH: "", resultM: "", resultS: "",
   itraScore: "",
 });
 
@@ -24,6 +24,7 @@ function raceToForm(race) {
     date: race.date || "",
     distance: distNum > 0 ? String(distNum) : "",
     category: race.category || "",
+    subtype: race.subtype || "",
     ascent: race.ascent || "",
     resultH: race.resultH || "",
     resultM: race.resultM || "",
@@ -225,10 +226,12 @@ export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete }) 
 
   // Card content (used when not in edit mode). Pulled out so we can reuse it from both sections.
   function renderRaceCardInner(r, timeStr) {
-    // Distance no longer shown on the card (category + name carries the signal for road
-    // races, trail's distance is in the form). Time goes in row 1. Row 2 exists only for
-    // ascent / ITRA — road & hyrox cards become single-row.
-    const hasRow2 = (r.ascent && parseInt(r.ascent) > 0) || r.itraScore;
+    // Road categories (Half Marathon / Marathon / 10K) carry the distance in
+    // the category tag itself, so we hide the number. Trail (and any other
+    // distance-based variant) shows the actual km. Row 2 exists when any of
+    // distance / ascent / ITRA is present.
+    const showDistanceOnCard = r.category === "Trail" && r.distance > 0;
+    const hasRow2 = showDistanceOnCard || (r.ascent && parseInt(r.ascent) > 0) || r.itraScore;
     return (
       <div key={r.id} onClick={() => startEdit(r)}
         style={{ ...s.card, cursor: "pointer" }}>
@@ -248,6 +251,9 @@ export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete }) 
               }}>▲ {r.priority}</span>
             )}
             {renderCategoryTag(r.category)}
+            {r.subtype && (
+              <span style={{ ...s.subTag, flexShrink: 0 }}>{r.subtype}</span>
+            )}
             <div style={{
               fontWeight: 500, fontSize: 15, color: "var(--ink-1)",
               maxWidth: 380, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
@@ -276,6 +282,12 @@ export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete }) 
         </div>
         {hasRow2 && (
           <div style={{ display: "flex", gap: 18, alignItems: "center", flexWrap: "wrap", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
+            {showDistanceOnCard && (
+              <span style={{ fontSize: 13, color: "var(--ink-1)", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                <span style={{ color: "var(--ink-3)" }}><RouteIcon size={13} /></span>
+                {r.distance}<span style={{ color: "var(--ink-3)", marginLeft: 1, fontSize: 10 }}>km</span>
+              </span>
+            )}
             {r.ascent && parseInt(r.ascent) > 0 && (
               <span style={{ fontSize: 13, color: "var(--moss-deep)", display: "inline-flex", alignItems: "center", gap: 5 }}>
                 <span style={{ color: "var(--moss)" }}><PeakIcon size={13} /></span>
@@ -300,11 +312,16 @@ export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete }) 
     // Hyrox is fixed-format indoor so skips both distance and ascent.
     const isRoadOnly = ["Half Marathon", "Marathon", "10K"].includes(newRace.category);
     const isHyrox = newRace.category === "Hyrox";
-    const showAscent = !isRoadOnly && !isHyrox;
-    const showDistance = !isHyrox;
-    // ITRA only shown for Trail HISTORY entries (target races have no result yet,
-    // road / hyrox don't get ITRA scores).
-    const showItra = !newRace.isTarget && newRace.category === "Trail";
+    const isSpartan = newRace.category === "Spartan";
+    const showAscent = !isRoadOnly && !isHyrox && !isSpartan;
+    // Distance hidden when the category itself implies the distance (road
+    // categories like Half Marathon / Marathon / 10K), when the format is
+    // fixed-indoor (Hyrox), or when the user picks a Spartan tier (tier
+    // already carries the size signal). Trail still shows it.
+    const showDistance = !isHyrox && !isRoadOnly && !isSpartan;
+    // ITRA fields removed from the form per user request (2026-05). The DB
+    // column is retained for backward compat with already-imported data.
+    const showItra = false;
 
     return (
       <div style={{ ...s.cardDark, marginBottom: 14 }}>
@@ -345,6 +362,21 @@ export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete }) 
               style={s.input} />
           </div>
         </div>
+
+        {/* Spartan-only: pick the event tier. Acts as the "size" signal in
+            place of distance/ascent for this category. */}
+        {isSpartan && (
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ ...s.label, marginBottom: 6 }}>{t("races.spartan_tier")}</div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {SPARTAN_SUBTYPES.map(st => (
+                <button key={st} type="button"
+                  onClick={() => setNewRace({ ...newRace, subtype: st })}
+                  style={s.chip(newRace.subtype === st)}>{t(`enum.spartan.${st}`)}</button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Row 2: Date + Distance + Ascent (each shown by category rules).
             Empty cells are NOT rendered so visible fields sit adjacent. */}

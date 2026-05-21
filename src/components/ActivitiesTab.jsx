@@ -245,13 +245,27 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
     };
     const header = parseLine(lines[0]);
     const idx = (n) => header.findIndex(h => h.toLowerCase() === n.toLowerCase());
+    // Try several known Garmin column names — they vary by app version,
+    // device type, and locale. First match wins.
+    const idxAny = (...names) => {
+      for (const n of names) {
+        const i = idx(n);
+        if (i >= 0) return i;
+      }
+      return -1;
+    };
     const iType = idx("Activity Type"), iDate = idx("Date");
-    const iDist = idx("Distance"), iTime = idx("Time");
+    const iDist = idx("Distance");
+    const iTime = idxAny("Time", "Total Time", "Moving Time", "Elapsed Time");
     const iAvgHR = idx("Avg HR"), iMaxHR = idx("Max HR");
     const iAscent = idx("Total Ascent");
     const iCadence = idx("Avg Run Cadence");
     const iTE = idx("Aerobic TE");
     const iGAP = idx("Avg GAP");
+
+    if (iTime < 0) {
+      console.warn("[CSV] No duration column found. Headers were:", header);
+    }
 
     const num = (raw) => {
       const s = String(raw || "").replace(/,/g, "").trim();

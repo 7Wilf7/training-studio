@@ -79,6 +79,10 @@ export const SORT_OPTIONS = [
 
 export const RACE_PRIORITY = ["A", "B", "C"];
 
+// Spartan event distance/difficulty tiers — Sprint shortest/easiest, Ultra
+// longest/hardest. PR view ranks by this order (Ultra > Beast > Super > Sprint).
+export const SPARTAN_SUBTYPES = ["Sprint", "Super", "Beast", "Ultra"];
+
 // Race categories — used for PR auto-aggregation and as a list-view tag
 export const RACE_CATEGORIES = [
   "Half Marathon",

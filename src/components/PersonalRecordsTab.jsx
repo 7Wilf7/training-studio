@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { s } from "../styles";
-import { RACE_CATEGORIES, RACE_CATEGORY_COLOR } from "../constants";
+import { RACE_CATEGORIES, RACE_CATEGORY_COLOR, SPARTAN_SUBTYPES } from "../constants";
 import { useT } from "../i18n/LanguageContext";
 import { useClickOutside } from "../utils/useClickOutside";
 
@@ -11,6 +11,18 @@ function resultSeconds(r) {
   const total = h * 3600 + m * 60 + sec;
   return total > 0 ? total : Infinity;
 }
+
+// Trail varies in length, so the headline metric is the longest distance.
+// Spartan ranks by tier difficulty (Ultra > Beast > Super > Sprint) — distance
+// isn't a clean signal for it. Other categories (Half Marathon / Marathon /
+// 10K / Hyrox) all run a fixed distance, so fastest time is the right rep.
+const DISTANCE_RANKED_CATEGORIES = new Set(["Trail"]);
+const DIFFICULTY_RANKED_CATEGORIES = new Set(["Spartan"]);
+
+const SPARTAN_RANK = SPARTAN_SUBTYPES.reduce((acc, name, i) => {
+  acc[name] = i + 1;   // Sprint=1, Super=2, Beast=3, Ultra=4
+  return acc;
+}, {});
 
 function formatHMS(sec) {
   if (!isFinite(sec)) return "—";
@@ -40,13 +52,29 @@ export function PersonalRecordsTab({ races, itraPI, setItraPI }) {
     for (const cat of allCats) {
       const group = byCategory[cat];
       if (!group || group.length === 0) continue;
-      const sorted = [...group].sort((a, b) => resultSeconds(a) - resultSeconds(b));
-      const best = sorted[0];
-      const bestSec = resultSeconds(best);
+      const metric = DISTANCE_RANKED_CATEGORIES.has(cat) ? "distance"
+        : DIFFICULTY_RANKED_CATEGORIES.has(cat) ? "difficulty"
+        : "time";
+      let sorted, best;
+      if (metric === "distance") {
+        // Longest distance wins. Null/0 distance sorts last.
+        sorted = [...group].sort((a, b) => (b.distance || 0) - (a.distance || 0));
+        best = (sorted[0]?.distance || 0) > 0 ? sorted[0] : null;
+      } else if (metric === "difficulty") {
+        // Highest Spartan tier wins (Ultra=4 > Beast=3 > Super=2 > Sprint=1).
+        // Unknown / missing subtype sorts last.
+        sorted = [...group].sort((a, b) => (SPARTAN_RANK[b.subtype] || 0) - (SPARTAN_RANK[a.subtype] || 0));
+        best = SPARTAN_RANK[sorted[0]?.subtype] ? sorted[0] : null;
+      } else {
+        sorted = [...group].sort((a, b) => resultSeconds(a) - resultSeconds(b));
+        const bestSec = resultSeconds(sorted[0]);
+        best = isFinite(bestSec) ? sorted[0] : null;
+      }
       out.push({
         category: cat,
-        best: isFinite(bestSec) ? best : null,
-        bestSeconds: bestSec,
+        metric,
+        best,
+        bestSeconds: best ? resultSeconds(best) : Infinity,
         all: sorted,
       });
     }
@@ -96,11 +124,27 @@ export function PersonalRecordsTab({ races, itraPI, setItraPI }) {
               borderTop: "3px solid " + (RACE_CATEGORY_COLOR[rec.category] || "var(--rule)"),
               position: "relative",
             }}>
-              <div style={{ fontSize: 13, color: "var(--ink-2)", marginBottom: 6, fontWeight: 500 }}>{t(`enum.race_cat.${rec.category}`)}</div>
+              <div style={{ fontSize: 13, color: "var(--ink-2)", marginBottom: 6, fontWeight: 500, display: "flex", alignItems: "baseline", gap: 8 }}>
+                <span>{t(`enum.race_cat.${rec.category}`)}</span>
+                {(rec.metric === "distance" || rec.metric === "difficulty") && (
+                  <span style={{ fontSize: 10, color: "var(--ink-3)", fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 400 }}>
+                    {rec.metric === "distance" ? t("pr.longest") : t("pr.toughest")}
+                  </span>
+                )}
+              </div>
               {rec.best ? (
                 <>
-                  <div style={{ ...s.metricVal, fontSize: 24 }}>
-                    {formatHMS(rec.bestSeconds)}
+                  <div style={{ ...s.metricVal, fontSize: 24, display: "flex", alignItems: "baseline", gap: 6 }}>
+                    {rec.metric === "distance" ? (
+                      <>
+                        <span>{rec.best.distance}</span>
+                        <span style={{ fontSize: 13, color: "var(--ink-3)", fontWeight: 400, fontFamily: "var(--font-mono)" }}>km</span>
+                      </>
+                    ) : rec.metric === "difficulty" ? (
+                      <span>{rec.best.subtype}</span>
+                    ) : (
+                      <span>{formatHMS(rec.bestSeconds)}</span>
+                    )}
                   </div>
                   <div style={{ fontSize: 13, color: "var(--ink-2)", marginTop: 10, lineHeight: 1.45 }}>
                     {rec.best.name}
@@ -118,7 +162,10 @@ export function PersonalRecordsTab({ races, itraPI, setItraPI }) {
                   <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 8 }}>
                     {rec.all.slice(1).map(r => (
                       <div key={r.id} style={{ ...s.dataNum, fontSize: 12, color: "var(--ink-2)" }}>
-                        {formatHMS(resultSeconds(r))} · <span style={{ fontFamily: "var(--font-sans)" }}>{r.name}</span> · <span style={{ color: "var(--ink-3)" }}>{r.date}</span>
+                        {rec.metric === "distance" ? (r.distance > 0 ? `${r.distance}km` : "—")
+                          : rec.metric === "difficulty" ? (r.subtype || "—")
+                          : formatHMS(resultSeconds(r))}
+                        {" · "}<span style={{ fontFamily: "var(--font-sans)" }}>{r.name}</span> · <span style={{ color: "var(--ink-3)" }}>{r.date}</span>
                       </div>
                     ))}
                   </div>
