@@ -2,6 +2,7 @@ import { useState, useRef, useMemo } from "react";
 import { s } from "../styles";
 import { RUN_SUBTYPES, RUN_FLAGS, RUN_PACE_TYPES, SORT_OPTIONS, ACTIVITY_TYPES } from "../constants";
 import { useT } from "../i18n/LanguageContext";
+import { useIsNarrow } from "../hooks/useMediaQuery";
 import {
   autoClassifyRun, parseTimeToSeconds,
   formatDuration, formatPaceFromSec, formatDateShort, isDuplicate,
@@ -26,6 +27,10 @@ function mapGarminActivityType(at) {
 
 export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs, setConfirmDelete }) {
   const t = useT();
+  // < 1024px: phone OR small tablet. Both can't fit the 8-column metric
+  // grid plus the 300px left identifier block — switch to a stacked flex
+  // layout where the metric pills wrap naturally.
+  const isNarrow = useIsNarrow();
   const [sortBy, setSortBy] = useState("date_desc");
   const [showAdd, setShowAdd] = useState(false);
   const [editingId, setEditingId] = useState(null); // log.id currently being edited inline
@@ -419,26 +424,32 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
               onClick={onCardClick}
               style={{
                 ...s.card,
-                display: "flex", alignItems: "center", gap: 12,
+                display: "flex",
+                flexDirection: isNarrow ? "column" : "row",
+                alignItems: isNarrow ? "stretch" : "center",
+                gap: isNarrow ? 8 : 12,
                 cursor: "pointer",
                 ...(isSelected ? { background: "#eef5ff", borderColor: "#7aa8e0" } : {}),
               }}>
-              {selectMode && (
-                <input type="checkbox" checked={isSelected} readOnly
-                  style={{ width: 16, height: 16, pointerEvents: "none", flexShrink: 0 }} />
-              )}
-              {/* Left identifiers: date + type tag + sub-type chips.
-                  Fixed-width container so the metrics grid below starts at the SAME x
-                  on every row (columns align), but without the giant leftover gap that
-                  flex:1 caused before. Sub-types overflow gets ellipsised. */}
-              <div style={{
+              {/* Top row (narrow: header line; desktop: left identifier block).
+                  Contains: checkbox? · date · type tag · subtype chips · delete-button-on-narrow.
+                  On desktop this is the 300px-fixed left column; on narrow it
+                  spans full width with the delete button pushed to the right. */}
+              <div style={isNarrow ? {
+                display: "flex", alignItems: "center", gap: 10,
+                flexWrap: "wrap",
+              } : {
                 width: 300, minWidth: 300, flexShrink: 0,
                 display: "flex", alignItems: "center", gap: 10,
                 overflow: "hidden",
               }}>
+                {selectMode && (
+                  <input type="checkbox" checked={isSelected} readOnly
+                    style={{ width: 16, height: 16, pointerEvents: "none", flexShrink: 0 }} />
+                )}
                 <div style={{ minWidth: 50, fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--ink-3)", fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{formatDateShort(l.date)}</div>
                 <div style={{ ...s.tag(l.type), flexShrink: 0 }}>{t(`enum.activity.${l.type}`)}</div>
-                <div style={{ flex: 1, minWidth: 0, display: "flex", gap: 6, flexWrap: "nowrap", overflow: "hidden" }}>
+                <div style={{ flex: 1, minWidth: 0, display: "flex", gap: 6, flexWrap: isNarrow ? "wrap" : "nowrap", overflow: "hidden" }}>
                   {l.subTypes.filter(st => {
                     if (RUN_FLAGS.includes(st)) return true;
                     if (RUN_PACE_TYPES.includes(st)) return l.type === "Road Run";
@@ -454,10 +465,24 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
                     );
                   })}
                 </div>
+                {/* Delete button on narrow lives at the right end of the header line;
+                    desktop puts it at the very end of the row (later in this JSX). */}
+                {isNarrow && !selectMode && (
+                  <button onClick={(e) => { e.stopPropagation(); deleteLog(l.id); }}
+                    style={{ border: "none", background: "none", color: "var(--ink-3)", cursor: "pointer", fontSize: 14, padding: "0 4px", marginLeft: "auto", flexShrink: 0 }}
+                    title={t("activities.delete_tooltip")}>✕</button>
+                )}
               </div>
-              {/* Metrics grid — 8 fixed columns so each metric stacks vertically across rows.
-                  Order (per user request): Distance · Ascent · Duration · Pace · GAP · HR · TE · Cadence. */}
-              <div style={{
+              {/* Metrics container — on desktop, an 8-column fixed grid so
+                  values align vertically across rows. On narrow, a wrapping
+                  flex row that flows naturally on phone widths. */}
+              <div style={isNarrow ? {
+                display: "flex", flexWrap: "wrap",
+                gap: "6px 14px",
+                alignItems: "center",
+                fontFamily: "var(--font-mono)",
+                fontVariantNumeric: "tabular-nums",
+              } : {
                 display: "grid",
                 gridTemplateColumns: "90px 80px 110px 80px 80px 80px 55px 75px",
                 gap: 8,

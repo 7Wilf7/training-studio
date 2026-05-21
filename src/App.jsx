@@ -13,6 +13,7 @@ import { ApiSettingsModal } from "./components/ApiSettingsModal";
 import { UserBadge } from "./components/Auth/UserBadge";
 import { LoginScreen } from "./components/Auth/LoginScreen";
 import { useAuth } from "./hooks/useAuth";
+import { useIsMobile, useIsNarrow } from "./hooks/useMediaQuery";
 import * as db from "./lib/db";
 
 function LoadingScreen() {
@@ -342,6 +343,8 @@ function AppShell({
   lang, setLang,
 }) {
   const t = useT();
+  const isMobile = useIsMobile();
+  const isNarrow = useIsNarrow();
   const [tab, setTab] = useState(0);
   const [period, setPeriod] = useState({ type: "all" });
   const [periodDropdown, setPeriodDropdown] = useState(null);
@@ -403,39 +406,72 @@ function AppShell({
   useEffect(() => { document.title = titleText; }, [titleText]);
 
   return (
-    <div style={{ maxWidth: 1280, margin: "0 auto", padding: "1.5rem 1.75rem 2rem", fontFamily: "var(--font-sans)", color: "var(--ink-1)", position: "relative" }}>
+    <div style={{
+      maxWidth: 1280, margin: "0 auto",
+      padding: isMobile ? "1rem 1rem 1.5rem" : "1.5rem 1.75rem 2rem",
+      fontFamily: "var(--font-sans)", color: "var(--ink-1)", position: "relative",
+    }}>
 
-      {/* Top instrument bar — runs full-width across the top with hairline ruling
-          underneath. Layout is a 3-column grid: brand mark / center title / readout + controls. */}
+      {/* Top instrument bar — desktop runs a 3-column grid; narrow stacks the
+          three sections vertically with the title on top (the most important
+          identifier on a phone) and the brand + controls flanking it. */}
       <div style={{
         display: "grid",
-        gridTemplateColumns: "1fr auto 1fr",
-        alignItems: "flex-start",
-        gap: 16,
-        paddingBottom: 18,
+        gridTemplateColumns: isNarrow ? "1fr" : "1fr auto 1fr",
+        alignItems: isNarrow ? "stretch" : "flex-start",
+        gap: isNarrow ? 12 : 16,
+        paddingBottom: isMobile ? 14 : 18,
         borderBottom: "1px solid var(--rule)",
-        marginBottom: 24,
+        marginBottom: isMobile ? 16 : 24,
       }}>
 
-        {/* Left: brand mark — coordinate-style identifier */}
-        <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--ink-3)", lineHeight: 1.6 }}>
+        {/* Left: brand mark — coordinate-style identifier.
+            Narrow: horizontal row (compact); desktop: 3-line block. */}
+        <div style={{
+          fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--ink-3)",
+          lineHeight: 1.6,
+          display: isNarrow ? "flex" : "block",
+          flexWrap: "wrap", gap: isNarrow ? 10 : 0,
+          alignItems: "baseline",
+        }}>
           <div style={{ color: "var(--moss)", fontWeight: 600 }}>▲ Training Studio</div>
           <div>GMT+8</div>
           <div>{now.toLocaleDateString("en-CA")}</div>
         </div>
 
-        {/* Center: title — display weight, generous space */}
-        <div style={{ textAlign: "center", maxWidth: 520 }}>
-          <h2 style={{ fontFamily: "var(--font-sans)", fontSize: 30, fontWeight: 500, margin: 0, color: "var(--ink-1)", letterSpacing: "-0.02em", lineHeight: 1.15 }}>
+        {/* Center: title — display weight, generous space.
+            Narrow: smaller font, drops subtitle to save vertical space. */}
+        <div style={{
+          textAlign: "center",
+          maxWidth: 520,
+          order: isNarrow ? -1 : 0,  // title first on narrow stack
+          margin: isNarrow ? "0 auto" : undefined,
+        }}>
+          <h2 style={{
+            fontFamily: "var(--font-sans)",
+            fontSize: isMobile ? 22 : 30,
+            fontWeight: 500, margin: 0, color: "var(--ink-1)",
+            letterSpacing: "-0.02em", lineHeight: 1.15,
+          }}>
             {titleText}
           </h2>
-          <p style={{ fontFamily: "var(--font-sans)", fontSize: 13, color: "var(--ink-3)", margin: "8px 0 0" }}>
-            {t("header.subtitle")}
-          </p>
+          {!isMobile && (
+            <p style={{ fontFamily: "var(--font-sans)", fontSize: 13, color: "var(--ink-3)", margin: "8px 0 0" }}>
+              {t("header.subtitle")}
+            </p>
+          )}
         </div>
 
-        {/* Right: clock + controls. Clock as instrument readout (big mono), buttons as ruled cells. */}
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 10 }}>
+        {/* Right: clock + controls. Clock as instrument readout (big mono), buttons as ruled cells.
+            Narrow: row-flex (clock left, buttons right) to keep the bar compact. */}
+        <div style={{
+          display: "flex",
+          flexDirection: isNarrow ? "row" : "column",
+          alignItems: isNarrow ? "center" : "flex-end",
+          justifyContent: isNarrow ? "space-between" : "flex-start",
+          gap: 10,
+          flexWrap: "wrap",
+        }}>
           <div style={{ fontFamily: "var(--font-mono)", color: "var(--ink-1)", textAlign: "right", lineHeight: 1.1 }}>
             <div style={{ fontSize: 24, fontWeight: 500, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>
               {now.toLocaleTimeString("en-GB", { hour12: false })}
@@ -463,8 +499,14 @@ function AppShell({
       </div>
 
       {/* Tabs — full-width segmented ruler. Position number stays small + mono
-          to keep the instrument feel; the label is sentence case + readable. */}
-      <div style={{ display: "flex", marginBottom: 28, borderBottom: "1px solid var(--rule)", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+          to keep the instrument feel; the label is sentence case + readable.
+          Mobile: trim padding, hide the 01/02/03/04 prefix to save room. */}
+      <div style={{
+        display: "flex",
+        marginBottom: isMobile ? 20 : 28,
+        borderBottom: "1px solid var(--rule)",
+        overflowX: "auto", WebkitOverflowScrolling: "touch",
+      }}>
         {TABS.map((label, i) => {
           const key = ["tabs.training", "tabs.calendar", "tabs.races", "tabs.ai_coach"][i];
           const active = tab === i;
@@ -472,8 +514,9 @@ function AppShell({
             <button key={label} onClick={() => setTab(i)} style={{
               flex: 1, textAlign: "center",
               background: "transparent", border: "none",
-              padding: "14px 18px 18px",
-              fontSize: 15, fontFamily: "var(--font-sans)",
+              padding: isMobile ? "10px 8px 12px" : "14px 18px 18px",
+              fontSize: isMobile ? 13 : 15,
+              fontFamily: "var(--font-sans)",
               fontWeight: active ? 600 : 500,
               color: active ? "var(--ink-1)" : "var(--ink-3)",
               cursor: "pointer", whiteSpace: "nowrap",
@@ -482,7 +525,11 @@ function AppShell({
               marginBottom: -1,
               transition: "color 120ms",
             }}>
-              <span style={{ color: "var(--ink-3)", marginRight: 8, fontWeight: 400, fontFamily: "var(--font-mono)", fontSize: 11 }}>{String(i + 1).padStart(2, "0")}</span>
+              {!isMobile && (
+                <span style={{ color: "var(--ink-3)", marginRight: 8, fontWeight: 400, fontFamily: "var(--font-mono)", fontSize: 11 }}>
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+              )}
               {t(key)}
             </button>
           );

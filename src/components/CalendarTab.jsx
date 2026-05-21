@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { s } from "../styles";
 import { RUN_GROUP_TYPES, TYPE_COLOR } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
+import { useIsMobile } from "../hooks/useMediaQuery";
 import { CalendarDayModal } from "./CalendarDayModal";
 
 // YYYY-MM-DD in LOCAL time. workouts.date is stored as 'YYYY-MM-DD' (no time
@@ -45,6 +46,7 @@ const MONTH_KEYS = [
 export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNotes, setDailyTags }) {
   const t = useT();
   const { lang } = useLanguage();
+  const isMobile = useIsMobile();
   const today = new Date();
   const todayKey = dateKey(today);
 
@@ -115,16 +117,23 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
         <button onClick={gotoPrev} style={{ ...s.btnGhost, padding: "6px 12px", fontSize: 14 }} aria-label="Previous month">‹</button>
         <div style={{
           fontFamily: "var(--font-sans)", fontSize: 18, fontWeight: 500,
-          color: "var(--ink-1)", minWidth: 160, textAlign: "center",
+          color: "var(--ink-1)",
+          minWidth: isMobile ? 110 : 160,
+          textAlign: "center",
           letterSpacing: "-0.01em",
         }}>{monthLabel}</div>
         <button onClick={gotoNext} style={{ ...s.btnGhost, padding: "6px 12px", fontSize: 14 }} aria-label="Next month">›</button>
         <button onClick={gotoToday} style={{ ...s.btnGhost, padding: "6px 12px", fontSize: 12, marginLeft: 4 }}>
           {t("calendar.today")}
         </button>
-        <div style={{ marginLeft: "auto", ...s.muted, fontSize: 12 }}>
-          {t("calendar.legend_hint")}
-        </div>
+        {/* Legend hint is verbose — hidden on mobile to save the nav bar from
+            wrapping. Users still see the visual distinction (solid vs dashed)
+            in the cells themselves. */}
+        {!isMobile && (
+          <div style={{ marginLeft: "auto", ...s.muted, fontSize: 12 }}>
+            {t("calendar.legend_hint")}
+          </div>
+        )}
       </div>
 
       {/* Weekday header */}
@@ -137,10 +146,12 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
       }}>
         {WEEKDAYS.map((w, i) => (
           <div key={w} style={{
-            fontFamily: "var(--font-mono)", fontSize: 12,
+            fontFamily: "var(--font-mono)",
+            fontSize: isMobile ? 10 : 12,
             color: i >= 5 ? "var(--ink-3)" : "var(--ink-2)",
             textTransform: "uppercase", letterSpacing: "0.06em",
-            padding: "10px 12px", textAlign: "left",
+            padding: isMobile ? "6px 4px" : "10px 12px",
+            textAlign: "center",
             borderRight: i < 6 ? "1px solid var(--rule)" : "none",
           }}>{w}</div>
         ))}
@@ -178,6 +189,7 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
               rowIdx={Math.floor(i / 7)}
               onClick={() => setOpenDay({ dateKey: key, isFuture })}
               t={t}
+              isMobile={isMobile}
             />
           );
         })}
@@ -210,7 +222,7 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
 //     bottom-right corner — independent from workouts.
 //   - Empty + past/today → "Rest" placeholder; empty + future → "+ plan" hint
 // ─────────────────────────────────────────────────────────────────────────
-function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, colIdx, rowIdx, onClick, t }) {
+function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, colIdx, rowIdx, onClick, t, isMobile }) {
   const dayTags = note ? (note.tags || []) : [];
   const hasContent = logs.length > 0;
 
@@ -220,6 +232,87 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, colI
       ? "var(--bg-elevated)"
       : "var(--bg)";
 
+  // Mobile cells are ~50–60px wide on a 430px screen — way too cramped for
+  // labels or distances. Switch to Garmin-style: just the date number and a
+  // row of color dots per activity. Tap → existing day modal for details.
+  if (isMobile) {
+    return (
+      <div
+        onClick={onClick}
+        style={{
+          position: "relative",
+          minHeight: 64,
+          padding: "5px 4px 6px",
+          borderRight: colIdx < 6 ? "1px solid var(--rule)" : "none",
+          borderBottom: rowIdx < 5 ? "1px solid var(--rule)" : "none",
+          background: cellBg,
+          cursor: "pointer",
+          opacity: inMonth ? 1 : 0.45,
+          transition: "background 120ms",
+          overflow: "hidden",
+          display: "flex", flexDirection: "column", alignItems: "center",
+        }}
+      >
+        {/* Day number — centered on mobile, smaller box for "today" */}
+        <span style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 13,
+          fontWeight: isToday ? 600 : 500,
+          color: isToday ? "var(--ink-1)"
+                : isWeekend ? "var(--ink-3)"
+                : "var(--ink-2)",
+          fontVariantNumeric: "tabular-nums",
+          padding: isToday ? "1px 5px" : "0",
+          border: isToday ? "1px solid var(--ink-1)" : "none",
+          borderRadius: isToday ? 3 : 0,
+          lineHeight: 1,
+          marginBottom: 4,
+        }}>{date.getDate()}</span>
+
+        {/* Activity dots — up to 4, one per workout. Color encodes type;
+            dashed border = planned. If >4, last dot becomes a "+N" indicator. */}
+        {hasContent && (
+          <div style={{
+            display: "flex", gap: 3, alignItems: "center",
+            flexWrap: "wrap", justifyContent: "center",
+            maxWidth: "100%",
+          }}>
+            {logs.slice(0, 4).map(l => {
+              const c = TYPE_COLOR[l.type] || "#57564f";
+              return (
+                <span key={l.id} style={{
+                  width: 7, height: 7,
+                  borderRadius: "50%",
+                  background: l.isPlanned ? "transparent" : c,
+                  border: l.isPlanned ? `1.5px dashed ${c}` : "none",
+                  display: "inline-block",
+                  flexShrink: 0,
+                }} title={t(`enum.activity.${l.type}`)} />
+              );
+            })}
+            {logs.length > 4 && (
+              <span style={{
+                fontSize: 9, color: "var(--ink-3)",
+                fontFamily: "var(--font-mono)", marginLeft: 1,
+              }}>+{logs.length - 4}</span>
+            )}
+          </div>
+        )}
+
+        {/* Day-level tag indicator — small moss dot in the corner instead of
+            the desktop chip. Visually distinct from activity dots above. */}
+        {dayTags.length > 0 && (
+          <span style={{
+            position: "absolute", bottom: 4, right: 4,
+            width: 5, height: 5, borderRadius: "50%",
+            background: "var(--moss-deep)",
+          }} title={dayTags.map(tag => t(`calendar.tag.${tag}`)).join(", ")} />
+        )}
+      </div>
+    );
+  }
+
+  // Desktop / tablet — full layout with type names and metrics.
   return (
     <div
       onClick={onClick}

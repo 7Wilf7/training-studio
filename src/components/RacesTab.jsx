@@ -4,6 +4,7 @@ import { RACE_PRIORITY, RACE_CATEGORIES, RACE_CATEGORY_COLOR, SPARTAN_SUBTYPES }
 import { useT } from "../i18n/LanguageContext";
 import { parseDistanceKm, inferRaceCategory } from "../utils/format";
 import { useClickOutside } from "../utils/useClickOutside";
+import { useIsNarrow } from "../hooks/useMediaQuery";
 import { ClockIcon } from "./Icons";
 import { PersonalRecordsBar } from "./PersonalRecordsBar";
 
@@ -36,6 +37,7 @@ function raceToForm(race) {
 
 export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete, itraPI, setItraPI }) {
   const t = useT();
+  const isNarrow = useIsNarrow();
   // addingMode: null = no add form; "target" or "history" = the new race kind being added.
   // No more target/history TAB switching — both lists render on the same page.
   const [addingMode, setAddingMode] = useState(null);
@@ -247,15 +249,26 @@ export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete, it
         style={{
           ...s.card,
           cursor: "pointer",
-          display: "flex", alignItems: "center", gap: 12,
+          display: "flex",
+          // Narrow: stack the metadata line over the name+suffix line so the
+          // race name has room to breathe. Desktop: keep the single-row,
+          // column-aligned layout that lets you scan a list quickly.
+          flexDirection: isNarrow ? "column" : "row",
+          alignItems: isNarrow ? "stretch" : "center",
+          gap: isNarrow ? 6 : 12,
+          flexWrap: isNarrow ? "wrap" : "nowrap",
           padding: "10px 14px",
         }}>
         {/* Date on the far left, mono, fixed width so columns align across rows */}
         <div style={{
-          minWidth: 80, flexShrink: 0,
+          minWidth: isNarrow ? 0 : 80, flexShrink: 0,
           fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--ink-3)",
           fontVariantNumeric: "tabular-nums",
-        }}>{r.date || "—"}</div>
+          display: isNarrow ? "inline-flex" : "block",
+          alignItems: "center", gap: 8,
+        }}>
+          <span>{r.date || "—"}</span>
+        </div>
 
         {/* Priority chip (target races only) */}
         {r.isTarget && r.priority && (

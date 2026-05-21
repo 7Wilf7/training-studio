@@ -2,6 +2,7 @@ import { useState } from "react";
 import { s } from "../styles";
 import { ACTIVITY_TYPES, DAILY_TAGS, RUN_GROUP_TYPES, TYPE_COLOR } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
+import { useIsMobile } from "../hooks/useMediaQuery";
 import { formatDuration } from "../utils/format";
 
 // Pretty header date: "Thu, May 21 2026" / "5月21日 周四 2026"
@@ -31,6 +32,7 @@ export function CalendarDayModal({
 }) {
   const t = useT();
   const { lang } = useLanguage();
+  const isMobile = useIsMobile();
 
   // Single open panel — keeps the modal short.
   // null | 'plan'
@@ -91,8 +93,11 @@ export function CalendarDayModal({
       style={{
         position: "fixed", inset: 0,
         background: "rgba(20,20,19,0.55)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        zIndex: 100, padding: 20,
+        display: "flex",
+        alignItems: isMobile ? "flex-end" : "center",
+        justifyContent: "center",
+        zIndex: 100,
+        padding: isMobile ? 0 : 20,
       }}
     >
       <div
@@ -100,10 +105,11 @@ export function CalendarDayModal({
         style={{
           background: "var(--bg)",
           border: "1px solid var(--rule)",
-          borderRadius: 4,
+          borderRadius: isMobile ? "8px 8px 0 0" : 4,
           width: "100%", maxWidth: 520,
-          maxHeight: "90vh", overflowY: "auto",
-          padding: "22px 26px 24px",
+          maxHeight: isMobile ? "85vh" : "90vh",
+          overflowY: "auto",
+          padding: isMobile ? "18px 18px 22px" : "22px 26px 24px",
           fontFamily: "var(--font-sans)",
         }}
       >
