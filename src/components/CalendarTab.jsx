@@ -42,7 +42,7 @@ const MONTH_KEYS = [
   "period.month_short.9",  "period.month_short.10", "period.month_short.11",
 ];
 
-export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete }) {
+export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNotes, setDailyTags }) {
   const t = useT();
   const { lang } = useLanguage();
   const today = new Date();
@@ -56,9 +56,9 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete }) {
 
   const cells = useMemo(() => buildMonthGrid(view.year, view.month), [view]);
 
-  // Index workouts by date for O(1) lookup per cell. A single date can host
-  // multiple workouts (e.g. morning run + evening strength), so the value
-  // is an array.
+  // Index workouts AND dailyNotes by date for O(1) lookup per cell. Multiple
+  // workouts can share a date (morning run + evening strength); daily_notes
+  // is UNIQUE per (user_id, date) so there's at most one note entry per day.
   const byDate = useMemo(() => {
     const m = new Map();
     for (const l of logs) {
@@ -70,7 +70,14 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete }) {
     return m;
   }, [logs]);
 
-  // Open day modal — null when closed; { dateKey } when open.
+  const notesByDate = useMemo(() => {
+    const m = new Map();
+    for (const n of dailyNotes) {
+      if (n.date) m.set(n.date, n);
+    }
+    return m;
+  }, [dailyNotes]);
+
   const [openDay, setOpenDay] = useState(null);
 
   function gotoPrev() {
@@ -94,8 +101,6 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete }) {
     month: t(MONTH_KEYS[view.month]),
   });
 
-  // Weekday header — Mon..Sun. Reuse the period.month_short pattern but we
-  // need short weekday names; keep them inline since they're tiny + dual-lang.
   const WEEKDAYS = lang === "zh"
     ? ["一", "二", "三", "四", "五", "六", "日"]
     : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -122,7 +127,7 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete }) {
         </div>
       </div>
 
-      {/* Weekday header — sticky-ish, lives above the grid */}
+      {/* Weekday header */}
       <div style={{
         display: "grid",
         gridTemplateColumns: "repeat(7, 1fr)",
@@ -157,6 +162,7 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete }) {
           const isFuture = key > todayKey;
           const isWeekend = monIdx(d) >= 5;
           const dayLogs = byDate.get(key) || [];
+          const dayNote = notesByDate.get(key) || null;
 
           return (
             <DayCell
@@ -167,6 +173,7 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete }) {
               isFuture={isFuture}
               isWeekend={isWeekend}
               logs={dayLogs}
+              note={dayNote}
               colIdx={i % 7}
               rowIdx={Math.floor(i / 7)}
               onClick={() => setOpenDay({ dateKey: key, isFuture })}
@@ -181,10 +188,12 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete }) {
           dateKey={openDay.dateKey}
           isFuture={openDay.isFuture}
           logs={byDate.get(openDay.dateKey) || []}
+          note={notesByDate.get(openDay.dateKey) || null}
           onClose={() => setOpenDay(null)}
           addLog={addLog}
           updateLog={updateLog}
           setConfirmDelete={setConfirmDelete}
+          setDailyTags={setDailyTags}
         />
       )}
     </div>
@@ -192,18 +201,17 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Single day cell — kept small. The rendering rules:
-//   - Run-family logs (Road/Trail/Hiking/Floor Climbing) → show distance
-//   - Strength / HIIT / Recovery → show type label (no numbers)
-//   - Planned rows (is_planned=true) → dashed border, muted color
-//   - Tags (massage / stretching / foam_roll) → small chips at the bottom
-//   - Empty + past/today → "Rest" placeholder
-//   - Empty + future     → "+ plan" hint on hover
+// Single day cell.
+//   - Workouts render as multi-line pills: "Road Run" on top, then "12.5km
+//     · +320m" beneath (when distance / ascent exist).
+//   - Strength / HIIT just show the type label (no metrics line).
+//   - Planned rows (is_planned=true) use a dashed left border, muted text.
+//   - dailyNotes.tags (currently just 'massage') render as a chip in the
+//     bottom-right corner — independent from workouts.
+//   - Empty + past/today → "Rest" placeholder; empty + future → "+ plan" hint
 // ─────────────────────────────────────────────────────────────────────────
-function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, colIdx, rowIdx, onClick, t }) {
-  // Collect all tags across the day's logs — these display together at the
-  // bottom of the cell (one chip per unique tag).
-  const allTags = Array.from(new Set(logs.flatMap(l => l.tags || [])));
+function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, colIdx, rowIdx, onClick, t }) {
+  const dayTags = note ? (note.tags || []) : [];
   const hasContent = logs.length > 0;
 
   const cellBg = isToday
@@ -228,7 +236,7 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, colIdx, ro
         overflow: "hidden",
       }}
     >
-      {/* Day number — bold + box on "today", muted on out-of-month / weekend */}
+      {/* Day number */}
       <div style={{
         display: "flex", alignItems: "center", gap: 6,
         marginBottom: 8,
@@ -248,7 +256,7 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, colIdx, ro
         }}>{date.getDate()}</span>
       </div>
 
-      {/* Logs — stacked. Run-family shows type chip + distance; others show type only. */}
+      {/* Workouts */}
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         {logs.map(l => <LogPill key={l.id} log={l} t={t} />)}
       </div>
@@ -261,7 +269,6 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, colIdx, ro
         }}>{t("calendar.rest")}</div>
       )}
 
-      {/* Future + empty + in-month → soft "+ plan" hint */}
       {!hasContent && isFuture && inMonth && (
         <div style={{
           fontFamily: "var(--font-mono)", fontSize: 12,
@@ -270,21 +277,20 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, colIdx, ro
         }}>{t("calendar.add_plan_hint")}</div>
       )}
 
-      {/* Tags pinned to the bottom-right corner — small chips, distinct shape
-          from log pills so they read as "metadata on this day" */}
-      {allTags.length > 0 && (
+      {/* Day-level tags (massage). Pinned to the bottom-right corner so
+          they read as metadata on the day, not as an additional workout. */}
+      {dayTags.length > 0 && (
         <div style={{
           position: "absolute", bottom: 7, right: 9,
           display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end",
           maxWidth: "75%",
         }}>
-          {allTags.map(tag => (
+          {dayTags.map(tag => (
             <span key={tag} style={{
               fontSize: 11, fontFamily: "var(--font-mono)",
               padding: "2px 7px", borderRadius: 9,
               background: "var(--moss-bg)", color: "var(--moss-deep)",
               border: "1px solid var(--moss)", lineHeight: 1.3,
-              textTransform: "lowercase",
             }} title={t(`calendar.tag.${tag}`)}>
               {t(`calendar.tag.${tag}`)}
             </span>
@@ -295,63 +301,51 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, colIdx, ro
   );
 }
 
-// One activity row inside a day cell. Visual rules:
-//   - Every log gets a small colored TYPE chip (Road / Trail / Hike / Stair /
-//     Str / HIIT / Rec) so the type is immediately readable even when only
-//     a distance is shown next to it.
-//   - Run-family   → "[Road] 12.5km"
-//   - Other types  → just the type chip (Strength / HIIT / Recovery)
-//   - is_planned   → dashed border + chip background goes hollow (outline-only)
+// One activity row inside a day cell. Two-line layout: type label on top,
+// metrics line beneath (only rendered when there's something useful to show).
 function LogPill({ log, t }) {
   const isRun = RUN_GROUP_TYPES.includes(log.type);
   const isPlanned = log.isPlanned;
   const color = TYPE_COLOR[log.type] || "#57564f";
-  const shortType = t(`enum.activity_short.${log.type}`);
 
-  // hex → hex+alpha for chip backgrounds. TYPE_COLOR values are all 6-digit
-  // hex so a literal alpha suffix is safe; var() fallback uses a flat tint.
-  const isHex = typeof color === "string" && color.startsWith("#") && color.length === 7;
-  const chipBg = isPlanned
-    ? "transparent"
-    : isHex ? color + "1f" : "rgba(0,0,0,0.05)";
-  const chipBorder = isHex ? color + "66" : color;
+  // Metrics line: distance + ascent for runs; nothing for Strength/HIIT (the
+  // type label alone is the headline since they don't carry km).
+  const metrics = [];
+  if (isRun && log.distance > 0) metrics.push(`${log.distance} km`);
+  if (isRun && log.ascent > 0)   metrics.push(`+${log.ascent} m`);
 
   return (
     <div style={{
-      display: "flex", alignItems: "center", gap: 6,
-      fontSize: 12.5, lineHeight: 1.35,
-      padding: "3px 6px 3px 7px",
+      fontSize: 11.5, lineHeight: 1.3,
+      padding: "3px 6px 4px 7px",
       borderLeft: `2px ${isPlanned ? "dashed" : "solid"} ${color}`,
       background: isPlanned ? "transparent" : "rgba(0,0,0,0.02)",
       borderRadius: 2,
-      whiteSpace: "nowrap",
       overflow: "hidden",
     }}>
-      {/* Type chip — always present, color-coded by activity */}
-      <span style={{
-        fontSize: 10, fontWeight: 600,
-        fontFamily: "var(--font-mono)",
-        padding: "1px 5px",
-        background: chipBg,
+      {/* Line 1: type name (full label, color-coded) */}
+      <div style={{
+        fontWeight: 600,
         color: color,
-        border: `1px solid ${chipBorder}`,
-        borderRadius: 2,
-        textTransform: "uppercase", letterSpacing: "0.04em",
-        lineHeight: 1.4,
-        flexShrink: 0,
-      }}>{shortType}</span>
-
-      {/* Headline metric — distance for runs, blank for Strength/HIIT/Recovery
-          (the chip itself is the label there). */}
-      {isRun && log.distance > 0 && (
-        <span style={{
+        fontSize: 12,
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        opacity: isPlanned ? 0.75 : 1,
+      }}>
+        {t(`enum.activity.${log.type}`)}
+      </div>
+      {/* Line 2: metrics (only when present) */}
+      {metrics.length > 0 && (
+        <div style={{
           fontFamily: "var(--font-mono)",
           fontVariantNumeric: "tabular-nums",
           color: isPlanned ? "var(--ink-3)" : "var(--ink-1)",
-          overflow: "hidden", textOverflow: "ellipsis",
+          fontSize: 11,
+          marginTop: 1,
         }}>
-          {log.distance}<span style={{ color: "var(--ink-3)", fontSize: 10, marginLeft: 1 }}>km</span>
-        </span>
+          {metrics.join(" · ")}
+        </div>
       )}
     </div>
   );

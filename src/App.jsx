@@ -6,7 +6,7 @@ import { INITIAL_FILTER } from "./components/GlobalFilter";
 import { TrainingTab } from "./components/TrainingTab";
 import { RacesTab } from "./components/RacesTab";
 import { AICoachTab } from "./components/AICoachTab";
-import { PersonalRecordsTab } from "./components/PersonalRecordsTab";
+import { CalendarTab } from "./components/CalendarTab";
 import { ConfirmDeleteModal } from "./components/ConfirmDeleteModal";
 import { ProfileEditor } from "./components/ProfileEditor";
 import { ApiSettingsModal } from "./components/ApiSettingsModal";
@@ -42,9 +42,11 @@ export default function App() {
 
 function AuthedApp({ user, signOut }) {
   // ── Supabase-backed: workouts (3.3c) + races (3.3d) + chatMessages (3.3e)
+  //    + dailyNotes (Calendar day-level tags, e.g. ['massage'])
   const [logs, setLogs] = useState([]);
   const [races, setRaces] = useState([]);
   const [chatMessages, setChatMessages] = useState([]);
+  const [dailyNotes, setDailyNotes] = useState([]);
 
   // ── Supabase-backed (loaded async on mount) ─────────────────────────────
   const [profile, setProfileState] = useState(null);
@@ -61,12 +63,13 @@ function AuthedApp({ user, signOut }) {
     let cancelled = false;
     (async () => {
       try {
-        const [profileData, settingsData, workoutsData, racesData, messagesData] = await Promise.all([
+        const [profileData, settingsData, workoutsData, racesData, messagesData, notesData] = await Promise.all([
           db.profiles.getMyProfile(),
           db.userSettings.getMySettings(),
           db.workouts.listMyWorkouts(),
           db.races.listMyRaces(),
           db.coachMessages.listMyMessages(),
+          db.dailyNotes.listMyDailyNotes(),
         ]);
         if (cancelled) return;
 
@@ -99,6 +102,10 @@ function AuthedApp({ user, signOut }) {
 
         // Coach messages — DAL returns created_at asc (oldest first).
         setChatMessages(messagesData);
+
+        // Daily notes — DAL returns date desc. Calendar indexes by date so
+        // order isn't critical; we keep the DAL ordering as-is.
+        setDailyNotes(notesData);
       } catch (err) {
         console.error("Failed to load user data:", err);
         if (!cancelled) {
@@ -266,6 +273,23 @@ function AuthedApp({ user, signOut }) {
     }
   }
 
+  // ── Daily notes — upsert by date, [] clears the row server-side. We
+  // replace the matching local entry on success; if the result is null
+  // (server deleted because tags=[]), drop the entry locally.
+  async function setDailyTags(date, tags) {
+    try {
+      const updated = await db.dailyNotes.setDailyTags(date, tags);
+      setDailyNotes(prev => {
+        const without = prev.filter(n => n.date !== date);
+        return updated ? [updated, ...without] : without;
+      });
+      return updated;
+    } catch (err) {
+      window.alert("Failed to update daily tags: " + err.message);
+      throw err;
+    }
+  }
+
   // Transient, in-memory only — used for error fallback bubbles (API error,
   // network error, missing key). Refreshing the page clears them since they
   // never reach the DB. `isLocal` lets downstream code identify them.
@@ -293,6 +317,7 @@ function AuthedApp({ user, signOut }) {
         appendChatMessage={appendChatMessage}
         appendLocalChatMessage={appendLocalChatMessage}
         clearAllChatMessages={clearAllChatMessages}
+        dailyNotes={dailyNotes} setDailyTags={setDailyTags}
         apiKey={apiKey} setApiKey={setApiKey}
         apiModel={apiModel} setApiModel={setApiModel}
         itraPI={itraPI} setItraPI={setItraPI}
@@ -310,6 +335,7 @@ function AppShell({
   logs, addLog, updateLog, bulkAddLogs, deleteLogs,
   races, addRace, updateRace, deleteRace,
   chatMessages, appendChatMessage, appendLocalChatMessage, clearAllChatMessages,
+  dailyNotes, setDailyTags,
   apiKey, setApiKey, apiModel, setApiModel,
   itraPI, setItraPI, profile, setProfile, coachConfig, setCoachConfig,
   coachMemory, setCoachMemory,
@@ -440,7 +466,7 @@ function AppShell({
           to keep the instrument feel; the label is sentence case + readable. */}
       <div style={{ display: "flex", marginBottom: 28, borderBottom: "1px solid var(--rule)", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
         {TABS.map((label, i) => {
-          const key = ["tabs.training", "tabs.races", "tabs.pr", "tabs.ai_coach"][i];
+          const key = ["tabs.training", "tabs.calendar", "tabs.races", "tabs.ai_coach"][i];
           const active = tab === i;
           return (
             <button key={label} onClick={() => setTab(i)} style={{
@@ -482,17 +508,22 @@ function AppShell({
         />
       )}
       {tab === 1 && (
+        <CalendarTab
+          logs={logs}
+          addLog={addLog}
+          updateLog={updateLog}
+          setConfirmDelete={setConfirmDelete}
+          dailyNotes={dailyNotes}
+          setDailyTags={setDailyTags}
+        />
+      )}
+      {tab === 2 && (
         <RacesTab
           races={races}
           addRace={addRace}
           updateRace={updateRace}
           now={now}
           setConfirmDelete={setConfirmDelete}
-        />
-      )}
-      {tab === 2 && (
-        <PersonalRecordsTab
-          races={races}
           itraPI={itraPI}
           setItraPI={setItraPI}
         />

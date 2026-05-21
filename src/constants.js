@@ -10,21 +10,22 @@ export const MODEL_PRESETS = [
   "deepseek-v4-flash",    // faster + cheaper
 ];
 
-export const TABS = ["Training", "Races", "PR", "AI Coach"];
+// Top-level tabs. PR is absorbed into Races (PersonalRecordsBar sits at the
+// top of the Races view). Calendar is a peer tab — its own month grid +
+// click-to-edit panel — not nested under Training anymore.
+export const TABS = ["Training", "Calendar", "Races", "AI Coach"];
 
-// Activity types (stored in log.type)
-// "Recovery" is a low-impact placeholder type used for active-recovery days
-// (massage, stretching, foam roll). It does NOT count toward Run distance,
-// PR, or Charts — see RUN_GROUP_TYPES below.
-export const ACTIVITY_TYPES = ["Road Run", "Trail Run", "Hiking", "Floor Climbing", "Strength", "HIIT", "Recovery"];
+// Activity types (stored in log.type). Recovery removed — active recovery is
+// a day-level tag in the daily_notes table now, not a workout row.
+export const ACTIVITY_TYPES = ["Road Run", "Trail Run", "Hiking", "Floor Climbing", "Strength", "HIIT"];
 
 // Types that aggregate into the Run filter group (kept here so it's the single source of truth)
 export const RUN_GROUP_TYPES = ["Road Run", "Trail Run", "Hiking", "Floor Climbing"];
 
-// Tags attachable to any workout — multi-select, surfaces in the Calendar
-// day-cell modal. Recovery activities default to tags=['massage'] but the
-// tag can also be added to a normal run ("ran 10k AND got a massage").
-export const WORKOUT_TAGS = ["massage", "stretching", "foam_roll"];
+// Day-level tags stored in daily_notes.tags[]. Surfaced on Calendar day
+// cells and toggled via the day modal. Currently a single value ("massage")
+// but kept as an array for future expansion without another schema change.
+export const DAILY_TAGS = ["massage"];
 
 // Running sub-types — split into two groups:
 //   PACE: heart-rate-based classification (single-select per activity)
@@ -45,7 +46,6 @@ export const TYPE_COLOR = {
   "Floor Climbing": "#8b6a3e",   /* earth: stair / indoor climb */
   "Strength":       "#57564f",   /* ink-2: stone gray */
   "HIIT":           "#b54e1a",   /* burnt orange: alert/intensity */
-  "Recovery":       "#7a8d6a",   /* moss-light: rest-day green, low key */
 };
 
 // Global-filter parent → child mapping (used by GlobalFilter UI + filter logic).

@@ -4,7 +4,8 @@ import { RACE_PRIORITY, RACE_CATEGORIES, RACE_CATEGORY_COLOR, SPARTAN_SUBTYPES }
 import { useT } from "../i18n/LanguageContext";
 import { parseDistanceKm, inferRaceCategory } from "../utils/format";
 import { useClickOutside } from "../utils/useClickOutside";
-import { PeakIcon, ClockIcon, RouteIcon } from "./Icons";
+import { ClockIcon } from "./Icons";
+import { PersonalRecordsBar } from "./PersonalRecordsBar";
 
 const EMPTY_RACE = (isTarget) => ({
   isTarget, priority: "A", name: "", date: "",
@@ -33,7 +34,7 @@ function raceToForm(race) {
   };
 }
 
-export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete }) {
+export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete, itraPI, setItraPI }) {
   const t = useT();
   // addingMode: null = no add form; "target" or "history" = the new race kind being added.
   // No more target/history TAB switching — both lists render on the same page.
@@ -170,6 +171,10 @@ export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete }) 
 
   return (
     <div>
+      {/* PR bar — absorbs the former PR tab. ITRA editor lives as a small badge
+          on the Trail card here, not a separate large card. */}
+      <PersonalRecordsBar races={races} itraPI={itraPI} setItraPI={setItraPI} />
+
       {/* Two add buttons at the top. Click one to open the corresponding add form below. */}
       <div style={{ marginBottom: 14, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
         <button onClick={() => startAdd("target")} style={addingMode === "target" ? s.btn : s.btnGhost}>{t("races.add_target")}</button>
@@ -224,79 +229,110 @@ export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete }) 
     </div>
   );
 
-  // Card content (used when not in edit mode). Pulled out so we can reuse it from both sections.
+  // Single-line card layout — mirrors the activity row pattern so all metric
+  // columns line up vertically across many rows. Layout (left to right):
+  //   date | priority? | category-tag | subtype? | name + (distance · +ascent)
+  //   | spacer | time | ✕
+  // For Trail we surface distance + ascent inline after the name; road
+  // categories (HM/M/10K) get their distance from the category tag itself.
   function renderRaceCardInner(r, timeStr) {
-    // Road categories (Half Marathon / Marathon / 10K) carry the distance in
-    // the category tag itself, so we hide the number. Trail (and any other
-    // distance-based variant) shows the actual km. Row 2 exists when any of
-    // distance / ascent / ITRA is present.
-    const showDistanceOnCard = r.category === "Trail" && r.distance > 0;
-    const hasRow2 = showDistanceOnCard || (r.ascent && parseInt(r.ascent) > 0) || r.itraScore;
+    const showDistanceInline = r.category === "Trail" && r.distance > 0;
+    const showAscentInline   = r.ascent && parseInt(r.ascent) > 0;
+    const inlineSuffix = [];
+    if (showDistanceInline) inlineSuffix.push(`${r.distance} km`);
+    if (showAscentInline)   inlineSuffix.push(`+${r.ascent} m`);
+
     return (
       <div key={r.id} onClick={() => startEdit(r)}
-        style={{ ...s.card, cursor: "pointer" }}>
-        {/* Row 1: priority + category tag + name (truncated) | time? + date + ✕ */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: hasRow2 ? 8 : 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
-            {r.isTarget && r.priority && (
-              <span style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: 12,
-                fontWeight: 600,
-                color: r.priority === "A" ? "var(--ink-inv)" : "var(--ink-1)",
-                background: r.priority === "A" ? "var(--ink-1)" : r.priority === "B" ? "var(--moss-bg)" : "transparent",
-                border: "1px solid " + (r.priority === "A" ? "var(--ink-1)" : "var(--rule)"),
-                padding: "2px 8px",
-                flexShrink: 0,
-              }}>▲ {r.priority}</span>
-            )}
-            {renderCategoryTag(r.category)}
-            {r.subtype && (
-              <span style={{ ...s.subTag, flexShrink: 0 }}>{r.subtype}</span>
-            )}
-            <div style={{
-              fontWeight: 500, fontSize: 15, color: "var(--ink-1)",
-              maxWidth: 380, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-            }}>{r.name}</div>
-            {!r.category && (
-              <select value=""
-                onClick={(e) => e.stopPropagation()}
-                onChange={e => updateRaceCategory(r.id, e.target.value)}
-                style={{ ...s.input, width: "auto", padding: "3px 6px", fontSize: 11, color: "#888", flexShrink: 0 }}>
-                <option value="">{t("races.set_category")}</option>
-                {RACE_CATEGORIES.map(c => <option key={c} value={c}>{t(`enum.race_cat.${c}`)}</option>)}
-              </select>
-            )}
-          </div>
-          <div style={{ display: "flex", gap: 14, alignItems: "center", flexShrink: 0, fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
-            {timeStr && (
-              <span style={{ fontSize: 16, fontWeight: 500, color: "var(--ink-1)", letterSpacing: "-0.01em", display: "inline-flex", alignItems: "center", gap: 5 }}>
-                <span style={{ color: "var(--ink-3)" }}><ClockIcon size={13} /></span>
-                {timeStr}
-              </span>
-            )}
-            <div style={{ fontSize: 13, color: "var(--ink-3)" }}>{r.date}</div>
-            <button onClick={(e) => { e.stopPropagation(); deleteRace(r.id); }}
-              style={{ border: "none", background: "none", color: "var(--ink-3)", cursor: "pointer", fontSize: 14, padding: 0, lineHeight: 1 }}>✕</button>
-          </div>
-        </div>
-        {hasRow2 && (
-          <div style={{ display: "flex", gap: 18, alignItems: "center", flexWrap: "wrap", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
-            {showDistanceOnCard && (
-              <span style={{ fontSize: 13, color: "var(--ink-1)", display: "inline-flex", alignItems: "center", gap: 5 }}>
-                <span style={{ color: "var(--ink-3)" }}><RouteIcon size={13} /></span>
-                {r.distance}<span style={{ color: "var(--ink-3)", marginLeft: 1, fontSize: 10 }}>km</span>
-              </span>
-            )}
-            {r.ascent && parseInt(r.ascent) > 0 && (
-              <span style={{ fontSize: 13, color: "var(--moss-deep)", display: "inline-flex", alignItems: "center", gap: 5 }}>
-                <span style={{ color: "var(--moss)" }}><PeakIcon size={13} /></span>
-                +{r.ascent}<span style={{ color: "var(--ink-3)", marginLeft: 1, fontSize: 10 }}>m</span>
-              </span>
-            )}
-            {r.itraScore && <span style={s.subTag}>ITRA {r.itraScore}</span>}
-          </div>
+        style={{
+          ...s.card,
+          cursor: "pointer",
+          display: "flex", alignItems: "center", gap: 12,
+          padding: "10px 14px",
+        }}>
+        {/* Date on the far left, mono, fixed width so columns align across rows */}
+        <div style={{
+          minWidth: 80, flexShrink: 0,
+          fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--ink-3)",
+          fontVariantNumeric: "tabular-nums",
+        }}>{r.date || "—"}</div>
+
+        {/* Priority chip (target races only) */}
+        {r.isTarget && r.priority && (
+          <span style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 12,
+            fontWeight: 600,
+            color: r.priority === "A" ? "var(--ink-inv)" : "var(--ink-1)",
+            background: r.priority === "A" ? "var(--ink-1)" : r.priority === "B" ? "var(--moss-bg)" : "transparent",
+            border: "1px solid " + (r.priority === "A" ? "var(--ink-1)" : "var(--rule)"),
+            padding: "2px 8px",
+            flexShrink: 0,
+          }}>▲ {r.priority}</span>
         )}
+
+        {/* Category tag */}
+        {renderCategoryTag(r.category)}
+        {r.subtype && (
+          <span style={{ ...s.subTag, flexShrink: 0 }}>{r.subtype}</span>
+        )}
+
+        {/* Name + inline distance/ascent suffix */}
+        <div style={{
+          flex: 1, minWidth: 0,
+          display: "flex", alignItems: "baseline", gap: 10,
+          overflow: "hidden",
+        }}>
+          <span style={{
+            fontWeight: 500, fontSize: 14, color: "var(--ink-1)",
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            minWidth: 0,
+          }}>{r.name}</span>
+          {inlineSuffix.length > 0 && (
+            <span style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 12, color: "var(--ink-3)",
+              fontVariantNumeric: "tabular-nums",
+              flexShrink: 0,
+            }}>
+              {inlineSuffix.join(" · ")}
+            </span>
+          )}
+        </div>
+
+        {/* Category-picker for uncategorized races — kept inline so it
+            doesn't break the row layout */}
+        {!r.category && (
+          <select value=""
+            onClick={(e) => e.stopPropagation()}
+            onChange={e => updateRaceCategory(r.id, e.target.value)}
+            style={{ ...s.input, width: "auto", padding: "3px 6px", fontSize: 11, color: "#888", flexShrink: 0 }}>
+            <option value="">{t("races.set_category")}</option>
+            {RACE_CATEGORIES.map(c => <option key={c} value={c}>{t(`enum.race_cat.${c}`)}</option>)}
+          </select>
+        )}
+
+        {/* Right side: finish time (history races) + delete */}
+        <div style={{
+          display: "flex", gap: 14, alignItems: "center", flexShrink: 0,
+          fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums",
+        }}>
+          {timeStr && (
+            <span style={{
+              fontSize: 14, fontWeight: 500, color: "var(--ink-1)",
+              letterSpacing: "-0.01em",
+              display: "inline-flex", alignItems: "center", gap: 5,
+            }}>
+              <span style={{ color: "var(--ink-3)" }}><ClockIcon size={13} /></span>
+              {timeStr}
+            </span>
+          )}
+          {r.itraScore && (
+            <span style={{ ...s.subTag, fontSize: 10 }}>ITRA {r.itraScore}</span>
+          )}
+          <button onClick={(e) => { e.stopPropagation(); deleteRace(r.id); }}
+            style={{ border: "none", background: "none", color: "var(--ink-3)", cursor: "pointer", fontSize: 14, padding: 0, lineHeight: 1 }}>✕</button>
+        </div>
       </div>
     );
   }

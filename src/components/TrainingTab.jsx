@@ -7,7 +7,6 @@ import { GlobalFilter, logMatchesFilter } from "./GlobalFilter";
 import { PeriodSelector } from "./PeriodSelector";
 import { ActivitiesTab } from "./ActivitiesTab";
 import { ChartsTab } from "./ChartsTab";
-import { CalendarTab } from "./CalendarTab";
 
 export function TrainingTab({
   logs, addLog, updateLog, bulkAddLogs,
@@ -16,11 +15,10 @@ export function TrainingTab({
   setConfirmDelete, profile,
 }) {
   const t = useT();
-  const [view, setView] = useState("activities"); // "activities" | "calendar" | "charts"
+  const [view, setView] = useState("activities"); // "activities" | "charts"
 
-  // Calendar needs BOTH actual + planned workouts (it visually distinguishes
-  // them). Activities / Charts / stats cards must NOT include future plans
-  // (otherwise PR would count un-run distance, weekly km would jump, etc).
+  // Activities / Charts must NOT include planned workouts (those live on the
+  // Calendar tab only). Planned rows would inflate PR / weekly km / averages.
   const actualLogs = useMemo(() => logs.filter(l => !l.isPlanned), [logs]);
 
   const filteredAllLogs = useMemo(
@@ -54,24 +52,17 @@ export function TrainingTab({
         setOpenDropdown={setFilterDropdown}
       />
 
-      {/* Period selector hides on Calendar view — calendar has its own month picker
-          and the global period filter doesn't apply to a month grid. */}
-      {view !== "calendar" && (
-        <PeriodSelector
-          period={period}
-          setPeriod={setPeriod}
-          periodDropdown={periodDropdown}
-          setPeriodDropdown={setPeriodDropdown}
-        />
-      )}
+      <PeriodSelector
+        period={period}
+        setPeriod={setPeriod}
+        periodDropdown={periodDropdown}
+        setPeriodDropdown={setPeriodDropdown}
+      />
 
-      {/* Sub-view toggle — Activities ↔ Calendar ↔ Charts */}
+      {/* Sub-view toggle — Activities ↔ Charts (Calendar is a top-level tab now) */}
       <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
         <button onClick={() => setView("activities")} style={s.chip(view === "activities")}>
           {t("training.view.activities")}
-        </button>
-        <button onClick={() => setView("calendar")} style={s.chip(view === "calendar")}>
-          {t("training.view.calendar")}
         </button>
         <button onClick={() => setView("charts")} style={s.chip(view === "charts")}>
           {t("training.view.charts")}
@@ -130,15 +121,6 @@ export function TrainingTab({
             setConfirmDelete={setConfirmDelete}
           />
         </>
-      )}
-
-      {view === "calendar" && (
-        <CalendarTab
-          logs={logs}
-          addLog={addLog}
-          updateLog={updateLog}
-          setConfirmDelete={setConfirmDelete}
-        />
       )}
 
       {view === "charts" && (

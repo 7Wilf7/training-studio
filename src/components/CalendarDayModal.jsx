@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { s } from "../styles";
-import { ACTIVITY_TYPES, WORKOUT_TAGS, RUN_GROUP_TYPES, TYPE_COLOR } from "../constants";
+import { ACTIVITY_TYPES, DAILY_TAGS, RUN_GROUP_TYPES, TYPE_COLOR } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { formatDuration } from "../utils/format";
 
@@ -17,8 +17,6 @@ function formatHeaderDate(yyyy_mm_dd, lang) {
   return `${wkEn}, ${monEn} ${d} ${y}`;
 }
 
-// Sums a Strength/HIIT/Recovery duration into a tiny label; for runs we
-// pick distance as the headline.
 function logHeadline(log) {
   if (RUN_GROUP_TYPES.includes(log.type) && log.distance > 0) {
     return `${log.distance} km${log.duration > 0 ? " · " + formatDuration(log.duration) : ""}`;
@@ -28,55 +26,30 @@ function logHeadline(log) {
 }
 
 export function CalendarDayModal({
-  dateKey, isFuture, logs, onClose,
-  addLog, updateLog, setConfirmDelete,
+  dateKey, isFuture, logs, note, onClose,
+  addLog, setConfirmDelete, setDailyTags,
 }) {
   const t = useT();
   const { lang } = useLanguage();
 
-  // Three folded panels — only one open at a time keeps the modal short.
-  // null | 'recovery' | 'plan' | { editTagsFor: logId }
+  // Single open panel — keeps the modal short.
+  // null | 'plan'
   const [panel, setPanel] = useState(null);
 
-  // ── "Add recovery" form state ──
-  const [recoveryTags, setRecoveryTags] = useState([]);
-
-  // ── "Add planned workout" form state ──
+  // ── "Add planned workout" form state (future days only) ──
   const [planType, setPlanType] = useState("Road Run");
   const [planDistance, setPlanDistance] = useState("");
   const [planDurationMin, setPlanDurationMin] = useState("");
 
-  // ── "Edit tags on existing log" state ──
-  const [editTagsDraft, setEditTagsDraft] = useState([]);
-
-  function startEditTags(log) {
-    setEditTagsDraft([...(log.tags || [])]);
-    setPanel({ editTagsFor: log.id });
-  }
-
-  function toggleInArray(arr, val) {
-    return arr.includes(val) ? arr.filter(x => x !== val) : [...arr, val];
-  }
-
-  async function saveRecovery() {
-    if (recoveryTags.length === 0) {
-      // No tag = nothing to record. Just close the form.
-      setPanel(null);
-      return;
-    }
-    try {
-      await addLog({
-        date: dateKey,
-        type: "Recovery",
-        subTypes: [],
-        distance: 0, duration: 0, pace: 0, hr: 0, maxHR: 0,
-        ascent: 0, cadence: 0, aerobicTE: 0, gap: 0,
-        isPlanned: false,
-        tags: recoveryTags,
-      }, { source: "manual" });
-      setRecoveryTags([]);
-      setPanel(null);
-    } catch { /* alert shown by wrapper */ }
+  // Day-level tags live in dailyNotes — we toggle in-place. The Save is implicit:
+  // each click calls setDailyTags() which upserts immediately. UI reflects the
+  // latest state via the `note` prop the parent reloads after every mutation.
+  const currentTags = note ? (note.tags || []) : [];
+  function toggleDayTag(tag) {
+    const next = currentTags.includes(tag)
+      ? currentTags.filter(x => x !== tag)
+      : [...currentTags, tag];
+    setDailyTags(dateKey, next).catch(() => { /* alerted by wrapper */ });
   }
 
   async function savePlan() {
@@ -105,16 +78,8 @@ export function CalendarDayModal({
     } catch { /* alert shown by wrapper */ }
   }
 
-  async function saveTagEdit(logId) {
-    try {
-      await updateLog(logId, { tags: editTagsDraft });
-      setPanel(null);
-    } catch { /* alert shown by wrapper */ }
-  }
-
   function deleteLog(logId) {
     setConfirmDelete({ type: "log", id: logId });
-    // Optimistically close; if user cancels delete, modal is gone but state is intact.
     onClose();
   }
 
@@ -167,7 +132,7 @@ export function CalendarDayModal({
 
         <div style={{ height: 1, background: "var(--rule)", margin: "14px 0 16px" }} />
 
-        {/* Existing logs on this day */}
+        {/* Existing workouts on this day */}
         {logs.length > 0 ? (
           <div style={{ marginBottom: 18 }}>
             <div style={{ ...s.label, marginBottom: 8 }}>
@@ -176,8 +141,6 @@ export function CalendarDayModal({
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {logs.map(l => {
                 const color = TYPE_COLOR[l.type] || "var(--ink-2)";
-                const showTags = (l.tags || []).length > 0;
-                const editingThis = panel && panel.editTagsFor === l.id;
                 return (
                   <div key={l.id} style={{
                     border: "1px solid var(--rule)",
@@ -204,56 +167,12 @@ export function CalendarDayModal({
                       }}>
                         {logHeadline(l)}
                       </div>
-                      <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
-                        {!l.isPlanned && (
-                          <button onClick={() => editingThis ? setPanel(null) : startEditTags(l)}
-                            style={{ ...s.btnGhost, fontSize: 11, padding: "4px 9px" }}>
-                            {editingThis ? t("common.cancel") : t("calendar.edit_tags")}
-                          </button>
-                        )}
-                        <button onClick={() => deleteLog(l.id)}
-                          style={{ ...s.btnGhost, fontSize: 11, padding: "4px 9px", color: "var(--danger)" }}>
-                          {t("common.delete")}
-                        </button>
-                      </div>
+                      <button onClick={() => deleteLog(l.id)}
+                        style={{ ...s.btnGhost, fontSize: 11, padding: "4px 9px",
+                          marginLeft: "auto", color: "var(--danger)" }}>
+                        {t("common.delete")}
+                      </button>
                     </div>
-
-                    {/* Existing tags row */}
-                    {showTags && !editingThis && (
-                      <div style={{ marginTop: 8, display: "flex", gap: 4, flexWrap: "wrap" }}>
-                        {l.tags.map(tag => (
-                          <span key={tag} style={{
-                            fontSize: 10.5, fontFamily: "var(--font-mono)",
-                            padding: "2px 7px", borderRadius: 8,
-                            background: "var(--moss-bg)", color: "var(--moss-deep)",
-                            border: "1px solid var(--moss)",
-                          }}>{t(`calendar.tag.${tag}`)}</span>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Inline tag editor */}
-                    {editingThis && (
-                      <div style={{ marginTop: 10 }}>
-                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
-                          {WORKOUT_TAGS.map(tag => (
-                            <button key={tag}
-                              onClick={() => setEditTagsDraft(toggleInArray(editTagsDraft, tag))}
-                              style={s.chip(editTagsDraft.includes(tag))}>
-                              {t(`calendar.tag.${tag}`)}
-                            </button>
-                          ))}
-                        </div>
-                        <div style={{ display: "flex", gap: 6 }}>
-                          <button onClick={() => saveTagEdit(l.id)} style={{ ...s.btn, fontSize: 12, padding: "5px 12px" }}>
-                            {t("common.save")}
-                          </button>
-                          <button onClick={() => setPanel(null)} style={{ ...s.btnGhost, fontSize: 12, padding: "5px 12px" }}>
-                            {t("common.cancel")}
-                          </button>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 );
               })}
@@ -269,42 +188,26 @@ export function CalendarDayModal({
           </div>
         )}
 
-        {/* Action panels — past/today shows "add recovery", future shows "add plan" */}
+        {/* Day-level tags — past/today only. Toggle chips; each click upserts
+            the daily_notes row immediately (no separate save step). */}
         {!isFuture && (
-          <div style={{ borderTop: "1px solid var(--rule)", paddingTop: 14 }}>
-            {panel === "recovery" ? (
-              <>
-                <div style={{ ...s.label, marginBottom: 8 }}>
-                  {t("calendar.add_recovery_title")}
-                </div>
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
-                  {WORKOUT_TAGS.map(tag => (
-                    <button key={tag}
-                      onClick={() => setRecoveryTags(toggleInArray(recoveryTags, tag))}
-                      style={s.chip(recoveryTags.includes(tag))}>
-                      {t(`calendar.tag.${tag}`)}
-                    </button>
-                  ))}
-                </div>
-                <div style={{ display: "flex", gap: 6 }}>
-                  <button onClick={saveRecovery}
-                    disabled={recoveryTags.length === 0}
-                    style={{ ...s.btn, fontSize: 12, padding: "6px 14px", opacity: recoveryTags.length === 0 ? 0.5 : 1 }}>
-                    {t("calendar.save_recovery")}
-                  </button>
-                  <button onClick={() => { setPanel(null); setRecoveryTags([]); }} style={{ ...s.btnGhost, fontSize: 12, padding: "6px 14px" }}>
-                    {t("common.cancel")}
-                  </button>
-                </div>
-              </>
-            ) : (
-              <button onClick={() => setPanel("recovery")} style={s.btn}>
-                {t("calendar.add_recovery_button")}
-              </button>
-            )}
+          <div style={{ borderTop: "1px solid var(--rule)", paddingTop: 14, marginBottom: 14 }}>
+            <div style={{ ...s.label, marginBottom: 8 }}>
+              {t("calendar.day_tags_title")}
+            </div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {DAILY_TAGS.map(tag => (
+                <button key={tag}
+                  onClick={() => toggleDayTag(tag)}
+                  style={s.chip(currentTags.includes(tag))}>
+                  {t(`calendar.tag.${tag}`)}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
+        {/* Future days only: add planned workout */}
         {isFuture && (
           <div style={{ borderTop: "1px solid var(--rule)", paddingTop: 14 }}>
             {panel === "plan" ? (
@@ -317,7 +220,7 @@ export function CalendarDayModal({
                     <div style={{ ...s.muted, fontSize: 11, marginBottom: 4 }}>{t("form.type")}</div>
                     <select value={planType} onChange={e => setPlanType(e.target.value)}
                       style={{ ...s.input, padding: "6px 8px", fontSize: 13 }}>
-                      {ACTIVITY_TYPES.filter(at => at !== "Recovery").map(at => (
+                      {ACTIVITY_TYPES.map(at => (
                         <option key={at} value={at}>{t(`enum.activity.${at}`)}</option>
                       ))}
                     </select>

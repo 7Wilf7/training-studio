@@ -13,8 +13,8 @@ const dict = {
 
   // ===== Tabs =====
   "tabs.training":        { en: "Training",                 zh: "训练" },
+  "tabs.calendar":        { en: "Calendar",                 zh: "日历" },
   "tabs.races":           { en: "Races",                    zh: "比赛" },
-  "tabs.pr":              { en: "PR",                       zh: "个人最佳" },
   "tabs.ai_coach":        { en: "AI Coach",                 zh: "AI 教练" },
 
   // ===== Common =====
@@ -125,18 +125,6 @@ const dict = {
   "enum.activity.Floor Climbing": { en: "Floor Climbing",   zh: "爬楼" },
   "enum.activity.Strength":       { en: "Strength",         zh: "力量" },
   "enum.activity.HIIT":           { en: "HIIT",             zh: "HIIT" },
-  "enum.activity.Recovery":       { en: "Recovery",         zh: "恢复" },
-
-  // Short labels for tight UIs (Calendar day cells). Same identity as
-  // enum.activity.* but trimmed to 2-4 chars so multiple pills can stack
-  // in one ~120px cell.
-  "enum.activity_short.Road Run":       { en: "Road",     zh: "公路" },
-  "enum.activity_short.Trail Run":      { en: "Trail",    zh: "越野" },
-  "enum.activity_short.Hiking":         { en: "Hike",     zh: "徒步" },
-  "enum.activity_short.Floor Climbing": { en: "Stair",    zh: "爬楼" },
-  "enum.activity_short.Strength":       { en: "Str",      zh: "力量" },
-  "enum.activity_short.HIIT":           { en: "HIIT",     zh: "HIIT" },
-  "enum.activity_short.Recovery":       { en: "Rec",      zh: "恢复" },
 
   "enum.subtype.Easy Run":        { en: "Easy Run",         zh: "轻松跑" },
   "enum.subtype.Aerobic Run":     { en: "Aerobic Run",      zh: "有氧跑" },
@@ -206,33 +194,27 @@ const dict = {
   "training.total_ascent":    { en: "Total Ascent",         zh: "总爬升" },
   "training.avg_hr":          { en: "Avg HR",               zh: "平均心率" },
 
-  // Training sub-views
+  // Training sub-views (Calendar promoted to a top-level tab — no sub-chip)
   "training.view.activities": { en: "Activities",           zh: "活动" },
-  "training.view.calendar":   { en: "Calendar",             zh: "日历" },
   "training.view.charts":     { en: "Charts",               zh: "图表" },
 
   // ===== Calendar tab =====
   "calendar.today":            { en: "Today",                zh: "今天" },
-  "calendar.legend_hint":      { en: "● done · ▢ planned · click any day to edit", zh: "● 已完成 · ▢ 计划中 · 点击日期编辑" },
+  "calendar.legend_hint":      { en: "solid = done · dashed = planned · click any day to edit", zh: "实线 = 已完成 · 虚线 = 计划 · 点击日期编辑" },
   "calendar.rest":             { en: "rest",                 zh: "休息" },
   "calendar.add_plan_hint":    { en: "+ plan",               zh: "+ 计划" },
   "calendar.day_past":         { en: "Day",                  zh: "当日" },
   "calendar.day_future":       { en: "Plan",                 zh: "计划" },
   "calendar.day_logs_title":   { en: "Activities & plans",   zh: "活动与计划" },
+  "calendar.day_tags_title":   { en: "Day tags",             zh: "当日标记" },
   "calendar.planned_badge":    { en: "planned",              zh: "计划" },
-  "calendar.edit_tags":        { en: "Tags",                 zh: "标签" },
   "calendar.empty_past":       { en: "Rest day — no activity recorded.", zh: "休息日 —— 没有记录活动。" },
   "calendar.empty_future":     { en: "No plan yet for this day.", zh: "尚未为这一天安排计划。" },
-  "calendar.add_recovery_title":  { en: "Mark active recovery", zh: "标记主动恢复" },
-  "calendar.add_recovery_button": { en: "+ Add active recovery", zh: "+ 添加主动恢复" },
-  "calendar.save_recovery":    { en: "Save Recovery",        zh: "保存恢复" },
   "calendar.add_plan_title":   { en: "Plan a workout",       zh: "安排训练计划" },
   "calendar.add_plan_button":  { en: "+ Add planned workout", zh: "+ 添加计划训练" },
   "calendar.save_plan":        { en: "Save Plan",            zh: "保存计划" },
   "calendar.plan_empty_warning":{ en: "Enter at least a distance or duration for the plan.", zh: "请至少填写距离或时长。" },
   "calendar.tag.massage":      { en: "Massage",              zh: "按摩" },
-  "calendar.tag.stretching":   { en: "Stretching",           zh: "拉伸" },
-  "calendar.tag.foam_roll":    { en: "Foam Roll",            zh: "泡沫轴" },
 
   // ===== Global filter =====
   "filter.type_label":        { en: "Type:",                zh: "类型：" },
@@ -291,7 +273,7 @@ const dict = {
   "charts.hr_zone_above":     { en: "Above Z5",                zh: "Z5 以上" },
 
   // ===== Activities tab =====
-  "activities.upload":        { en: "↑ Upload (.csv / .fit)", zh: "↑ 上传 (.csv / .fit)" },
+  "activities.upload":        { en: "↑ Upload (.csv)",      zh: "↑ 上传 (.csv)" },
   "activities.add_manual":    { en: "+ Add Manually",       zh: "+ 手动添加" },
   "activities.select_off":    { en: "☐ Select",             zh: "☐ 选择" },
   "activities.select_on":     { en: "✓ Selecting ({n})",    zh: "✓ 选择中 ({n})" },
@@ -302,20 +284,18 @@ const dict = {
   "activities.delete_sel":    { en: "Delete Selected",      zh: "删除所选" },
   "activities.empty":         { en: "No activities match your filters", zh: "没有符合筛选条件的活动" },
   "activities.duplicate_title":{ en: "⚠ Possible Duplicates", zh: "⚠ 可能的重复记录" },
-  "activities.duplicate_fit": { en: "An activity on {date} ({dist}km, {dur}) matches an existing entry.", zh: "{date} 的一条活动（{dist}km，{dur}）与已有记录匹配。" },
   "activities.duplicate_csv": { en: "{dups} of {total} activities match existing entries.", zh: "{total} 条活动中有 {dups} 条与已有记录重复。" },
   "activities.skip_dups":     { en: "Skip Duplicates",      zh: "跳过重复" },
   "activities.add_anyway":    { en: "Add Anyway",           zh: "仍然添加" },
   "activities.review":        { en: "Review ({sel} of {total} selected)", zh: "审核 (已选 {sel} / {total} 条)" },
   "activities.import":        { en: "Import",               zh: "导入" },
   "activities.import_done":   { en: "✓ Imported {n} activities.", zh: "✓ 已导入 {n} 条活动。" },
-  "activities.import_one":    { en: "✓ Imported: {dist}km · {dur} · HR {hr}", zh: "✓ 已导入：{dist}km · {dur} · 心率 {hr}" },
   "activities.parsed":        { en: "Parsed {n} activities. Review and import.", zh: "已解析 {n} 条活动。请审核后导入。" },
   "activities.ready":         { en: "Ready to import {n} activities.", zh: "准备导入 {n} 条活动。" },
   "activities.skipped_one":   { en: "Skipped duplicate.",   zh: "已跳过重复。" },
   "activities.added_one":     { en: "✓ Added.",             zh: "✓ 已添加。" },
   "activities.csv_empty":     { en: "CSV is empty.",        zh: "CSV 文件为空。" },
-  "activities.unsupported":   { en: "Unsupported. Use .csv (bulk export) or .fit (single activity).", zh: "不支持的文件。请使用 .csv (批量导出) 或 .fit (单次活动)。" },
+  "activities.unsupported":   { en: "Unsupported. Use .csv from Garmin Connect bulk export.", zh: "不支持的文件。请使用 Garmin Connect 批量导出的 .csv 文件。" },
   "activities.unknown_type_title": { en: "⚠ Unknown Activity Types", zh: "⚠ 无法识别的活动类型" },
   "activities.unknown_type_body":  { en: "{n} row(s) have activity types we couldn't auto-map. Pick a target type for each before importing.", zh: "{n} 条记录的活动类型无法自动识别，导入前请为每条选择目标类型。" },
   "activities.unknown_type_original": { en: "Original: ", zh: "原始：" },

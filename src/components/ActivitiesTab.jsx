@@ -109,126 +109,10 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
       const reader = new FileReader();
       reader.onload = (ev) => parseGarminCSV(ev.target.result);
       reader.readAsText(f);
-    } else if (name.endsWith(".fit")) {
-      parseFitFile(f);
     } else {
       setUploadMsg(t("activities.unsupported"));
     }
     e.target.value = "";
-  }
-
-  async function parseFitFile(file) {
-    setUploadMsg("Loading FIT parser...");
-    try {
-      if (!window.FitParser) {
-        const cdnUrls = [
-          "https://cdn.jsdelivr.net/npm/fit-file-parser@1.9.4/dist/fit-parser.js",
-          "https://unpkg.com/fit-file-parser@1.9.4/dist/fit-parser.js",
-          "https://cdn.jsdelivr.net/npm/fit-file-parser/dist/fit-parser.js",
-        ];
-        let loaded = false;
-        let lastErr = null;
-        for (const url of cdnUrls) {
-          try {
-            await new Promise((resolve, reject) => {
-              const script = document.createElement("script");
-              script.src = url;
-              script.onload = resolve;
-              script.onerror = () => reject(new Error(`CDN failed: ${url}`));
-              document.head.appendChild(script);
-            });
-            if (window.FitParser || window.fitParser) { loaded = true; break; }
-          } catch (e) { lastErr = e; }
-        }
-        if (!loaded) {
-          throw lastErr || new Error("All CDN sources failed");
-        }
-      }
-
-      const FitParserClass = window.FitParser
-        || (window.fitParser && window.fitParser.default)
-        || (window.fitParser && window.fitParser.FitParser)
-        || window.fitParser;
-
-      if (!FitParserClass || typeof FitParserClass !== "function") {
-        setUploadMsg("FIT parser library loaded but constructor not found. Try uploading CSV from Garmin Connect instead.");
-        return;
-      }
-
-      const buf = await file.arrayBuffer();
-      const fitParser = new FitParserClass({
-        force: true, speedUnit: "km/h", lengthUnit: "km",
-        temperatureUnit: "celsius", elapsedRecordField: true, mode: "list",
-      });
-
-      fitParser.parse(buf, (err, data) => {
-        if (err) {
-          setUploadMsg(`FIT parse error: ${err.message || JSON.stringify(err) || "unknown"}`);
-          return;
-        }
-        if (!data) { setUploadMsg("FIT file produced no data."); return; }
-
-        const session = data.sessions?.[0]
-          || data.activity?.sessions?.[0]
-          || (Array.isArray(data.activity?.events) && data.activity);
-
-        let sport, distance, duration, hr, maxHR, cadence, ascent, startTime;
-        if (session && session.total_distance !== undefined) {
-          sport = (session.sport || "").toLowerCase();
-          const subSport = (session.sub_sport || "").toLowerCase();
-          if (sport === "running" && subSport.includes("trail")) sport = "trail";
-          distance = +(session.total_distance || 0).toFixed(2);
-          duration = Math.round(session.total_timer_time || session.total_elapsed_time || 0);
-          hr = Math.round(session.avg_heart_rate || 0);
-          maxHR = Math.round(session.max_heart_rate || 0);
-          cadence = Math.round((session.avg_running_cadence || 0) * 2) || Math.round(session.avg_cadence || 0);
-          ascent = Math.round(session.total_ascent || 0);
-          startTime = session.start_time;
-        } else {
-          const records = data.records || data.activity?.records || [];
-          if (records.length === 0) {
-            setUploadMsg("FIT file parsed but no session or records found.");
-            return;
-          }
-          sport = "running";
-          const distArr = records.filter(r => r.distance != null);
-          distance = distArr.length ? +(distArr[distArr.length - 1].distance).toFixed(2) : 0;
-          const first = records[0], last = records[records.length - 1];
-          duration = first.timestamp && last.timestamp ? Math.round((new Date(last.timestamp) - new Date(first.timestamp)) / 1000) : 0;
-          const hrArr = records.filter(r => r.heart_rate).map(r => r.heart_rate);
-          hr = hrArr.length ? Math.round(hrArr.reduce((a, b) => a + b, 0) / hrArr.length) : 0;
-          maxHR = hrArr.length ? Math.max(...hrArr) : 0;
-          cadence = 0;
-          let asc = 0; const alts = records.filter(r => r.altitude != null).map(r => r.altitude);
-          for (let i = 1; i < alts.length; i++) if (alts[i] > alts[i - 1]) asc += alts[i] - alts[i - 1];
-          ascent = Math.round(asc);
-          startTime = first.timestamp;
-        }
-
-        // Use the same mapping as CSV — works because FIT sport strings ("hiking",
-        // "trail_running", "stair_climbing") match the same substring checks.
-        const mapped = mapGarminActivityType(sport);
-        const type = mapped.type;
-
-        const pace = (type !== "Strength" && type !== "HIIT" && distance > 0) ? Math.round(duration / distance) : 0;
-        const date = (startTime ? new Date(startTime) : new Date()).toISOString().slice(0, 10);
-        const subTypes = type === "Road Run" ? [autoClassifyRun(hr, false)] : [];
-
-        const newRow = { id: Date.now(), date, type, subTypes, distance, duration, pace, hr, maxHR, ascent, cadence, aerobicTE: 0, gap: 0 };
-
-        const dup = logs.find(l => isDuplicate(l, newRow));
-        if (dup) {
-          setDuplicateWarning({ existing: dup, incoming: [newRow], source: "fit" });
-        } else {
-          addLog(newRow, { source: "fit_file" }).then(() => {
-            setUploadMsg(t("activities.import_one", { dist: distance, dur: formatDuration(duration), hr: hr || "—" }));
-            setTimeout(() => setUploadMsg(""), 5000);
-          }).catch(() => {});
-        }
-      });
-    } catch (err) {
-      setUploadMsg(`FIT parser error: ${err.message || "unknown"}. Try exporting as CSV from Garmin Connect instead.`);
-    }
   }
 
   function parseGarminCSV(text) {
@@ -348,25 +232,13 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
   }
 
   async function confirmDuplicates(skipDups) {
-    if (duplicateWarning.source === "fit") {
-      if (!skipDups) {
-        try {
-          await bulkAddLogs(duplicateWarning.incoming, { source: "fit_file" });
-        } catch {
-          setDuplicateWarning(null);
-          return;
-        }
-      }
-      setUploadMsg(skipDups ? t("activities.skipped_one") : t("activities.added_one"));
-      setDuplicateWarning(null);
-      setTimeout(() => setUploadMsg(""), 4000);
-    } else {
-      let rows = duplicateWarning.incoming;
-      if (skipDups) rows = rows.filter(r => !duplicateWarning.dupIds.includes(r.id));
-      setParsedRows(rows);
-      setUploadMsg(t("activities.ready", { n: rows.length }));
-      setDuplicateWarning(null);
-    }
+    // CSV is the only import source now. (FIT support was removed; the
+    // single-row "fit" branch with its own bulk-add path went with it.)
+    let rows = duplicateWarning.incoming;
+    if (skipDups) rows = rows.filter(r => !duplicateWarning.dupIds.includes(r.id));
+    setParsedRows(rows);
+    setUploadMsg(t("activities.ready", { n: rows.length }));
+    setDuplicateWarning(null);
   }
 
   async function importParsed() {
@@ -395,7 +267,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
       <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
         <button onClick={() => { setShowAdd(!showAdd); setEditingId(null); }} style={s.btn}>{t("activities.add_manual")}</button>
         <button onClick={() => fileRef.current.click()} style={s.btnGhost}>{t("activities.upload")}</button>
-        <input ref={fileRef} type="file" accept=".csv,.fit" style={{ display: "none" }} onChange={handleFileSelect} />
+        <input ref={fileRef} type="file" accept=".csv" style={{ display: "none" }} onChange={handleFileSelect} />
         <button onClick={toggleSelectMode} style={selectMode ? s.btn : s.btnGhost}>
           {selectMode ? t("activities.select_on", { n: selectedIds.size }) : t("activities.select_off")}
         </button>
@@ -428,9 +300,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
         <div style={{ ...s.cardDark, marginBottom: 14, border: "1px solid #d4a017", background: "#fffbea" }}>
           <div style={{ ...s.section, color: "#7a5a00" }}>{t("activities.duplicate_title")}</div>
           <div style={{ fontSize: 13, color: "#555", marginBottom: 10 }}>
-            {duplicateWarning.source === "fit"
-              ? t("activities.duplicate_fit", { date: formatDateShort(duplicateWarning.incoming[0].date), dist: duplicateWarning.incoming[0].distance, dur: formatDuration(duplicateWarning.incoming[0].duration) })
-              : t("activities.duplicate_csv", { dups: duplicateWarning.dupIds.length, total: duplicateWarning.incoming.length })}
+            {t("activities.duplicate_csv", { dups: duplicateWarning.dupIds.length, total: duplicateWarning.incoming.length })}
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button onClick={() => confirmDuplicates(true)} style={s.btn}>{t("activities.skip_dups")}</button>
