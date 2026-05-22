@@ -92,11 +92,14 @@ export const RACE_PRIORITY = ["A", "B", "C"];
 // longest/hardest. PR view ranks by this order (Ultra > Beast > Super > Sprint).
 export const SPARTAN_SUBTYPES = ["Sprint", "Super", "Beast", "Ultra"];
 
-// Race categories — used for PR auto-aggregation and as a list-view tag
+// Race categories — used for PR auto-aggregation and as a list-view tag.
+// Order matters: PR bar + form dropdowns iterate this array, so this is the
+// canonical display order (10K shortest road → progressively bigger / more
+// specialized, "Other" last as the catch-all).
 export const RACE_CATEGORIES = [
+  "10K",
   "Half Marathon",
   "Marathon",
-  "10K",
   "Trail",
   "Spartan",
   "Hyrox",

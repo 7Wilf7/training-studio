@@ -340,6 +340,9 @@ const dict = {
   // ===== Races tab =====
   "races.section_target":     { en: "Target Races",         zh: "目标比赛" },
   "races.section_history":    { en: "Race History",         zh: "历史比赛" },
+  "races.filter_all":         { en: "All",                  zh: "全部" },
+  "races.filter_label":       { en: "Filter:",              zh: "筛选：" },
+  "races.filter_empty":       { en: "No races match the current filter.", zh: "没有符合筛选条件的比赛。" },
   "races.add_target":         { en: "+ Add Target Race",    zh: "+ 添加目标比赛" },
   "races.add_history":        { en: "+ Add Race Result",    zh: "+ 添加比赛成绩" },
   "races.new_target":         { en: "New Target Race",      zh: "新目标比赛" },
@@ -422,6 +425,8 @@ const dict = {
   "coach.input_placeholder":  { en: "Type your message — daily check-in, training question, or anything you want the coach to see.", zh: "输入你想和教练说的话 —— 今日打卡、训练疑问，或任何想让 ta 看到的内容。" },
   "coach.send":               { en: "Send",                 zh: "发送" },
   "coach.tip":                { en: "Tip: Ctrl/⌘+Enter to send · Chat history saved locally", zh: "提示：Ctrl/⌘+Enter 发送 · 聊天记录保存在本地" },
+  "coach.long_chat_hint":     { en: "Chat is getting long ({n} messages). Older turns start competing with the system prompt for the model's attention — consider distilling the takeaways into Memory, then clearing the chat for a clean slate.", zh: "对话已有 {n} 条，开始变长。旧消息会与系统提示词争夺模型注意力 —— 建议把要点固化到 Memory，再清空对话从新开始。" },
+  "coach.long_chat_action":   { en: "Open Memory",          zh: "打开 Memory" },
 
   // ===== AI Coach → Calendar import =====
   "coach.import_button":      { en: "📅 Import to Calendar",  zh: "📅 导入到日历" },

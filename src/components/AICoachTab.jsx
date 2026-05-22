@@ -6,9 +6,15 @@ import {
   ACTIVITY_TYPES,
 } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
+import { useIsNarrow } from "../hooks/useMediaQuery";
 import { formatDuration, formatPaceFromSec } from "../utils/format";
 import { buildSystemPrompt } from "../utils/profile";
 import { CoachPlanImportModal } from "./CoachPlanImportModal";
+
+// At this many persisted messages, surface a soft hint suggesting the user
+// distill Memory + clear the chat. Older turns start competing with the
+// system prompt for the model's attention past ~20 turns.
+const LONG_CHAT_HINT_THRESHOLD = 20;
 
 // Tolerant JSON-array extraction from a coach reply. The LLM may wrap its
 // output in markdown fences, prefix it with commentary, or even return a
@@ -67,6 +73,7 @@ export function AICoachTab({
   const apiEndpoint = DEFAULT_API_ENDPOINT;
   const t = useT();
   const { lang } = useLanguage();
+  const isNarrow = useIsNarrow();
   const [showCoachConfig, setShowCoachConfig] = useState(false);
   const [showPromptPreview, setShowPromptPreview] = useState(false);
   // Preview language is independent of UI language — defaults to UI language
@@ -444,8 +451,18 @@ Rules:
         </div>
       )}
 
+      {/* Memory + Preview Prompt sit in a 2-col grid when BOTH are open on
+          desktop, so the user can compare the durable Memory blob against
+          the assembled system prompt side-by-side. Narrow screens or single
+          panel = full-width stack, same as before. */}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: (showMemory && showPromptPreview && !isNarrow) ? "1fr 1fr" : "1fr",
+        gap: 14,
+        marginBottom: (showMemory || showPromptPreview) ? 14 : 0,
+      }}>
       {showMemory && (
-        <div style={{ ...s.cardDark, marginBottom: 14 }}>
+        <div style={{ ...s.cardDark, marginBottom: 0 }}>
           <div style={{ ...s.section, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
             <span>{t("coach.memory_title")}</span>
             <div style={{ display: "flex", gap: 6 }}>
@@ -503,7 +520,7 @@ Rules:
       )}
 
       {showPromptPreview && (
-        <div style={{ ...s.cardDark, marginBottom: 14 }}>
+        <div style={{ ...s.cardDark, marginBottom: 0 }}>
           <div style={{ ...s.section, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
             <span>{t("coach.prompt_title")}</span>
             {/* EN ↔ ZH toggle — only affects the preview, not what the LLM sees. */}
@@ -529,6 +546,28 @@ Rules:
             color: "var(--ink-1)", background: "var(--bg-elevated)",
           }}>{previewPrompt}</pre>
           <div style={{ ...s.muted, marginTop: 6, lineHeight: 1.5 }}>{t("coach.prompt_hint")}{previewLang === "zh" ? ` ${t("coach.prompt_zh_note")}` : ""}</div>
+        </div>
+      )}
+      </div>
+
+      {/* Soft hint once chat history grows past the threshold — older turns
+          start competing with the system prompt for the model's attention.
+          One-tap to open Memory; not blocking. */}
+      {chatMessages.length >= LONG_CHAT_HINT_THRESHOLD && !showMemory && (
+        <div style={{
+          marginBottom: 14, padding: "10px 14px",
+          border: "1px solid var(--rule)",
+          background: "rgba(181,78,26,0.06)",
+          display: "flex", gap: 12, alignItems: "flex-start",
+          flexWrap: "wrap",
+        }}>
+          <div style={{ fontSize: 12, color: "var(--ink-2)", lineHeight: 1.55, flex: 1, minWidth: 220 }}>
+            {t("coach.long_chat_hint", { n: chatMessages.length })}
+          </div>
+          <button onClick={() => setShowMemory(true)}
+            style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px", flexShrink: 0 }}>
+            {t("coach.long_chat_action")}
+          </button>
         </div>
       )}
 

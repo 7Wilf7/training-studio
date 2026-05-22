@@ -8,6 +8,16 @@ import { useIsNarrow } from "../hooks/useMediaQuery";
 import { ClockIcon } from "./Icons";
 import { PersonalRecordsBar } from "./PersonalRecordsBar";
 
+// Shared grid template for race rows (desktop only). Same fixed columns for
+// the Target and History sections so every column lines up across both lists.
+// Order: date · priority · category(+subtype inline) · name · distance · ascent · time · ✕.
+// Category cell is fixed 150px — wide enough for the longest combo
+// ("HALF MARATHON" or "SPARTAN ULTRA"); subtype sits flush against the
+// category tag inside the cell, and the name column starts at the same x
+// position on every row.
+// Priority is empty for history rows; time/ITRA is empty for target rows.
+const RACE_ROW_GRID = "82px 46px 150px minmax(0, 1fr) 78px 84px 108px 22px";
+
 const EMPTY_RACE = (isTarget) => ({
   isTarget, priority: "A", name: "", date: "",
   distance: "", category: "", subtype: "", ascent: "", resultH: "", resultM: "", resultS: "",
@@ -44,6 +54,12 @@ export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete, it
   const [editingRaceId, setEditingRaceId] = useState(null);
   const [newRace, setNewRace] = useState(EMPTY_RACE(true));
   const [pastRaceWarning, setPastRaceWarning] = useState(null);
+  // Independent category filters for the two lists. Empty array = show all;
+  // otherwise show only races whose `category` is in the set. Uncategorized
+  // races drop out of any filtered view by design — they reappear once the
+  // user picks a category via the inline picker on the card.
+  const [targetFilter, setTargetFilter] = useState([]);
+  const [historyFilter, setHistoryFilter] = useState([]);
 
   function startAdd(mode) {
     if (editingRaceId) cancelEdit();
@@ -135,16 +151,43 @@ export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete, it
 
   // Sort: target races by date ASC (next race coming up first); history by date DESC (most recent first).
   // Missing date sorts last for targets and first for history (treated as "unknown future" / "recent unknown").
-  const targetRacesList = races.filter(r => r.isTarget).sort((a, b) => {
+  const targetRacesAll = races.filter(r => r.isTarget).sort((a, b) => {
     if (!a.date) return 1;
     if (!b.date) return -1;
     return new Date(a.date) - new Date(b.date);
   });
-  const historyRacesList = races.filter(r => !r.isTarget).sort((a, b) => {
+  const historyRacesAll = races.filter(r => !r.isTarget).sort((a, b) => {
     if (!a.date) return 1;
     if (!b.date) return -1;
     return new Date(b.date) - new Date(a.date);
   });
+  // Apply per-section category filter. Empty filter = show all.
+  function applyFilter(list, filter) {
+    return filter.length === 0 ? list : list.filter(r => filter.includes(r.category));
+  }
+  const targetRacesList = applyFilter(targetRacesAll, targetFilter);
+  const historyRacesList = applyFilter(historyRacesAll, historyFilter);
+
+  function toggleFilter(filter, setFilter, cat) {
+    setFilter(filter.includes(cat) ? filter.filter(c => c !== cat) : [...filter, cat]);
+  }
+  function renderFilterChips(filter, setFilter) {
+    return (
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10, alignItems: "center" }}>
+        <span style={{ ...s.muted, fontSize: 11, marginRight: 2 }}>{t("races.filter_label")}</span>
+        <button onClick={() => setFilter([])}
+          style={{ ...s.chip(filter.length === 0), padding: "4px 10px", fontSize: 12 }}>
+          {t("races.filter_all")}
+        </button>
+        {RACE_CATEGORIES.map(c => (
+          <button key={c} onClick={() => toggleFilter(filter, setFilter, c)}
+            style={{ ...s.chip(filter.includes(c)), padding: "4px 10px", fontSize: 12 }}>
+            {t(`enum.race_cat.${c}`)}
+          </button>
+        ))}
+      </div>
+    );
+  }
 
   function renderCategoryTag(cat) {
     if (!cat) return null;
@@ -202,11 +245,14 @@ export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete, it
       {/* === Target Races section === */}
       <div style={{ ...s.section, marginTop: 8, display: "flex", alignItems: "baseline", gap: 8 }}>
         <span>{t("races.section_target")}</span>
-        <span style={{ ...s.muted, fontWeight: 400 }}>{targetRacesList.length}</span>
+        <span style={{ ...s.muted, fontWeight: 400 }}>
+          {targetFilter.length > 0 ? `${targetRacesList.length} / ${targetRacesAll.length}` : targetRacesAll.length}
+        </span>
       </div>
+      {targetRacesAll.length > 0 && renderFilterChips(targetFilter, setTargetFilter)}
       {targetRacesList.length === 0 ? (
         <div style={{ ...s.cardDark, textAlign: "center", color: "var(--ink-3)", padding: "24px 16px", marginBottom: 22, fontSize: 13 }}>
-          {t("races.empty_target")}
+          {targetRacesAll.length > 0 ? t("races.filter_empty") : t("races.empty_target")}
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 22 }}>
@@ -217,11 +263,14 @@ export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete, it
       {/* === History section === */}
       <div style={{ ...s.section, display: "flex", alignItems: "baseline", gap: 8 }}>
         <span>{t("races.section_history")}</span>
-        <span style={{ ...s.muted, fontWeight: 400 }}>{historyRacesList.length}</span>
+        <span style={{ ...s.muted, fontWeight: 400 }}>
+          {historyFilter.length > 0 ? `${historyRacesList.length} / ${historyRacesAll.length}` : historyRacesAll.length}
+        </span>
       </div>
+      {historyRacesAll.length > 0 && renderFilterChips(historyFilter, setHistoryFilter)}
       {historyRacesList.length === 0 ? (
         <div style={{ ...s.cardDark, textAlign: "center", color: "var(--ink-3)", padding: "24px 16px", fontSize: 13 }}>
-          {t("races.empty_history")}
+          {historyRacesAll.length > 0 ? t("races.filter_empty") : t("races.empty_history")}
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -238,97 +287,144 @@ export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete, it
   // For Trail we surface distance + ascent inline after the name; road
   // categories (HM/M/10K) get their distance from the category tag itself.
   function renderRaceCardInner(r, timeStr) {
-    const showDistanceInline = r.category === "Trail" && r.distance > 0;
-    const showAscentInline   = r.ascent && parseInt(r.ascent) > 0;
-    const inlineSuffix = [];
-    if (showDistanceInline) inlineSuffix.push(`${r.distance} km`);
-    if (showAscentInline)   inlineSuffix.push(`+${r.ascent} m`);
+    const distStr = r.distance > 0 ? `${r.distance} km` : "";
+    const ascStr  = r.ascent && parseInt(r.ascent) > 0 ? `+${r.ascent} m` : "";
 
+    // Mobile: stacked layout, name + suffix gets its own breathing room.
+    if (isNarrow) {
+      const inlineSuffix = [];
+      if (r.category === "Trail" && distStr) inlineSuffix.push(distStr);
+      if (ascStr) inlineSuffix.push(ascStr);
+      return (
+        <div key={r.id} onClick={() => startEdit(r)}
+          style={{
+            ...s.card, cursor: "pointer",
+            display: "flex", flexDirection: "column",
+            gap: 6, padding: "10px 14px",
+          }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+            <span style={{
+              fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--ink-3)",
+              fontVariantNumeric: "tabular-nums",
+            }}>{r.date || "—"}</span>
+            {r.isTarget && r.priority && (
+              <span style={{
+                fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 600,
+                color: r.priority === "A" ? "var(--ink-inv)" : "var(--ink-1)",
+                background: r.priority === "A" ? "var(--ink-1)" : r.priority === "B" ? "var(--moss-bg)" : "transparent",
+                border: "1px solid " + (r.priority === "A" ? "var(--ink-1)" : "var(--rule)"),
+                padding: "2px 8px",
+              }}>▲ {r.priority}</span>
+            )}
+            {renderCategoryTag(r.category)}
+            {r.subtype && <span style={s.subTag}>{r.subtype}</span>}
+            <button onClick={(e) => { e.stopPropagation(); deleteRace(r.id); }}
+              style={{ marginLeft: "auto", border: "none", background: "none", color: "var(--ink-3)", cursor: "pointer", fontSize: 14, padding: 0, lineHeight: 1 }}>✕</button>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "baseline" }}>
+            <span style={{ fontWeight: 500, fontSize: 14, color: "var(--ink-1)" }}>{r.name}</span>
+            {inlineSuffix.length > 0 && (
+              <span style={{
+                fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--ink-3)",
+                fontVariantNumeric: "tabular-nums",
+              }}>{inlineSuffix.join(" · ")}</span>
+            )}
+            {timeStr && (
+              <span style={{
+                fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 500,
+                color: "var(--ink-1)", marginLeft: "auto",
+                display: "inline-flex", alignItems: "center", gap: 5,
+              }}>
+                <span style={{ color: "var(--ink-3)" }}><ClockIcon size={13} /></span>
+                {timeStr}
+              </span>
+            )}
+          </div>
+          {!r.category && (
+            <select value=""
+              onClick={(e) => e.stopPropagation()}
+              onChange={e => updateRaceCategory(r.id, e.target.value)}
+              style={{ ...s.input, padding: "3px 6px", fontSize: 11, color: "#888" }}>
+              <option value="">{t("races.set_category")}</option>
+              {RACE_CATEGORIES.map(c => <option key={c} value={c}>{t(`enum.race_cat.${c}`)}</option>)}
+            </select>
+          )}
+          {r.itraScore && <span style={{ ...s.subTag, fontSize: 10, alignSelf: "flex-start" }}>ITRA {r.itraScore}</span>}
+        </div>
+      );
+    }
+
+    // Desktop: fixed-column grid so distance and ascent line up vertically
+    // across every row, even when some races have neither (road categories,
+    // Spartan, Hyrox). The same template is used for target + history sections
+    // so the two lists also align column-for-column.
     return (
       <div key={r.id} onClick={() => startEdit(r)}
         style={{
-          ...s.card,
-          cursor: "pointer",
-          display: "flex",
-          // Narrow: stack the metadata line over the name+suffix line so the
-          // race name has room to breathe. Desktop: keep the single-row,
-          // column-aligned layout that lets you scan a list quickly.
-          flexDirection: isNarrow ? "column" : "row",
-          alignItems: isNarrow ? "stretch" : "center",
-          gap: isNarrow ? 6 : 12,
-          flexWrap: isNarrow ? "wrap" : "nowrap",
-          padding: "10px 14px",
+          ...s.card, cursor: "pointer", padding: "10px 14px",
+          display: "grid",
+          gridTemplateColumns: RACE_ROW_GRID,
+          alignItems: "center", gap: 12,
         }}>
-        {/* Date on the far left, mono, fixed width so columns align across rows */}
+        {/* date */}
         <div style={{
-          minWidth: isNarrow ? 0 : 80, flexShrink: 0,
           fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--ink-3)",
           fontVariantNumeric: "tabular-nums",
-          display: isNarrow ? "inline-flex" : "block",
-          alignItems: "center", gap: 8,
-        }}>
-          <span>{r.date || "—"}</span>
-        </div>
+        }}>{r.date || "—"}</div>
 
-        {/* Priority chip (target races only) */}
-        {r.isTarget && r.priority && (
-          <span style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: 12,
-            fontWeight: 600,
-            color: r.priority === "A" ? "var(--ink-inv)" : "var(--ink-1)",
-            background: r.priority === "A" ? "var(--ink-1)" : r.priority === "B" ? "var(--moss-bg)" : "transparent",
-            border: "1px solid " + (r.priority === "A" ? "var(--ink-1)" : "var(--rule)"),
-            padding: "2px 8px",
-            flexShrink: 0,
-          }}>▲ {r.priority}</span>
-        )}
-
-        {/* Category tag */}
-        {renderCategoryTag(r.category)}
-        {r.subtype && (
-          <span style={{ ...s.subTag, flexShrink: 0 }}>{r.subtype}</span>
-        )}
-
-        {/* Name + inline distance/ascent suffix */}
-        <div style={{
-          flex: 1, minWidth: 0,
-          display: "flex", alignItems: "baseline", gap: 10,
-          overflow: "hidden",
-        }}>
-          <span style={{
-            fontWeight: 500, fontSize: 14, color: "var(--ink-1)",
-            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-            minWidth: 0,
-          }}>{r.name}</span>
-          {inlineSuffix.length > 0 && (
+        {/* priority (target only — empty cell for history keeps the grid aligned) */}
+        <div>
+          {r.isTarget && r.priority && (
             <span style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 12, color: "var(--ink-3)",
-              fontVariantNumeric: "tabular-nums",
-              flexShrink: 0,
-            }}>
-              {inlineSuffix.join(" · ")}
-            </span>
+              fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 600,
+              color: r.priority === "A" ? "var(--ink-inv)" : "var(--ink-1)",
+              background: r.priority === "A" ? "var(--ink-1)" : r.priority === "B" ? "var(--moss-bg)" : "transparent",
+              border: "1px solid " + (r.priority === "A" ? "var(--ink-1)" : "var(--rule)"),
+              padding: "2px 8px",
+              whiteSpace: "nowrap",
+            }}>▲ {r.priority}</span>
           )}
         </div>
 
-        {/* Category-picker for uncategorized races — kept inline so it
-            doesn't break the row layout */}
-        {!r.category && (
-          <select value=""
-            onClick={(e) => e.stopPropagation()}
-            onChange={e => updateRaceCategory(r.id, e.target.value)}
-            style={{ ...s.input, width: "auto", padding: "3px 6px", fontSize: 11, color: "#888", flexShrink: 0 }}>
-            <option value="">{t("races.set_category")}</option>
-            {RACE_CATEGORIES.map(c => <option key={c} value={c}>{t(`enum.race_cat.${c}`)}</option>)}
-          </select>
-        )}
+        {/* category + optional subtype, clustered side-by-side. Auto-width so
+            the subtype (e.g. Spartan ULTRA) sits flush against the category;
+            name then begins immediately to the right. */}
+        <div style={{ display: "flex", gap: 6, alignItems: "center", minWidth: 0 }}>
+          {r.category ? renderCategoryTag(r.category) : (
+            <select value=""
+              onClick={(e) => e.stopPropagation()}
+              onChange={e => updateRaceCategory(r.id, e.target.value)}
+              style={{ ...s.input, padding: "3px 6px", fontSize: 11, color: "#888" }}>
+              <option value="">{t("races.set_category")}</option>
+              {RACE_CATEGORIES.map(c => <option key={c} value={c}>{t(`enum.race_cat.${c}`)}</option>)}
+            </select>
+          )}
+          {r.subtype && <span style={s.subTag}>{r.subtype}</span>}
+        </div>
 
-        {/* Right side: finish time (history races) + delete */}
+        {/* name — fills remaining space, truncates */}
         <div style={{
-          display: "flex", gap: 14, alignItems: "center", flexShrink: 0,
+          fontWeight: 500, fontSize: 14, color: "var(--ink-1)",
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          minWidth: 0,
+        }}>{r.name}</div>
+
+        {/* distance column */}
+        <div style={{
+          fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--ink-3)",
+          fontVariantNumeric: "tabular-nums", textAlign: "right",
+        }}>{distStr}</div>
+
+        {/* ascent column */}
+        <div style={{
+          fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--ink-3)",
+          fontVariantNumeric: "tabular-nums", textAlign: "right",
+        }}>{ascStr}</div>
+
+        {/* time + ITRA column (history rows; empty for target) */}
+        <div style={{
           fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums",
+          display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2,
         }}>
           {timeStr && (
             <span style={{
@@ -343,9 +439,11 @@ export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete, it
           {r.itraScore && (
             <span style={{ ...s.subTag, fontSize: 10 }}>ITRA {r.itraScore}</span>
           )}
-          <button onClick={(e) => { e.stopPropagation(); deleteRace(r.id); }}
-            style={{ border: "none", background: "none", color: "var(--ink-3)", cursor: "pointer", fontSize: 14, padding: 0, lineHeight: 1 }}>✕</button>
         </div>
+
+        {/* delete */}
+        <button onClick={(e) => { e.stopPropagation(); deleteRace(r.id); }}
+          style={{ border: "none", background: "none", color: "var(--ink-3)", cursor: "pointer", fontSize: 14, padding: 0, lineHeight: 1, justifySelf: "end" }}>✕</button>
       </div>
     );
   }
