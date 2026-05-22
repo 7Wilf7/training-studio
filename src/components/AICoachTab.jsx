@@ -257,7 +257,10 @@ Output the memory text only, nothing else.`;
         },
         body: JSON.stringify({
           model: apiModel,
-          max_tokens: 4000,
+          // 8000 = DeepSeek's hard output ceiling (with small margin). Memory
+          // prompt asks for ~500 words so this is generous headroom — billed
+          // by actual tokens, the cap costs nothing if unused.
+          max_tokens: 8000,
           messages: [{ role: "user", content: memoryPrompt }],
         }),
       });
@@ -383,7 +386,10 @@ Rules:
         },
         body: JSON.stringify({
           model: apiModel,
-          max_tokens: 1500,
+          // 8000 = DeepSeek's hard output ceiling. A long multi-week plan can
+          // easily exceed 1500 tokens; truncating mid-JSON makes parsePlansFromLLM
+          // fail silently (user sees "no plans found" when really we got cut off).
+          max_tokens: 8000,
           messages: [{ role: "user", content: extractPrompt }],
         }),
       });
@@ -464,7 +470,11 @@ Rules:
         },
         body: JSON.stringify({
           model: apiModel,
-          max_tokens: 1200,
+          // Practical ceiling: DeepSeek's hard output cap is 8192 tokens on
+          // the Anthropic-compat endpoint, so 8000 leaves a small margin.
+          // The model decides how much to actually write — this is just the
+          // "don't get cut off mid-sentence" headroom.
+          max_tokens: 8000,
           system: systemPrompt,
           messages: messagesToSend,
         }),
@@ -477,6 +487,12 @@ Rules:
         appendLocalChatMessage("assistant", t("coach.api_error", { msg }));
       } else {
         const reply = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || t("coach.no_response");
+        if (!reply || reply === t("coach.no_response")) {
+          // Diagnostic: API said 200 OK with no error, but we extracted no
+          // text. Most likely the model ID is unknown to DeepSeek (they
+          // silently return an empty payload). Dump full response so we can see.
+          console.warn("[AI Coach] Empty reply. Full response:", data, "model sent:", apiModel);
+        }
         try {
           await appendChatMessage("assistant", reply);
         } catch { /* alerted by wrapper */ }
