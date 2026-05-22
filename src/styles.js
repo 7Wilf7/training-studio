@@ -139,6 +139,56 @@ export const s = {
     transition: "border-color 120ms, color 120ms",
   },
 
+  // --- Modal overlay + card ---
+  // Shared style pair for fixed-overlay modals. On mobile (isMobile=true) the
+  // card stretches to a full-screen page with safe-area padding; on desktop
+  // it's a centered card with the given maxWidth. Use:
+  //   <div style={s.modalOverlay(isMobile)}>
+  //     <div style={s.modalCard(isMobile, { maxWidth: 600, bg: "..." })} ...>
+  modalOverlay: (isMobile) => ({
+    position: "fixed",
+    inset: 0,
+    background: "rgba(0,0,0,0.4)",
+    display: "flex",
+    alignItems: isMobile ? "stretch" : "flex-start",
+    justifyContent: "center",
+    zIndex: 1000,
+    padding: isMobile ? 0 : 20,
+    overflowY: "auto",
+  }),
+  modalCard: (isMobile, { maxWidth = 600, bg = "var(--bg-elevated)" } = {}) => ({
+    background: bg,
+    border: isMobile ? "none" : "1px solid var(--rule)",
+    borderRadius: isMobile ? 0 : 4,
+    boxShadow: isMobile ? "none" : "0 10px 40px rgba(0,0,0,0.2)",
+    width: "100%",
+    maxWidth: isMobile ? "none" : maxWidth,
+    margin: isMobile ? 0 : "20px auto",
+    minHeight: isMobile ? "100dvh" : "auto",
+    padding: isMobile
+      ? "calc(env(safe-area-inset-top) + 18px) 18px calc(env(safe-area-inset-bottom) + 24px)"
+      : 24,
+    boxSizing: "border-box",
+  }),
+  // Close button (the × in modal headers). Bumped tap target so it works
+  // reliably on touch — desktop also benefits from a larger hit area.
+  modalCloseBtn: {
+    background: "none",
+    border: "none",
+    fontSize: 24,
+    color: "var(--ink-3)",
+    cursor: "pointer",
+    padding: 0,
+    width: 44,
+    height: 44,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: -10,
+    marginTop: -10,
+    lineHeight: 1,
+  },
+
   // Chip — filter pills / mode toggles. Sentence case + sans, easier to scan.
   chip: (active) => ({
     border: "1px solid " + (active ? "var(--ink-1)" : "var(--rule)"),

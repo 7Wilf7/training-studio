@@ -116,3 +116,25 @@ input[type="number"] { -moz-appearance: textfield; }
 /* Small reset on details/summary used in PR list. */
 summary { list-style: none; }
 summary::-webkit-details-marker { display: none; }
+
+/* ============================================================
+   Mobile-only overrides
+   ------------------------------------------------------------
+   1) iOS Safari zooms the page when a focused input has font-size
+      < 16px. Force ≥ 16px on form controls at phone widths. !important
+      is required because most form controls carry inline `fontSize`
+      from inline-style helpers (s.input, ad-hoc 11/12/13px overrides).
+   2) Bump the default tap target. Many in-line chips and small buttons
+      use ~30-36px heights — fine on desktop, finicky on a touchscreen.
+      40px is the realistic compromise (Apple HIG suggests 44).
+   Components that genuinely need a smaller button on mobile can opt
+   out by setting min-height inline.
+   ============================================================ */
+@media (max-width: 767px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+  button {
+    min-height: 40px;
+  }
+}

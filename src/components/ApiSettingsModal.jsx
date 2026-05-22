@@ -2,6 +2,7 @@ import { useState } from "react";
 import { s } from "../styles";
 import { MODEL_PRESETS, DEEPSEEK_SIGNUP_URL } from "../constants";
 import { useT } from "../i18n/LanguageContext";
+import { useIsMobile } from "../hooks/useMediaQuery";
 
 function maskedKey(k) {
   if (!k) return "";
@@ -20,6 +21,7 @@ export function ApiSettingsModal({
   onClose,
 }) {
   const t = useT();
+  const isMobile = useIsMobile();
   const [keyDraft, setKeyDraft] = useState("");
 
   function saveKey() {
@@ -37,14 +39,13 @@ export function ApiSettingsModal({
   const sectionH = { fontSize: 16, fontWeight: 600, color: "var(--ink-1)", margin: "0 0 4px" };
 
   return (
-    <div onClick={onClose}
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 1000, padding: 20, overflowY: "auto" }}>
+    <div onClick={onClose} style={s.modalOverlay(isMobile)}>
       <div onClick={e => e.stopPropagation()}
-        style={{ background: "var(--bg-elevated)", borderRadius: 4, padding: 24, maxWidth: 600, width: "100%", boxShadow: "0 10px 40px rgba(0,0,0,0.2)", margin: "20px auto", border: "1px solid var(--rule)" }}>
+        style={s.modalCard(isMobile, { maxWidth: 600 })}>
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
           <h2 style={{ fontSize: 20, fontWeight: 500, margin: 0 }}>{t("api.title")}</h2>
-          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, color: "var(--ink-3)", cursor: "pointer" }}>×</button>
+          <button onClick={onClose} style={s.modalCloseBtn} aria-label="Close">×</button>
         </div>
         <p style={{ ...s.muted, marginBottom: 22, lineHeight: 1.6 }}>{t("api.desc_ds")}</p>
 

@@ -6,6 +6,7 @@ import {
 } from "../constants";
 import { calculateAge, isProfileComplete, computeHRZones } from "../utils/profile";
 import { useT } from "../i18n/LanguageContext";
+import { useIsMobile } from "../hooks/useMediaQuery";
 
 function toggleArr(arr, id) {
   const a = Array.isArray(arr) ? arr : [];
@@ -14,6 +15,7 @@ function toggleArr(arr, id) {
 
 export function ProfileEditor({ profile, setProfile, onClose, mode = "edit" }) {
   const t = useT();
+  const isMobile = useIsMobile();
   // Backfill any missing fields with defaults so the form is robust against older saved data
   const [draft, setDraft] = useState({ ...DEFAULT_PROFILE, ...(profile || {}) });
   const age = calculateAge(draft.birthDate);
@@ -26,16 +28,16 @@ export function ProfileEditor({ profile, setProfile, onClose, mode = "edit" }) {
 
   return (
     <div onClick={mode === "setup" ? undefined : onClose}
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 1000, padding: 20, overflowY: "auto" }}>
+      style={s.modalOverlay(isMobile)}>
       <div onClick={e => e.stopPropagation()}
-        style={{ background: "#fff", borderRadius: 12, padding: 24, maxWidth: 680, width: "100%", boxShadow: "0 10px 40px rgba(0,0,0,0.2)", margin: "20px auto" }}>
+        style={s.modalCard(isMobile, { maxWidth: 680, bg: "#fff" })}>
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
           <h2 style={{ fontSize: 20, fontWeight: 500, margin: 0 }}>
             {mode === "setup" ? t("profile.title_setup") : t("profile.title_edit")}
           </h2>
           {mode === "edit" && (
-            <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, color: "#888", cursor: "pointer" }}>×</button>
+            <button onClick={onClose} style={s.modalCloseBtn} aria-label="Close">×</button>
           )}
         </div>
         <p style={{ ...s.muted, marginBottom: 18, lineHeight: 1.5 }}>

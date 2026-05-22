@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { s } from "../../styles";
+import { useIsMobile } from "../../hooks/useMediaQuery";
 
 export function LoginScreen({ onClose, signIn }) {
+  const isMobile = useIsMobile();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -24,21 +26,15 @@ export function LoginScreen({ onClose, signIn }) {
   return (
     <div
       onClick={submitting ? undefined : onClose}
-      style={{
-        position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)",
-        display: "flex", alignItems: "flex-start", justifyContent: "center",
-        zIndex: 1000, padding: 20, overflowY: "auto",
-      }}
+      style={s.modalOverlay(isMobile)}
     >
       <form
         onClick={e => e.stopPropagation()}
         onSubmit={handleSubmit}
         style={{
-          background: "var(--bg-elevated)", borderRadius: 4, padding: 28,
-          maxWidth: 380, width: "100%",
-          boxShadow: "0 10px 40px rgba(0,0,0,0.2)",
-          margin: "60px auto",
-          border: "1px solid var(--rule)",
+          ...s.modalCard(isMobile, { maxWidth: 380 }),
+          margin: isMobile ? 0 : "60px auto",
+          padding: isMobile ? "calc(env(safe-area-inset-top) + 28px) 22px calc(env(safe-area-inset-bottom) + 24px)" : 28,
         }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>

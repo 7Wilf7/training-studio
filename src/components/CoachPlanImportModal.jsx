@@ -2,6 +2,7 @@ import { useState } from "react";
 import { s } from "../styles";
 import { ACTIVITY_TYPES, RUN_GROUP_TYPES, TYPE_COLOR } from "../constants";
 import { useT } from "../i18n/LanguageContext";
+import { useIsMobile } from "../hooks/useMediaQuery";
 
 // Each row in the modal is a draft proposal — user can toggle, edit, or
 // remove. Internal `_id` keeps React's key stable; `_selected` drives the
@@ -21,6 +22,7 @@ function buildDraft(p, idx) {
 
 export function CoachPlanImportModal({ plans, onConfirm, onCancel }) {
   const t = useT();
+  const isMobile = useIsMobile();
   const [items, setItems] = useState(() => plans.map(buildDraft));
   const [importing, setImporting] = useState(false);
 
@@ -64,22 +66,14 @@ export function CoachPlanImportModal({ plans, onConfirm, onCancel }) {
   return (
     <div
       onClick={onCancel}
-      style={{
-        position: "fixed", inset: 0,
-        background: "rgba(20,20,19,0.55)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        zIndex: 110, padding: 20,
-      }}
+      style={{ ...s.modalOverlay(isMobile), zIndex: 110, background: "rgba(20,20,19,0.55)" }}
     >
       <div
         onClick={e => e.stopPropagation()}
         style={{
-          background: "var(--bg)",
-          border: "1px solid var(--rule)",
-          borderRadius: 4,
-          width: "100%", maxWidth: 720,
-          maxHeight: "90vh", overflowY: "auto",
-          padding: "22px 26px 24px",
+          ...s.modalCard(isMobile, { maxWidth: 720, bg: "var(--bg)" }),
+          maxHeight: isMobile ? "none" : "90vh",
+          overflowY: "auto",
           fontFamily: "var(--font-sans)",
         }}
       >
@@ -97,10 +91,7 @@ export function CoachPlanImportModal({ plans, onConfirm, onCancel }) {
               {t("coach.import_modal_title", { n: plans.length })}
             </div>
           </div>
-          <button onClick={onCancel} style={{
-            background: "none", border: "none", fontSize: 20,
-            color: "var(--ink-3)", cursor: "pointer", padding: "4px 8px",
-          }} aria-label="Close">×</button>
+          <button onClick={onCancel} style={s.modalCloseBtn} aria-label="Close">×</button>
         </div>
 
         <div style={{ ...s.muted, marginTop: 10, lineHeight: 1.5, fontSize: 13 }}>

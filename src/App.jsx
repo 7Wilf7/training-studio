@@ -12,6 +12,7 @@ import { ProfileEditor } from "./components/ProfileEditor";
 import { ApiSettingsModal } from "./components/ApiSettingsModal";
 import { UserBadge } from "./components/Auth/UserBadge";
 import { LoginScreen } from "./components/Auth/LoginScreen";
+import { MobileShell } from "./components/MobileShell";
 import { useAuth } from "./hooks/useAuth";
 import { useIsMobile, useIsNarrow } from "./hooks/useMediaQuery";
 import * as db from "./lib/db";
@@ -405,6 +406,120 @@ function AppShell({
   // Keep the browser tab title in sync with the displayed page title
   useEffect(() => { document.title = titleText; }, [titleText]);
 
+  // Tab content rendered identically across desktop & mobile shells — only
+  // the chrome around it differs. Modals stay outside both shells so they
+  // overlay everything (and aren't constrained by the mobile content scroll).
+  const tabContent = (
+    <>
+      {tab === 0 && (
+        <TrainingTab
+          logs={logs}
+          addLog={addLog}
+          updateLog={updateLog}
+          bulkAddLogs={bulkAddLogs}
+          filter={globalFilter}
+          setFilter={setGlobalFilter}
+          filterDropdown={filterDropdown}
+          setFilterDropdown={setFilterDropdown}
+          period={period}
+          setPeriod={setPeriod}
+          periodDropdown={periodDropdown}
+          setPeriodDropdown={setPeriodDropdown}
+          setConfirmDelete={setConfirmDelete}
+          profile={profile}
+        />
+      )}
+      {tab === 1 && (
+        <CalendarTab
+          logs={logs}
+          addLog={addLog}
+          updateLog={updateLog}
+          setConfirmDelete={setConfirmDelete}
+          dailyNotes={dailyNotes}
+          setDailyTags={setDailyTags}
+        />
+      )}
+      {tab === 2 && (
+        <RacesTab
+          races={races}
+          addRace={addRace}
+          updateRace={updateRace}
+          now={now}
+          setConfirmDelete={setConfirmDelete}
+          itraPI={itraPI}
+          setItraPI={setItraPI}
+        />
+      )}
+      {tab === 3 && (
+        <AICoachTab
+          logs={logs}
+          races={races}
+          profile={profile}
+          coachConfig={coachConfig}
+          setCoachConfig={setCoachConfig}
+          coachMemory={coachMemory}
+          setCoachMemory={setCoachMemory}
+          chatMessages={chatMessages}
+          appendChatMessage={appendChatMessage}
+          appendLocalChatMessage={appendLocalChatMessage}
+          bulkAddLogs={bulkAddLogs}
+          now={now}
+          setConfirmDelete={setConfirmDelete}
+          apiKey={apiKey}
+          apiModel={apiModel}
+          onEditProfile={() => setProfileEditorMode("edit")}
+        />
+      )}
+    </>
+  );
+
+  const modals = (
+    <>
+      <ConfirmDeleteModal
+        confirmDelete={confirmDelete}
+        setConfirmDelete={setConfirmDelete}
+        onConfirm={executeDelete}
+      />
+
+      {profileEditorMode && (
+        <ProfileEditor
+          profile={profile}
+          setProfile={setProfile}
+          mode={profileEditorMode}
+          onClose={() => setProfileEditorMode(null)}
+        />
+      )}
+
+      {showApiSettings && (
+        <ApiSettingsModal
+          apiKey={apiKey}
+          setApiKey={setApiKey}
+          apiModel={apiModel}
+          setApiModel={setApiModel}
+          onClose={() => setShowApiSettings(false)}
+        />
+      )}
+    </>
+  );
+
+  if (isMobile) {
+    return (
+      <>
+        <MobileShell
+          tab={tab} setTab={setTab}
+          apiKey={apiKey}
+          lang={lang} onToggleLang={toggleLang}
+          onOpenApiSettings={() => setShowApiSettings(true)}
+          onOpenProfile={() => setProfileEditorMode("edit")}
+          signOut={signOut}
+        >
+          {tabContent}
+        </MobileShell>
+        {modals}
+      </>
+    );
+  }
+
   return (
     <div style={{
       maxWidth: 1280, margin: "0 auto",
@@ -542,90 +657,8 @@ function AppShell({
         })}
       </div>
 
-      {tab === 0 && (
-        <TrainingTab
-          logs={logs}
-          addLog={addLog}
-          updateLog={updateLog}
-          bulkAddLogs={bulkAddLogs}
-          filter={globalFilter}
-          setFilter={setGlobalFilter}
-          filterDropdown={filterDropdown}
-          setFilterDropdown={setFilterDropdown}
-          period={period}
-          setPeriod={setPeriod}
-          periodDropdown={periodDropdown}
-          setPeriodDropdown={setPeriodDropdown}
-          setConfirmDelete={setConfirmDelete}
-          profile={profile}
-        />
-      )}
-      {tab === 1 && (
-        <CalendarTab
-          logs={logs}
-          addLog={addLog}
-          updateLog={updateLog}
-          setConfirmDelete={setConfirmDelete}
-          dailyNotes={dailyNotes}
-          setDailyTags={setDailyTags}
-        />
-      )}
-      {tab === 2 && (
-        <RacesTab
-          races={races}
-          addRace={addRace}
-          updateRace={updateRace}
-          now={now}
-          setConfirmDelete={setConfirmDelete}
-          itraPI={itraPI}
-          setItraPI={setItraPI}
-        />
-      )}
-      {tab === 3 && (
-        <AICoachTab
-          logs={logs}
-          races={races}
-          profile={profile}
-          coachConfig={coachConfig}
-          setCoachConfig={setCoachConfig}
-          coachMemory={coachMemory}
-          setCoachMemory={setCoachMemory}
-          chatMessages={chatMessages}
-          appendChatMessage={appendChatMessage}
-          appendLocalChatMessage={appendLocalChatMessage}
-          bulkAddLogs={bulkAddLogs}
-          now={now}
-          setConfirmDelete={setConfirmDelete}
-          apiKey={apiKey}
-          apiModel={apiModel}
-          onEditProfile={() => setProfileEditorMode("edit")}
-        />
-      )}
-
-      <ConfirmDeleteModal
-        confirmDelete={confirmDelete}
-        setConfirmDelete={setConfirmDelete}
-        onConfirm={executeDelete}
-      />
-
-      {profileEditorMode && (
-        <ProfileEditor
-          profile={profile}
-          setProfile={setProfile}
-          mode={profileEditorMode}
-          onClose={() => setProfileEditorMode(null)}
-        />
-      )}
-
-      {showApiSettings && (
-        <ApiSettingsModal
-          apiKey={apiKey}
-          setApiKey={setApiKey}
-          apiModel={apiModel}
-          setApiModel={setApiModel}
-          onClose={() => setShowApiSettings(false)}
-        />
-      )}
+      {tabContent}
+      {modals}
     </div>
   );
 }
