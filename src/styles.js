@@ -147,14 +147,18 @@ export const s = {
   //     <div style={s.modalCard(isMobile, { maxWidth: 600, bg: "..." })} ...>
   modalOverlay: (isMobile) => ({
     position: "fixed",
-    inset: 0,
+    top: 0, left: 0, right: 0, bottom: 0,
     background: "rgba(0,0,0,0.4)",
     display: "flex",
     alignItems: isMobile ? "stretch" : "flex-start",
     justifyContent: "center",
-    zIndex: 1000,
+    // 9999 — well above MobileShell's fixed nav (20). Combined with the
+    // ModalRoot portal (which moves the overlay to document.body, escaping
+    // any ancestor stacking context), z-index conflicts are avoided.
+    zIndex: 9999,
     padding: isMobile ? 0 : 20,
     overflowY: "auto",
+    overscrollBehavior: "contain",
   }),
   modalCard: (isMobile, { maxWidth = 600, bg = "var(--bg-elevated)" } = {}) => ({
     background: bg,

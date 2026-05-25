@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { s } from "../../styles";
 import { useIsMobile } from "../../hooks/useMediaQuery";
+import { ModalRoot } from "../ModalRoot";
 
 export function LoginScreen({ onClose, signIn }) {
   const isMobile = useIsMobile();
@@ -24,6 +25,7 @@ export function LoginScreen({ onClose, signIn }) {
   }
 
   return (
+    <ModalRoot>
     <div
       onClick={submitting ? undefined : onClose}
       style={s.modalOverlay(isMobile)}
@@ -129,5 +131,6 @@ export function LoginScreen({ onClose, signIn }) {
         </div>
       </form>
     </div>
+    </ModalRoot>
   );
 }

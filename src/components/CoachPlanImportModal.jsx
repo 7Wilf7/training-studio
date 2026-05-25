@@ -3,6 +3,7 @@ import { s } from "../styles";
 import { ACTIVITY_TYPES, RUN_GROUP_TYPES, TYPE_COLOR } from "../constants";
 import { useT } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
+import { ModalRoot } from "./ModalRoot";
 
 // Each row in the modal is a draft proposal — user can toggle, edit, or
 // remove. Internal `_id` keeps React's key stable; `_selected` drives the
@@ -64,9 +65,10 @@ export function CoachPlanImportModal({ plans, onConfirm, onCancel }) {
   }
 
   return (
+    <ModalRoot>
     <div
       onClick={onCancel}
-      style={{ ...s.modalOverlay(isMobile), zIndex: 110, background: "rgba(20,20,19,0.55)" }}
+      style={{ ...s.modalOverlay(isMobile), background: "rgba(20,20,19,0.55)" }}
     >
       <div
         onClick={e => e.stopPropagation()}
@@ -213,5 +215,6 @@ export function CoachPlanImportModal({ plans, onConfirm, onCancel }) {
         </div>
       </div>
     </div>
+    </ModalRoot>
   );
 }

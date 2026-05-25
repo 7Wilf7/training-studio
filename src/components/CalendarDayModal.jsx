@@ -4,6 +4,7 @@ import { ACTIVITY_TYPES, DAILY_TAGS, RUN_GROUP_TYPES, TYPE_COLOR } from "../cons
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { formatDuration } from "../utils/format";
+import { ModalRoot } from "./ModalRoot";
 
 // Pretty header date: "Thu, May 21 2026" / "5月21日 周四 2026"
 function formatHeaderDate(yyyy_mm_dd, lang) {
@@ -88,15 +89,16 @@ export function CalendarDayModal({
   const headerDate = formatHeaderDate(dateKey, lang);
 
   return (
+    <ModalRoot>
     <div
       onClick={onClose}
       style={{
-        position: "fixed", inset: 0,
+        position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
         background: "rgba(20,20,19,0.55)",
         display: "flex",
         alignItems: isMobile ? "flex-end" : "center",
         justifyContent: "center",
-        zIndex: 100,
+        zIndex: 9999,
         padding: isMobile ? 0 : 20,
       }}
     >
@@ -266,5 +268,6 @@ export function CalendarDayModal({
         )}
       </div>
     </div>
+    </ModalRoot>
   );
 }

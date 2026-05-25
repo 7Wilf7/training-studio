@@ -18,6 +18,21 @@ const dict = {
   "tabs.calendar":        { en: "Calendar",                 zh: "日历" },
   "tabs.races":           { en: "Races",                    zh: "比赛" },
   "tabs.ai_coach":        { en: "AI Coach",                 zh: "AI 教练" },
+  "tabs.settings":        { en: "Settings",                 zh: "设置" },
+
+  // ===== Settings (mobile-only tab page) =====
+  "settings.title":          { en: "Settings",              zh: "设置" },
+  "settings.account":        { en: "Account",               zh: "账号" },
+  "settings.profile":        { en: "Personal profile",      zh: "个人资料" },
+  "settings.profile_desc":   { en: "Display name, training experience, injuries", zh: "显示名、训练履历、伤病" },
+  "settings.preferences":    { en: "Preferences",           zh: "偏好设置" },
+  "settings.api":            { en: "API key",               zh: "API 密钥" },
+  "settings.api_set":        { en: "Configured",            zh: "已配置" },
+  "settings.api_missing":    { en: "Not set — AI Coach disabled", zh: "未设置 · AI 教练不可用" },
+  "settings.language":       { en: "Language",              zh: "语言" },
+  "settings.guide":          { en: "User guide",            zh: "使用手册" },
+  "settings.guide_desc":     { en: "Opens in a new tab",    zh: "新标签页打开" },
+  "settings.sign_out":       { en: "Sign out",              zh: "退出登录" },
 
   // ===== Common =====
   "common.cancel":        { en: "Cancel",                   zh: "取消" },

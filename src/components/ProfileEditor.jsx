@@ -7,6 +7,7 @@ import {
 import { calculateAge, isProfileComplete, computeHRZones } from "../utils/profile";
 import { useT } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
+import { ModalRoot } from "./ModalRoot";
 
 function toggleArr(arr, id) {
   const a = Array.isArray(arr) ? arr : [];
@@ -27,6 +28,7 @@ export function ProfileEditor({ profile, setProfile, onClose, mode = "edit" }) {
   }
 
   return (
+    <ModalRoot>
     <div onClick={mode === "setup" ? undefined : onClose}
       style={s.modalOverlay(isMobile)}>
       <div onClick={e => e.stopPropagation()}
@@ -247,5 +249,6 @@ export function ProfileEditor({ profile, setProfile, onClose, mode = "edit" }) {
         </div>
       </div>
     </div>
+    </ModalRoot>
   );
 }

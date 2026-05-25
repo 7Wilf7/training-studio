@@ -13,6 +13,7 @@ import { ApiSettingsModal } from "./components/ApiSettingsModal";
 import { UserBadge } from "./components/Auth/UserBadge";
 import { LoginScreen } from "./components/Auth/LoginScreen";
 import { MobileShell } from "./components/MobileShell";
+import { SettingsMobileTab } from "./components/SettingsMobileTab";
 import { useAuth } from "./hooks/useAuth";
 import { useIsMobile, useIsNarrow } from "./hooks/useMediaQuery";
 import * as db from "./lib/db";
@@ -503,17 +504,24 @@ function AppShell({
   );
 
   if (isMobile) {
+    // 5th tab (idx=4) is the mobile-only Settings page — it owns the actions
+    // that desktop puts in the top-right (profile / api / lang / guide / signout).
+    const mobileContent = tab === 4 ? (
+      <SettingsMobileTab
+        user={user}
+        profile={profile}
+        apiKey={apiKey}
+        lang={lang}
+        onOpenProfile={() => setProfileEditorMode("edit")}
+        onOpenApiSettings={() => setShowApiSettings(true)}
+        onToggleLang={toggleLang}
+        signOut={signOut}
+      />
+    ) : tabContent;
     return (
       <>
-        <MobileShell
-          tab={tab} setTab={setTab}
-          apiKey={apiKey}
-          lang={lang} onToggleLang={toggleLang}
-          onOpenApiSettings={() => setShowApiSettings(true)}
-          onOpenProfile={() => setProfileEditorMode("edit")}
-          signOut={signOut}
-        >
-          {tabContent}
+        <MobileShell tab={tab} setTab={setTab}>
+          {mobileContent}
         </MobileShell>
         {modals}
       </>

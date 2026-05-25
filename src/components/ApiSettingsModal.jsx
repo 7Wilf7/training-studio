@@ -3,6 +3,7 @@ import { s } from "../styles";
 import { MODEL_PRESETS, DEEPSEEK_SIGNUP_URL } from "../constants";
 import { useT } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
+import { ModalRoot } from "./ModalRoot";
 
 function maskedKey(k) {
   if (!k) return "";
@@ -39,6 +40,7 @@ export function ApiSettingsModal({
   const sectionH = { fontSize: 16, fontWeight: 600, color: "var(--ink-1)", margin: "0 0 4px" };
 
   return (
+    <ModalRoot>
     <div onClick={onClose} style={s.modalOverlay(isMobile)}>
       <div onClick={e => e.stopPropagation()}
         style={s.modalCard(isMobile, { maxWidth: 600 })}>
@@ -97,5 +99,6 @@ export function ApiSettingsModal({
         </div>
       </div>
     </div>
+    </ModalRoot>
   );
 }
