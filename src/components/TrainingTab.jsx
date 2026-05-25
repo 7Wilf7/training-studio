@@ -45,55 +45,73 @@ export function TrainingTab({
     ? Math.round(hrLogs.reduce((sum, l) => sum + l.hr, 0) / hrLogs.length)
     : 0;
 
+  // Mobile-only sticky header. Glues the three navigation rows to the top
+  // of MobileShell's scrolling main: All activities ▼ / Activities-Charts
+  // toggle / period selector (when in activities view). Negative side
+  // margins bleed past main's 14px gutters so the sticky background covers
+  // the scroll content all the way to the screen edges.
+  const stickyHeaderStyle = isMobile ? {
+    position: "sticky", top: 0, zIndex: 10,
+    background: "var(--bg)",
+    marginLeft: -14, marginRight: -14, paddingLeft: 14, paddingRight: 14,
+    paddingTop: 4, paddingBottom: 4,
+    marginBottom: 6,
+  } : undefined;
+
   return (
     <div>
-      {/* Centered borderless filter dropdown — same on desktop and mobile.
-          Applies to both Activities and Charts views (the filter narrows
-          the dataset, not the visualization). */}
-      <GlobalFilter filter={filter} setFilter={setFilter} />
+      <div style={stickyHeaderStyle}>
+        {/* Centered borderless filter dropdown — same on desktop and mobile.
+            Applies to both Activities and Charts views (the filter narrows
+            the dataset, not the visualization). */}
+        <GlobalFilter filter={filter} setFilter={setFilter} />
 
-      {/* Activities ↔ Charts sits ABOVE the period selector: the period only
-          governs Activities (Charts has its own period selector inside).
-          Wrapped as segmented tabs so the hierarchy reads correctly. */}
-      <div style={{
-        display: "flex",
-        marginBottom: 14,
-        border: "1px solid var(--rule)",
-        borderRadius: 2,
-        background: "var(--bg-elevated)",
-      }}>
-        {[
-          { id: "activities", label: t("training.view.activities") },
-          { id: "charts",     label: t("training.view.charts") },
-        ].map((tab, i) => {
-          const active = view === tab.id;
-          return (
-            <button key={tab.id} onClick={() => setView(tab.id)}
-              style={{
-                flex: 1, minHeight: 36,
-                background: active ? "var(--ink-1)" : "transparent",
-                color: active ? "var(--ink-inv)" : "var(--ink-2)",
-                border: "none",
-                borderRight: i === 0 ? "1px solid var(--rule)" : "none",
-                fontFamily: "var(--font-sans)", fontSize: 13,
-                fontWeight: active ? 600 : 500,
-                cursor: "pointer", borderRadius: 0,
-              }}>
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
+        {/* Activities ↔ Charts sits ABOVE the period selector: the period only
+            governs Activities (Charts has its own period selector inside).
+            Wrapped as segmented tabs so the hierarchy reads correctly. */}
+        <div style={{
+          display: "flex",
+          marginBottom: 14,
+          border: "1px solid var(--rule)",
+          borderRadius: 2,
+          background: "var(--bg-elevated)",
+        }}>
+          {[
+            { id: "activities", label: t("training.view.activities") },
+            { id: "charts",     label: t("training.view.charts") },
+          ].map((tab, i) => {
+            const active = view === tab.id;
+            return (
+              <button key={tab.id} onClick={() => setView(tab.id)}
+                style={{
+                  flex: 1, minHeight: 36,
+                  background: active ? "var(--ink-1)" : "transparent",
+                  color: active ? "var(--ink-inv)" : "var(--ink-2)",
+                  border: "none",
+                  borderRight: i === 0 ? "1px solid var(--rule)" : "none",
+                  fontFamily: "var(--font-sans)", fontSize: 13,
+                  fontWeight: active ? 600 : 500,
+                  cursor: "pointer", borderRadius: 0,
+                }}>
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
 
-      {view === "activities" && (
-        <>
-          {/* Period applies to the activity list + the four stats only. */}
+        {view === "activities" && (
+          /* Period applies to the activity list + the four stats only. */
           <PeriodSelector
             period={period}
             setPeriod={setPeriod}
             periodDropdown={periodDropdown}
             setPeriodDropdown={setPeriodDropdown}
           />
+        )}
+      </div>
+
+      {view === "activities" && (
+        <>
 
           {/* Instrument-readout stats — four cells in a single row, each like a
               meter on a control panel. Hairline rules between cells, contour

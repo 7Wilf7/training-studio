@@ -186,12 +186,16 @@ export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete, it
     if (isMobile) {
       const value = filter[0] || "";
       return (
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+        // No marginBottom here — renderMobileSection lays this out in a flex
+        // row next to the Add button, and the extra bottom margin pushed the
+        // filter's center off-axis relative to the button. The surrounding
+        // row owns the spacing.
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ ...s.muted, fontSize: 11, flexShrink: 0 }}>{t("races.filter_label")}</span>
           <select
             value={value}
             onChange={e => setFilter(e.target.value ? [e.target.value] : [])}
-            style={{ ...s.input, flex: 1, padding: "6px 10px", fontSize: 13 }}>
+            style={{ ...s.input, flex: 1, padding: "0 10px", height: 40, fontSize: 13 }}>
             <option value="">{t("races.filter_all")}</option>
             {RACE_CATEGORIES.map(c => (
               <option key={c} value={c}>{t(`enum.race_cat.${c}`)}</option>
@@ -329,6 +333,15 @@ export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete, it
   if (isMobile) {
     return (
       <div>
+        {/* Sticky header: top tab strip + (Races sub-tab strip when active).
+            Glues both nav rows to the top of the scrolling main; lists below
+            scroll under them. Side bleed to escape main's 14px gutters. */}
+        <div style={{
+          position: "sticky", top: 0, zIndex: 10,
+          background: "var(--bg)",
+          marginLeft: -14, marginRight: -14, paddingLeft: 14, paddingRight: 14,
+          paddingTop: 4,
+        }}>
         {/* Top tab strip: Races (left) | PR (right) */}
         <div style={{ display: "flex", borderBottom: "1px solid var(--rule)", marginBottom: 14 }}>
           {[
@@ -353,44 +366,55 @@ export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete, it
           })}
         </div>
 
+        {/* Sub-tab strip — sticks below the top tab strip when Races is active.
+            Stays inside the sticky wrapper so both nav rows pin together. */}
+        {mobileTopTab === "races" && (
+          <div style={{
+            display: "flex",
+            marginBottom: 12,
+            border: "1px solid var(--rule)",
+            borderRadius: 2,
+            background: "var(--bg-elevated)",
+          }}>
+            {[
+              { id: "target",  label: t("races.section_target"),  count: targetRacesAll.length },
+              { id: "history", label: t("races.section_history"), count: historyRacesAll.length },
+            ].map((tab, i) => {
+              const active = mobileSubTab === tab.id;
+              return (
+                <button key={tab.id} onClick={() => {
+                  // Close any open Add form when switching sub-tab. Otherwise
+                  // a target-add form would linger over the history list and
+                  // its title text would lie ("New target race" while on
+                  // History). cancelAdd resets newRace draft too.
+                  if (addingMode) cancelAdd();
+                  setMobileSubTab(tab.id);
+                }}
+                  style={{
+                    flex: 1, minHeight: 36, padding: "8px 10px",
+                    background: active ? "var(--ink-1)" : "transparent",
+                    color: active ? "var(--ink-inv)" : "var(--ink-2)",
+                    border: "none",
+                    borderRight: i === 0 ? "1px solid var(--rule)" : "none",
+                    fontFamily: "var(--font-sans)", fontSize: 13,
+                    fontWeight: active ? 600 : 500,
+                    textAlign: "center",
+                    cursor: "pointer", borderRadius: 0,
+                  }}>
+                  {tab.label} ({tab.count})
+                </button>
+              );
+            })}
+          </div>
+        )}
+        </div> {/* /sticky header */}
+
         {mobileTopTab === "pr" && (
           <PersonalRecordsBar races={races} itraPI={itraPI} setItraPI={setItraPI} />
         )}
 
         {mobileTopTab === "races" && (
           <>
-            {/* Sub-tab strip — full-width segmented, count baked into label */}
-            <div style={{
-              display: "flex",
-              marginBottom: 12,
-              border: "1px solid var(--rule)",
-              borderRadius: 2,
-              background: "var(--bg-elevated)",
-            }}>
-              {[
-                { id: "target",  label: t("races.section_target"),  count: targetRacesAll.length },
-                { id: "history", label: t("races.section_history"), count: historyRacesAll.length },
-              ].map((tab, i) => {
-                const active = mobileSubTab === tab.id;
-                return (
-                  <button key={tab.id} onClick={() => setMobileSubTab(tab.id)}
-                    style={{
-                      flex: 1, minHeight: 36, padding: "8px 10px",
-                      background: active ? "var(--ink-1)" : "transparent",
-                      color: active ? "var(--ink-inv)" : "var(--ink-2)",
-                      border: "none",
-                      borderRight: i === 0 ? "1px solid var(--rule)" : "none",
-                      fontFamily: "var(--font-sans)", fontSize: 13,
-                      fontWeight: active ? 600 : 500,
-                      textAlign: "center",
-                      cursor: "pointer", borderRadius: 0,
-                    }}>
-                    {tab.label} ({tab.count})
-                  </button>
-                );
-              })}
-            </div>
-
             {pastRaceWarning && (
               <div style={{ ...s.cardDark, marginBottom: 14, border: "1px solid #d4a017", background: "#fffbea" }}>
                 <div style={{ ...s.section, color: "#7a5a00" }}>{t("races.past_warn_title")}</div>
@@ -691,24 +715,61 @@ export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete, it
           </div>
         )}
 
-        {/* Row 1: Category (narrow) + Name (flex) */}
-        <div style={{ display: "grid", gridTemplateColumns: "200px 1fr", gap: 10, marginBottom: 10 }}>
-          <div>
-            <div style={{ ...s.label, marginBottom: 6 }}>{t("races.category_label")}</div>
-            <select value={newRace.category}
-              onChange={e => setNewRace({ ...newRace, category: e.target.value })}
-              style={s.input}>
-              <option value="">{t("races.category_placeholder")}</option>
-              {RACE_CATEGORIES.map(c => <option key={c} value={c}>{t(`enum.race_cat.${c}`)}</option>)}
-            </select>
+        {/* Mobile: race name on its own row (full width — input is what the
+            user actually types so it needs the most space), then Date +
+            Category on one row. Category dropdown gets a short label for
+            "Half Marathon" so it doesn't overflow the cell. */}
+        {isMobile ? (
+          <>
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ ...s.label, marginBottom: 6 }}>{t("races.name_label")}</div>
+              <input placeholder={t("races.name_placeholder")} value={newRace.name}
+                onChange={e => setNewRace({ ...newRace, name: e.target.value })}
+                style={s.input} />
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+              <div>
+                <div style={{ ...s.label, marginBottom: 6 }}>{t("races.date_label")}</div>
+                <input type="date" value={newRace.date}
+                  onChange={e => setNewRace({ ...newRace, date: e.target.value })}
+                  style={s.input} />
+              </div>
+              <div>
+                <div style={{ ...s.label, marginBottom: 6 }}>{t("races.category_label")}</div>
+                <select value={newRace.category}
+                  onChange={e => setNewRace({ ...newRace, category: e.target.value })}
+                  style={s.input}>
+                  <option value="">{t("races.category_placeholder")}</option>
+                  {RACE_CATEGORIES.map(c => (
+                    <option key={c} value={c}>
+                      {/* Abbreviate Half Marathon on the narrow phone select. */}
+                      {c === "Half Marathon" ? t("enum.race_cat.Half Marathon_short") : t(`enum.race_cat.${c}`)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </>
+        ) : (
+          /* Desktop unchanged: Category (200px) + Name (flex) on one row. */
+          <div style={{ display: "grid", gridTemplateColumns: "200px 1fr", gap: 10, marginBottom: 10 }}>
+            <div>
+              <div style={{ ...s.label, marginBottom: 6 }}>{t("races.category_label")}</div>
+              <select value={newRace.category}
+                onChange={e => setNewRace({ ...newRace, category: e.target.value })}
+                style={s.input}>
+                <option value="">{t("races.category_placeholder")}</option>
+                {RACE_CATEGORIES.map(c => <option key={c} value={c}>{t(`enum.race_cat.${c}`)}</option>)}
+              </select>
+            </div>
+            <div>
+              <div style={{ ...s.label, marginBottom: 6 }}>{t("races.name_label")}</div>
+              <input placeholder={t("races.name_placeholder")} value={newRace.name}
+                onChange={e => setNewRace({ ...newRace, name: e.target.value })}
+                style={s.input} />
+            </div>
           </div>
-          <div>
-            <div style={{ ...s.label, marginBottom: 6 }}>{t("races.name_label")}</div>
-            <input placeholder={t("races.name_placeholder")} value={newRace.name}
-              onChange={e => setNewRace({ ...newRace, name: e.target.value })}
-              style={s.input} />
-          </div>
-        </div>
+        )}
 
         {/* Spartan-only: pick the event tier. Acts as the "size" signal in
             place of distance/ascent for this category. */}
@@ -725,32 +786,58 @@ export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete, it
           </div>
         )}
 
-        {/* Row 2: Date + Distance + Ascent (each shown by category rules).
-            Empty cells are NOT rendered so visible fields sit adjacent. */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10, marginBottom: 10 }}>
-          <div>
-            <div style={{ ...s.label, marginBottom: 6 }}>{t("races.date_label")}</div>
-            <input type="date" value={newRace.date}
-              onChange={e => setNewRace({ ...newRace, date: e.target.value })}
-              style={s.input} />
+        {/* Mobile: Distance + Ascent on one row (2-col); Date already covered
+            in the row above with Category. Desktop: Date + Distance + Ascent
+            in a 3-col row as before. The `(km)` suffix in the label is dropped
+            on mobile so the label doesn't wrap to two lines in the narrow cell
+            and break the row alignment. */}
+        {isMobile ? (
+          (showDistance || showAscent) && (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10, marginBottom: 10 }}>
+              {showDistance && (
+                <div>
+                  <div style={{ ...s.label, marginBottom: 6 }}>{t("races.distance_label_short")}</div>
+                  <input type="number" step="0.001" placeholder="km" value={newRace.distance}
+                    onChange={e => setNewRace({ ...newRace, distance: e.target.value })}
+                    style={s.input} />
+                </div>
+              )}
+              {showAscent && (
+                <div>
+                  <div style={{ ...s.label, marginBottom: 6 }}>{t("races.ascent_label_short")}</div>
+                  <input type="number" placeholder="m" value={newRace.ascent}
+                    onChange={e => setNewRace({ ...newRace, ascent: e.target.value })}
+                    style={s.input} />
+                </div>
+              )}
+            </div>
+          )
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10, marginBottom: 10 }}>
+            <div>
+              <div style={{ ...s.label, marginBottom: 6 }}>{t("races.date_label")}</div>
+              <input type="date" value={newRace.date}
+                onChange={e => setNewRace({ ...newRace, date: e.target.value })}
+                style={s.input} />
+            </div>
+            {showDistance && (
+              <div>
+                <div style={{ ...s.label, marginBottom: 6 }}>{t("races.distance_label")}</div>
+                <input type="number" step="0.001" placeholder="0" value={newRace.distance}
+                  onChange={e => setNewRace({ ...newRace, distance: e.target.value })}
+                  style={s.input} />
+              </div>
+            )}
+            {showAscent && (
+              <div>
+                <div style={{ ...s.label, marginBottom: 6 }}>{t("races.ascent_label")}</div>
+                <input type="number" placeholder="0" value={newRace.ascent}
+                  onChange={e => setNewRace({ ...newRace, ascent: e.target.value })}
+                  style={s.input} />
+              </div>
+            )}
           </div>
-          {showDistance && (
-            <div>
-              <div style={{ ...s.label, marginBottom: 6 }}>{t("races.distance_label")}</div>
-              <input type="number" step="0.001" placeholder="0" value={newRace.distance}
-                onChange={e => setNewRace({ ...newRace, distance: e.target.value })}
-                style={s.input} />
-            </div>
-          )}
-          {showAscent && (
-            <div>
-              <div style={{ ...s.label, marginBottom: 6 }}>{t("races.ascent_label")}</div>
-              <input type="number" placeholder="0" value={newRace.ascent}
-                onChange={e => setNewRace({ ...newRace, ascent: e.target.value })}
-                style={s.input} />
-            </div>
-          )}
-        </div>
+        )}
 
         {/* ITRA — Trail history races only */}
         {showItra && (

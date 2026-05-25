@@ -154,6 +154,7 @@ const dict = {
 
   // ===== Enum: Race categories =====
   "enum.race_cat.Half Marathon":  { en: "Half Marathon",    zh: "半程马拉松" },
+  "enum.race_cat.Half Marathon_short": { en: "Half",        zh: "半马" },
   "enum.race_cat.Marathon":       { en: "Marathon",         zh: "全程马拉松" },
   "enum.race_cat.10K":            { en: "10K",              zh: "10 公里" },
   "enum.race_cat.Trail":          { en: "Trail",            zh: "越野" },
@@ -207,8 +208,12 @@ const dict = {
 
   // ===== Training tab summary cards =====
   "training.sessions":        { en: "Sessions",             zh: "训练次数" },
-  "training.total_distance":  { en: "Total Distance",       zh: "总距离" },
-  "training.total_ascent":    { en: "Total Ascent",         zh: "总爬升" },
+  // Short labels for the mobile 4-col stats row — the English "Total
+  // Distance" / "Total Ascent" wrapped to two lines at ~75px per cell.
+  // The "Total" prefix is implicit (it's the period total) so dropping it
+  // doesn't lose information.
+  "training.total_distance":  { en: "Distance",             zh: "总距离" },
+  "training.total_ascent":    { en: "Ascent",               zh: "总爬升" },
   "training.avg_hr":          { en: "Avg HR",               zh: "平均心率" },
 
   // Training sub-views (Calendar promoted to a top-level tab — no sub-chip)
@@ -383,6 +388,8 @@ const dict = {
   "races.name_placeholder":   { en: "e.g. UTMB, 柴古唐斯, 上海马拉松", zh: "例如 UTMB、柴古唐斯、上海马拉松" },
   "races.date_label":         { en: "Date",                 zh: "日期" },
   "races.distance_label":     { en: "Distance (km)",        zh: "距离 (km)" },
+  "races.distance_label_short": { en: "Distance",           zh: "距离" },
+  "races.ascent_label_short":   { en: "Ascent",             zh: "爬升" },
   "races.ascent_label":       { en: "Ascent (m)",           zh: "爬升 (m)" },
   "races.category_label":     { en: "Category",             zh: "组别" },
   "races.spartan_tier":       { en: "Spartan tier",         zh: "斯巴达级别" },
