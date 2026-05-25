@@ -305,10 +305,19 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
       </div>
 
       {selectMode && (
-        <div style={{ ...s.cardDark, marginBottom: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          <span style={s.muted}>{t("activities.selected", { n: selectedIds.size })}</span>
-          <button onClick={selectAll} style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px" }}>{t("activities.select_all")}</button>
-          <button onClick={clearSelection} style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px" }}>{t("activities.clear_sel")}</button>
+        // Select All / Clear / Delete share one row. The "N selected" label
+        // was dropped — the Select button itself shows ✓N, already conveys
+        // the count.
+        <div style={{ ...s.cardDark, marginBottom: 12, display: "flex", gap: 8, alignItems: "center" }}>
+          <button onClick={selectAll}
+            style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px" }}>
+            {t("activities.select_all")}
+          </button>
+          <button onClick={clearSelection}
+            style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px" }}>
+            {t("activities.clear_sel")}
+          </button>
+          <div style={{ flex: 1 }} />
           <button onClick={bulkDeleteSelected} disabled={selectedIds.size === 0}
             style={{ ...s.btn, fontSize: 12, padding: "5px 12px", background: "#c0392b", borderColor: "#c0392b", opacity: selectedIds.size === 0 ? 0.5 : 1 }}>
             {t("activities.delete_sel")}
@@ -439,13 +448,21 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
               if (selectMode) toggleSelected(l.id);
               else setExpandedId(isExpanded ? null : l.id);
             };
+            // NB: explicit per-side borders. The `border` shorthand combined
+            // with a separate `borderLeft` longhand was inconsistently re-
+            // applied on certain state transitions (exiting select mode
+            // without changes) — the colored stripe would vanish until the
+            // next full re-render. Setting each side independently sidesteps
+            // the shorthand/longhand interaction entirely.
             return (
               <div key={l.id}
                 onClick={onMobileCardClick}
                 style={{
                   background: isSelected ? "#eef5ff" : "var(--bg-elevated)",
-                  border: "1px solid " + (isSelected ? "#7aa8e0" : "var(--rule)"),
-                  borderLeft: "4px solid " + (TYPE_COLOR[l.type] || "var(--rule)"),
+                  borderTop:    "1px solid " + (isSelected ? "#7aa8e0" : "var(--rule)"),
+                  borderRight:  "1px solid " + (isSelected ? "#7aa8e0" : "var(--rule)"),
+                  borderBottom: "1px solid " + (isSelected ? "#7aa8e0" : "var(--rule)"),
+                  borderLeft:   "4px solid " + (TYPE_COLOR[l.type] || "var(--rule)"),
                   padding: "9px 12px 10px",
                   display: "flex", flexDirection: "column", gap: 5,
                   cursor: "pointer",

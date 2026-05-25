@@ -115,8 +115,8 @@ export function GlobalFilter({ filter, setFilter }) {
     setOpen(false);
   }
 
-  // Flat option list with section headers. Single-select; matches mobile
-  // dropdown UX on desktop too — power-user multi-select via chips retired.
+  // Flat option list with three peer section headers. HIIT lives under its
+  // own "Conditioning" section to make clear it's not a Strength child.
   const sections = [
     { kind: "option", value: "all", label: t("filter.all_activities") },
     { kind: "header", label: t("filter.group.run") },
@@ -130,6 +130,7 @@ export function GlobalFilter({ filter, setFilter }) {
     { kind: "option", value: "strength-Upper Body",  label: t("filter.child.Upper Body") },
     { kind: "option", value: "strength-Lower Body",  label: t("filter.child.Lower Body") },
     { kind: "option", value: "strength-Core",        label: t("filter.child.Core") },
+    { kind: "header", label: t("filter.group.conditioning") },
     { kind: "option", value: "hiit", label: t("filter.group.hiit") },
   ];
 

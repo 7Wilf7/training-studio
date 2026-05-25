@@ -19,7 +19,8 @@ export function PeriodSelector({ period, setPeriod, periodDropdown, setPeriodDro
             background: active ? "var(--ink-1)" : "transparent",
             color: active ? "var(--ink-inv)" : "var(--ink-2)",
             border: "none",
-            borderRight: kind !== "all" ? "1px solid var(--rule)" : "none",
+            // No right divider on the rightmost cell (Year).
+            borderRight: kind !== "year" ? "1px solid var(--rule)" : "none",
             fontFamily: "var(--font-sans)", fontSize: 12,
             fontWeight: active ? 600 : 500,
             whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
@@ -69,6 +70,13 @@ export function PeriodSelector({ period, setPeriod, periodDropdown, setPeriodDro
       overflow: "visible",
       background: "var(--bg-elevated)",
     }}>
+      <Cell
+        kind="all"
+        active={period.type === "all"}
+        label={t("period.all_time")}
+        onClick={() => { setPeriod({ type: "all" }); setPeriodDropdown(null); }}
+        hasDropdown={false}
+      />
       <Cell
         kind="week"
         active={period.type === "week"}
@@ -130,13 +138,6 @@ export function PeriodSelector({ period, setPeriod, periodDropdown, setPeriodDro
             () => { setPeriod(isCurrent ? { type: "year" } : { type: "year", year: yy }); setPeriodDropdown(null); },
           );
         })}
-      />
-      <Cell
-        kind="all"
-        active={period.type === "all"}
-        label={t("period.all_time")}
-        onClick={() => { setPeriod({ type: "all" }); setPeriodDropdown(null); }}
-        hasDropdown={false}
       />
     </div>
   );

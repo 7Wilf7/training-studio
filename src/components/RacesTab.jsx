@@ -465,17 +465,25 @@ export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete, it
     const distStr = r.distance > 0 ? `${r.distance} km` : "";
     const ascStr  = r.ascent && parseInt(r.ascent) > 0 ? `+${r.ascent} m` : "";
 
-    // Mobile: strict 2-row card. Row 1 = date + priority + category tag.
-    // Row 2 = race name (ellipsised if too long) + ascent/time suffix.
-    // Both rows are nowrap so the card height is consistent across all
-    // rows in the list. Tap the card to open the edit form (which shows
-    // the full name).
+    // Mobile: fixed-shape card.
+    //   Row 1 = date · priority · category tag · delete (every race).
+    //   Row 2 = race name (ellipsised) · time (right) — every race.
+    //   Row 3 = distance + ascent — Trail category only (it doesn't carry
+    //           the distance in its category tag the way Marathon/HM/10K
+    //           do, so the trail row needs to surface them explicitly).
     if (isNarrow) {
-      const suffixParts = [];
-      if (r.category === "Trail" && distStr) suffixParts.push(distStr);
-      if (ascStr) suffixParts.push(ascStr);
-      if (timeStr) suffixParts.push(timeStr);
-      const suffix = suffixParts.join(" · ");
+      const isTrailLike = r.category === "Trail";
+      // Row 2 suffix: time (always) + ascent (only when NOT trail, since
+      // trail moves ascent to row 3 with distance).
+      const row2Suffix = [];
+      if (!isTrailLike && ascStr) row2Suffix.push(ascStr);
+      if (timeStr) row2Suffix.push(timeStr);
+      // Row 3 parts: trail-only, distance + ascent.
+      const row3Parts = [];
+      if (isTrailLike) {
+        if (distStr) row3Parts.push(distStr);
+        if (ascStr) row3Parts.push(ascStr);
+      }
       return (
         <div key={r.id} onClick={() => startEdit(r)}
           style={{
@@ -505,7 +513,7 @@ export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete, it
               aria-label="Delete"
               style={{ border: "none", background: "none", color: "var(--ink-3)", cursor: "pointer", fontSize: 13, padding: "0 4px", minHeight: 24, flexShrink: 0 }}>✕</button>
           </div>
-          {/* Row 2: name (truncate) + suffix (ascent/time, right-aligned) */}
+          {/* Row 2: name (truncate) + time/ascent suffix (right-aligned) */}
           <div style={{ display: "flex", gap: 10, alignItems: "baseline", minWidth: 0 }}>
             <span
               title={r.name}
@@ -516,13 +524,22 @@ export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete, it
               }}>
               {r.name}
             </span>
-            {suffix && (
+            {row2Suffix.length > 0 && (
               <span style={{
                 fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--ink-3)",
                 fontVariantNumeric: "tabular-nums", flexShrink: 0,
-              }}>{suffix}</span>
+              }}>{row2Suffix.join(" · ")}</span>
             )}
           </div>
+          {/* Row 3: Trail-only, distance + ascent */}
+          {row3Parts.length > 0 && (
+            <div style={{
+              fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--ink-3)",
+              fontVariantNumeric: "tabular-nums",
+            }}>
+              {row3Parts.join(" · ")}
+            </div>
+          )}
           {!r.category && (
             <select value=""
               onClick={(e) => e.stopPropagation()}
