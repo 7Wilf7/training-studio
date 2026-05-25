@@ -562,7 +562,9 @@ Rules:
         </div>
       )}
 
-      {/* MOBILE settings sub-page header: ← back to chat + title + button list */}
+      {/* MOBILE settings sub-page header: ← back + title + vertical button
+          list (one per row, centered). The mobile sub-page has plenty of
+          vertical room so we stop cramming the toggle buttons into a wrap. */}
       {inSettings && (
         <div style={{ flexShrink: 0, marginBottom: 14 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
@@ -572,19 +574,28 @@ Rules:
             </button>
             <div style={{ ...s.section, margin: 0, flex: 1 }}>{t("coach.settings_title")}</div>
           </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button onClick={onEditProfile} style={s.btnGhost}>{t("coach.edit_profile")}</button>
-            <button onClick={() => setShowCoachConfig(!showCoachConfig)} style={s.btnGhost}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <button onClick={onEditProfile}
+              style={{ ...s.btnGhost, textAlign: "center", padding: "10px 14px" }}>
+              {t("coach.edit_profile")}
+            </button>
+            <button onClick={() => setShowCoachConfig(!showCoachConfig)}
+              style={{ ...s.btnGhost, textAlign: "center", padding: "10px 14px" }}>
               {showCoachConfig ? t("coach.hide_config") : t("coach.show_config")}
             </button>
-            <button onClick={() => setShowMemory(!showMemory)} style={s.btnGhost}>
+            <button onClick={() => setShowMemory(!showMemory)}
+              style={{ ...s.btnGhost, textAlign: "center", padding: "10px 14px" }}>
               {showMemory ? t("coach.hide_memory") : t("coach.show_memory")}{coachMemory ? " ●" : ""}
             </button>
-            <button onClick={() => setShowPromptPreview(!showPromptPreview)} style={s.btnGhost}>
+            <button onClick={() => setShowPromptPreview(!showPromptPreview)}
+              style={{ ...s.btnGhost, textAlign: "center", padding: "10px 14px" }}>
               {showPromptPreview ? t("coach.hide_prompt") : t("coach.show_prompt")}
             </button>
             {chatMessages.length > 0 && (
-              <button onClick={clearChat} style={s.btnGhost}>{t("coach.clear_chat")}</button>
+              <button onClick={clearChat}
+                style={{ ...s.btnGhost, textAlign: "center", padding: "10px 14px" }}>
+                {t("coach.clear_chat")}
+              </button>
             )}
           </div>
         </div>
@@ -599,32 +610,62 @@ Rules:
           <div style={s.section}>{t("coach.behavior")}</div>
           <div style={{ ...s.muted, marginBottom: 12, lineHeight: 1.5 }}>{t("coach.behavior_hint")}</div>
 
+          {/* On mobile the settings sub-page has plenty of vertical space —
+              stack each option on its own row, centered, instead of cramming
+              into a wrapping chip row. Desktop keeps the dense chip layout. */}
           <div style={{ marginBottom: 12 }}>
             <div style={{ ...s.label, marginBottom: 6 }}>{t("coach.style")}</div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <div style={{
+              display: "flex",
+              flexDirection: isMobile ? "column" : "row",
+              gap: isMobile ? 8 : 6,
+              flexWrap: isMobile ? "nowrap" : "wrap",
+            }}>
               {COACH_STYLES.map(o => (
                 <button key={o.id} onClick={() => setStyle(o.id)}
-                  style={s.chip(coachConfig.style === o.id)}>{t(`enum.coach.${o.id}`)}</button>
+                  style={isMobile
+                    ? { ...s.chip(coachConfig.style === o.id), padding: "10px 14px", width: "100%", textAlign: "center" }
+                    : s.chip(coachConfig.style === o.id)}>
+                  {t(`enum.coach.${o.id}`)}
+                </button>
               ))}
             </div>
           </div>
 
           <div style={{ marginBottom: 12 }}>
             <div style={{ ...s.label, marginBottom: 6 }}>{t("coach.length")}</div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <div style={{
+              display: "flex",
+              flexDirection: isMobile ? "column" : "row",
+              gap: isMobile ? 8 : 6,
+              flexWrap: isMobile ? "nowrap" : "wrap",
+            }}>
               {OUTPUT_LENGTHS.map(o => (
                 <button key={o.id} onClick={() => setOutputLength(o.id)}
-                  style={s.chip(coachConfig.outputLength === o.id)}>{t(`enum.length.${o.id}`)}</button>
+                  style={isMobile
+                    ? { ...s.chip(coachConfig.outputLength === o.id), padding: "10px 14px", width: "100%", textAlign: "center" }
+                    : s.chip(coachConfig.outputLength === o.id)}>
+                  {t(`enum.length.${o.id}`)}
+                </button>
               ))}
             </div>
           </div>
 
           <div style={{ marginBottom: 4 }}>
             <div style={{ ...s.label, marginBottom: 6 }}>{t("coach.intervention")}</div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <div style={{
+              display: "flex",
+              flexDirection: isMobile ? "column" : "row",
+              gap: isMobile ? 8 : 6,
+              flexWrap: isMobile ? "nowrap" : "wrap",
+            }}>
               {INTERVENTION_LEVELS.map(o => (
                 <button key={o.id} onClick={() => setIntervention(o.id)}
-                  style={s.chip(coachConfig.intervention === o.id)}>{t(`enum.intervention.${o.id}`)}</button>
+                  style={isMobile
+                    ? { ...s.chip(coachConfig.intervention === o.id), padding: "10px 14px", width: "100%", textAlign: "center" }
+                    : s.chip(coachConfig.intervention === o.id)}>
+                  {t(`enum.intervention.${o.id}`)}
+                </button>
               ))}
             </div>
           </div>
@@ -774,34 +815,42 @@ Rules:
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {chatMessages.map((m, i) => {
               // Persistent assistant replies (i.e. not local error bubbles) get
-              // an "Import to Calendar" affordance — the button lives in its
-              // own row right under the bubble so the bubble itself stays clean.
+              // an "Import to Calendar" affordance — a tiny 📅 icon button sitting
+              // to the right of the bubble. Avoids the extra row the old wide
+              // button took up under every assistant message.
               const canImport = m.role === "assistant" && !m.isLocal && bulkAddLogs;
               const extracting = extractingForIdx === i;
               return (
                 <div key={i} style={{
                   alignSelf: m.role === "user" ? "flex-end" : "flex-start",
                   maxWidth: "85%",
-                  display: "flex", flexDirection: "column",
+                  display: "flex", flexDirection: "row", alignItems: "flex-end", gap: 6,
                 }}>
                   <div style={{
                     background: m.role === "user" ? "#222" : "#f5f5f5",
                     color: m.role === "user" ? "#fff" : "#222",
                     borderRadius: 10, padding: "10px 14px",
                     fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-wrap",
+                    minWidth: 0,
                   }}>{m.content}</div>
                   {canImport && (
                     <button
                       onClick={() => importToCalendar(m.content, i)}
                       disabled={extracting}
+                      aria-label={t("coach.import_button")}
+                      title={extracting ? t("coach.extracting") : t("coach.import_button")}
                       style={{
-                        ...s.btnGhost,
-                        alignSelf: "flex-start",
-                        marginTop: 5,
-                        fontSize: 11, padding: "4px 10px",
+                        background: "var(--bg-elevated)",
+                        border: "1px solid var(--rule)",
+                        borderRadius: 4,
+                        width: 32, height: 32, minHeight: 32,
+                        padding: 0, fontSize: 15, lineHeight: 1,
+                        cursor: extracting ? "default" : "pointer",
                         opacity: extracting ? 0.5 : 1,
+                        flexShrink: 0,
+                        display: "inline-flex", alignItems: "center", justifyContent: "center",
                       }}>
-                      {extracting ? t("coach.extracting") : t("coach.import_button")}
+                      📅
                     </button>
                   )}
                 </div>
@@ -819,7 +868,7 @@ Rules:
           lets this specific textarea drop below 16px without breaking the
           iOS-zoom-prevention rule for every other input. */}
       <div style={{
-        display: "flex", gap: 8, alignItems: "flex-end",
+        display: "flex", gap: 8, alignItems: "stretch",
         paddingTop: isMobile ? 10 : 0,
         borderTop: isMobile ? "1px solid var(--rule)" : "none",
         flexShrink: 0,
@@ -832,31 +881,36 @@ Rules:
           onKeyDown={e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) sendChat(); }}
           style={{
             ...s.input,
-            resize: "vertical",
+            resize: isMobile ? "none" : "vertical",
             fontFamily: "var(--font-sans)",
             flex: 1,
             lineHeight: 1.45,
             "--mobile-input-fs": isMobile ? "14px" : undefined,
           }} />
         {isMobile ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 }}>
+          // align-items: stretch on the parent row already matches the column
+          // height to the textarea. flex: 1 on each button splits that evenly
+          // so ⚙ and ⏎ are exactly the same height — no more visual jitter.
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0, width: 44 }}>
             <button onClick={() => setShowCoachMenu(true)} aria-label={t("coach.menu_open")}
               style={{
                 ...s.btnGhost,
-                width: 44, minWidth: 44, height: 36,
+                flex: 1, width: "100%",
                 padding: 0, fontSize: 14, lineHeight: 1,
-                minHeight: 36,
+                minHeight: 0,
+                display: "inline-flex", alignItems: "center", justifyContent: "center",
               }}>
-              ⚙
-              {(coachMemory || showCoachConfig || showMemory || showPromptPreview) ? " ●" : ""}
+              ⚙{(coachMemory || showCoachConfig || showMemory || showPromptPreview) ? " ●" : ""}
             </button>
             <button onClick={sendChat} disabled={chatLoading || !chatInput.trim()}
               aria-label={t("coach.send")}
               style={{
                 ...s.btn,
-                width: 44, minWidth: 44, height: 44,
+                flex: 1, width: "100%",
                 padding: 0, fontSize: 20, lineHeight: 1,
+                minHeight: 0,
                 opacity: chatLoading || !chatInput.trim() ? 0.4 : 1,
+                display: "inline-flex", alignItems: "center", justifyContent: "center",
               }}>
               ⏎
             </button>
