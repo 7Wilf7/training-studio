@@ -10,6 +10,7 @@ import { useIsNarrow, useIsMobile } from "../hooks/useMediaQuery";
 import { formatDuration, formatPaceFromSec } from "../utils/format";
 import { buildSystemPrompt } from "../utils/profile";
 import { CoachPlanImportModal } from "./CoachPlanImportModal";
+import { ModalRoot } from "./ModalRoot";
 
 // At this many persisted messages, surface a soft hint suggesting the user
 // distill Memory + clear the chat. Older turns start competing with the
@@ -540,20 +541,16 @@ Rules:
           <button onClick={() => setShowCoachMenu(!showCoachMenu)}
             style={{ ...s.btnGhost, fontWeight: 600 }}>
             {showCoachMenu ? `▲ ${t("coach.menu_close")}` : `⚙ ${t("coach.menu_open")}`}
-            {(coachMemory || showCoachConfig || showMemory || showPromptPreview) && !showCoachMenu ? " ●" : ""}
+            {coachMemory && !showCoachMenu ? " ●" : ""}
           </button>
           {showCoachMenu && (
             <>
               <button onClick={onEditProfile} style={s.btnGhost}>{t("coach.edit_profile")}</button>
-              <button onClick={() => setShowCoachConfig(!showCoachConfig)} style={s.btnGhost}>
-                {showCoachConfig ? t("coach.hide_config") : t("coach.show_config")}
+              <button onClick={() => setShowCoachConfig(true)} style={s.btnGhost}>{t("coach.show_config")}</button>
+              <button onClick={() => setShowMemory(true)} style={s.btnGhost}>
+                {t("coach.show_memory")}{coachMemory ? " ●" : ""}
               </button>
-              <button onClick={() => setShowMemory(!showMemory)} style={s.btnGhost}>
-                {showMemory ? t("coach.hide_memory") : t("coach.show_memory")}{coachMemory ? " ●" : ""}
-              </button>
-              <button onClick={() => setShowPromptPreview(!showPromptPreview)} style={s.btnGhost}>
-                {showPromptPreview ? t("coach.hide_prompt") : t("coach.show_prompt")}
-              </button>
+              <button onClick={() => setShowPromptPreview(true)} style={s.btnGhost}>{t("coach.show_prompt")}</button>
               {chatMessages.length > 0 && (
                 <button onClick={clearChat} style={s.btnGhost}>{t("coach.clear_chat")}</button>
               )}
@@ -579,17 +576,17 @@ Rules:
               style={{ ...s.btnGhost, textAlign: "center", padding: "10px 14px" }}>
               {t("coach.edit_profile")}
             </button>
-            <button onClick={() => setShowCoachConfig(!showCoachConfig)}
+            <button onClick={() => setShowCoachConfig(true)}
               style={{ ...s.btnGhost, textAlign: "center", padding: "10px 14px" }}>
-              {showCoachConfig ? t("coach.hide_config") : t("coach.show_config")}
+              {t("coach.show_config")}
             </button>
-            <button onClick={() => setShowMemory(!showMemory)}
+            <button onClick={() => setShowMemory(true)}
               style={{ ...s.btnGhost, textAlign: "center", padding: "10px 14px" }}>
-              {showMemory ? t("coach.hide_memory") : t("coach.show_memory")}{coachMemory ? " ●" : ""}
+              {t("coach.show_memory")}{coachMemory ? " ●" : ""}
             </button>
-            <button onClick={() => setShowPromptPreview(!showPromptPreview)}
+            <button onClick={() => setShowPromptPreview(true)}
               style={{ ...s.btnGhost, textAlign: "center", padding: "10px 14px" }}>
-              {showPromptPreview ? t("coach.hide_prompt") : t("coach.show_prompt")}
+              {t("coach.show_prompt")}
             </button>
             {chatMessages.length > 0 && (
               <button onClick={clearChat}
@@ -601,176 +598,156 @@ Rules:
         </div>
       )}
 
-      {/* Config / memory / prompt panels. Visible on desktop; on mobile,
-          only inside the settings sub-page (scrollable so panels can fit). */}
-      {(!isMobile || inSettings) && (
-      <div style={isMobile ? { flex: 1, overflowY: "auto", minHeight: 0 } : undefined}>
+      {/* Config / Memory / Prompt Preview — now MODALS instead of inline
+          panels. The toggle buttons set the show* state which opens the
+          modal; the modal has its own ✕ close. No more "I forgot to hide
+          this panel" footgun. Modals overlay both desktop and mobile views,
+          and the legacy 2-col desktop "memory + prompt" layout is dropped
+          (one at a time is fine — these aren't compared often). */}
       {showCoachConfig && (
-        <div style={{ ...s.cardDark, marginBottom: 14 }}>
-          <div style={s.section}>{t("coach.behavior")}</div>
-          <div style={{ ...s.muted, marginBottom: 12, lineHeight: 1.5 }}>{t("coach.behavior_hint")}</div>
+        <ModalRoot>
+          <div style={s.modalOverlay(isMobile)} onClick={() => setShowCoachConfig(false)}>
+            <div style={s.modalCard(isMobile, { maxWidth: 600 })} onClick={(e) => e.stopPropagation()}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>{t("coach.behavior")}</h2>
+                <button onClick={() => setShowCoachConfig(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
+              </div>
+              <div style={{ ...s.muted, marginBottom: 16, lineHeight: 1.5 }}>{t("coach.behavior_hint")}</div>
 
-          {/* On mobile the settings sub-page has plenty of vertical space —
-              stack each option on its own row, centered, instead of cramming
-              into a wrapping chip row. Desktop keeps the dense chip layout. */}
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ ...s.label, marginBottom: 6 }}>{t("coach.style")}</div>
-            <div style={{
-              display: "flex",
-              flexDirection: isMobile ? "column" : "row",
-              gap: isMobile ? 8 : 6,
-              flexWrap: isMobile ? "nowrap" : "wrap",
-            }}>
-              {COACH_STYLES.map(o => (
-                <button key={o.id} onClick={() => setStyle(o.id)}
-                  style={isMobile
-                    ? { ...s.chip(coachConfig.style === o.id), padding: "10px 14px", width: "100%", textAlign: "center" }
-                    : s.chip(coachConfig.style === o.id)}>
-                  {t(`enum.coach.${o.id}`)}
-                </button>
-              ))}
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ ...s.label, marginBottom: 6 }}>{t("coach.style")}</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {COACH_STYLES.map(o => (
+                    <button key={o.id} onClick={() => setStyle(o.id)}
+                      style={{ ...s.chip(coachConfig.style === o.id), padding: "10px 14px", width: "100%", textAlign: "center" }}>
+                      {t(`enum.coach.${o.id}`)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ ...s.label, marginBottom: 6 }}>{t("coach.length")}</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {OUTPUT_LENGTHS.map(o => (
+                    <button key={o.id} onClick={() => setOutputLength(o.id)}
+                      style={{ ...s.chip(coachConfig.outputLength === o.id), padding: "10px 14px", width: "100%", textAlign: "center" }}>
+                      {t(`enum.length.${o.id}`)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div style={{ ...s.label, marginBottom: 6 }}>{t("coach.intervention")}</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {INTERVENTION_LEVELS.map(o => (
+                    <button key={o.id} onClick={() => setIntervention(o.id)}
+                      style={{ ...s.chip(coachConfig.intervention === o.id), padding: "10px 14px", width: "100%", textAlign: "center" }}>
+                      {t(`enum.intervention.${o.id}`)}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
-
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ ...s.label, marginBottom: 6 }}>{t("coach.length")}</div>
-            <div style={{
-              display: "flex",
-              flexDirection: isMobile ? "column" : "row",
-              gap: isMobile ? 8 : 6,
-              flexWrap: isMobile ? "nowrap" : "wrap",
-            }}>
-              {OUTPUT_LENGTHS.map(o => (
-                <button key={o.id} onClick={() => setOutputLength(o.id)}
-                  style={isMobile
-                    ? { ...s.chip(coachConfig.outputLength === o.id), padding: "10px 14px", width: "100%", textAlign: "center" }
-                    : s.chip(coachConfig.outputLength === o.id)}>
-                  {t(`enum.length.${o.id}`)}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div style={{ marginBottom: 4 }}>
-            <div style={{ ...s.label, marginBottom: 6 }}>{t("coach.intervention")}</div>
-            <div style={{
-              display: "flex",
-              flexDirection: isMobile ? "column" : "row",
-              gap: isMobile ? 8 : 6,
-              flexWrap: isMobile ? "nowrap" : "wrap",
-            }}>
-              {INTERVENTION_LEVELS.map(o => (
-                <button key={o.id} onClick={() => setIntervention(o.id)}
-                  style={isMobile
-                    ? { ...s.chip(coachConfig.intervention === o.id), padding: "10px 14px", width: "100%", textAlign: "center" }
-                    : s.chip(coachConfig.intervention === o.id)}>
-                  {t(`enum.intervention.${o.id}`)}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
+        </ModalRoot>
       )}
 
-      {/* Memory + Preview Prompt sit in a 2-col grid when BOTH are open on
-          desktop, so the user can compare the durable Memory blob against
-          the assembled system prompt side-by-side. Narrow screens or single
-          panel = full-width stack, same as before. */}
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: (showMemory && showPromptPreview && !isNarrow) ? "1fr 1fr" : "1fr",
-        gap: 14,
-        marginBottom: (showMemory || showPromptPreview) ? 14 : 0,
-      }}>
       {showMemory && (
-        <div style={{ ...s.cardDark, marginBottom: 0 }}>
-          <div style={{ ...s.section, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-            <span>{t("coach.memory_title")}</span>
-            <div style={{ display: "flex", gap: 6 }}>
+        <ModalRoot>
+          <div style={s.modalOverlay(isMobile)} onClick={() => setShowMemory(false)}>
+            <div style={s.modalCard(isMobile, { maxWidth: 600 })} onClick={(e) => e.stopPropagation()}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>{t("coach.memory_title")}</h2>
+                <button onClick={() => setShowMemory(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
+              </div>
+              <div style={{ ...s.muted, marginBottom: 14, lineHeight: 1.5 }}>{t("coach.memory_hint")}</div>
+
               {!memoryEditing && !memoryProposal && (
-                <>
+                <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
                   <button onClick={proposeMemoryUpdate}
                     disabled={memoryUpdating || chatMessages.length === 0}
-                    style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px", opacity: (memoryUpdating || chatMessages.length === 0) ? 0.5 : 1 }}>
+                    style={{ ...s.btnGhost, fontSize: 12, padding: "6px 12px", opacity: (memoryUpdating || chatMessages.length === 0) ? 0.5 : 1 }}>
                     {memoryUpdating ? t("coach.memory_updating") : t("coach.memory_auto_update")}
                   </button>
                   <button onClick={startEditMemory}
-                    style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px" }}>
+                    style={{ ...s.btnGhost, fontSize: 12, padding: "6px 12px" }}>
                     {t("coach.memory_edit")}
                   </button>
+                </div>
+              )}
+
+              {memoryProposal ? (
+                <>
+                  <div style={{ ...s.label, marginBottom: 6, color: "var(--moss-deep)" }}>{t("coach.memory_proposal_title")}</div>
+                  <pre style={{
+                    ...s.input, fontFamily: "var(--font-mono)", fontSize: 12,
+                    whiteSpace: "pre-wrap", lineHeight: 1.55, maxHeight: 360, overflowY: "auto",
+                    color: "var(--ink-1)", background: "var(--moss-bg)",
+                    borderColor: "var(--moss)",
+                  }}>{memoryProposal.text}</pre>
+                  <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                    <button onClick={acceptMemoryProposal} style={s.btn}>{t("coach.memory_accept")}</button>
+                    <button onClick={rejectMemoryProposal} style={s.btnGhost}>{t("coach.memory_reject")}</button>
+                  </div>
                 </>
+              ) : memoryEditing ? (
+                <>
+                  <textarea rows={10} value={memoryDraft}
+                    onChange={e => setMemoryDraft(e.target.value)}
+                    placeholder={t("coach.memory_placeholder")}
+                    style={{ ...s.input, fontFamily: "var(--font-mono)", fontSize: 12, lineHeight: 1.55, resize: "vertical" }} />
+                  <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                    <button onClick={saveMemory} style={s.btn}>{t("common.save")}</button>
+                    <button onClick={cancelEditMemory} style={s.btnGhost}>{t("common.cancel")}</button>
+                  </div>
+                </>
+              ) : (
+                <pre style={{
+                  ...s.input, fontFamily: "var(--font-mono)", fontSize: 12,
+                  whiteSpace: "pre-wrap", lineHeight: 1.55, maxHeight: 420, overflowY: "auto",
+                  color: coachMemory ? "var(--ink-1)" : "var(--ink-3)", background: "var(--bg-elevated)",
+                  minHeight: 80,
+                }}>{coachMemory || t("coach.memory_empty")}</pre>
               )}
             </div>
           </div>
-          <div style={{ ...s.muted, marginBottom: 10, lineHeight: 1.5 }}>{t("coach.memory_hint")}</div>
-
-          {memoryProposal ? (
-            <>
-              <div style={{ ...s.label, marginBottom: 6, color: "var(--moss-deep)" }}>{t("coach.memory_proposal_title")}</div>
-              <pre style={{
-                ...s.input, fontFamily: "var(--font-mono)", fontSize: 12,
-                whiteSpace: "pre-wrap", lineHeight: 1.55, maxHeight: 360, overflowY: "auto",
-                color: "var(--ink-1)", background: "var(--moss-bg)",
-                borderColor: "var(--moss)",
-              }}>{memoryProposal.text}</pre>
-              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                <button onClick={acceptMemoryProposal} style={s.btn}>{t("coach.memory_accept")}</button>
-                <button onClick={rejectMemoryProposal} style={s.btnGhost}>{t("coach.memory_reject")}</button>
-              </div>
-            </>
-          ) : memoryEditing ? (
-            <>
-              <textarea rows={10} value={memoryDraft}
-                onChange={e => setMemoryDraft(e.target.value)}
-                placeholder={t("coach.memory_placeholder")}
-                style={{ ...s.input, fontFamily: "var(--font-mono)", fontSize: 12, lineHeight: 1.55, resize: "vertical" }} />
-              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                <button onClick={saveMemory} style={s.btn}>{t("common.save")}</button>
-                <button onClick={cancelEditMemory} style={s.btnGhost}>{t("common.cancel")}</button>
-              </div>
-            </>
-          ) : (
-            <pre style={{
-              ...s.input, fontFamily: "var(--font-mono)", fontSize: 12,
-              whiteSpace: "pre-wrap", lineHeight: 1.55, maxHeight: 360, overflowY: "auto",
-              color: coachMemory ? "var(--ink-1)" : "var(--ink-3)", background: "var(--bg-elevated)",
-              minHeight: 80,
-            }}>{coachMemory || t("coach.memory_empty")}</pre>
-          )}
-        </div>
+        </ModalRoot>
       )}
 
       {showPromptPreview && (
-        <div style={{ ...s.cardDark, marginBottom: 0 }}>
-          <div style={{ ...s.section, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-            <span>{t("coach.prompt_title")}</span>
-            {/* EN ↔ ZH toggle — only affects the preview, not what the LLM sees. */}
-            <div style={{ display: "flex", gap: 0 }}>
-              <button onClick={() => setPreviewLang("en")}
-                style={{ ...s.btnGhost, fontSize: 11, padding: "4px 10px",
-                  borderRight: "none",
-                  background: previewLang === "en" ? "var(--ink-1)" : "transparent",
-                  color: previewLang === "en" ? "var(--ink-inv)" : "var(--ink-2)" }}>
-                EN
-              </button>
-              <button onClick={() => setPreviewLang("zh")}
-                style={{ ...s.btnGhost, fontSize: 11, padding: "4px 10px",
-                  background: previewLang === "zh" ? "var(--ink-1)" : "transparent",
-                  color: previewLang === "zh" ? "var(--ink-inv)" : "var(--ink-2)" }}>
-                中
-              </button>
+        <ModalRoot>
+          <div style={s.modalOverlay(isMobile)} onClick={() => setShowPromptPreview(false)}>
+            <div style={s.modalCard(isMobile, { maxWidth: 680 })} onClick={(e) => e.stopPropagation()}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8, gap: 8 }}>
+                <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>{t("coach.prompt_title")}</h2>
+                <div style={{ display: "flex", gap: 0, marginLeft: "auto" }}>
+                  <button onClick={() => setPreviewLang("en")}
+                    style={{ ...s.btnGhost, fontSize: 11, padding: "4px 10px",
+                      borderRight: "none",
+                      background: previewLang === "en" ? "var(--ink-1)" : "transparent",
+                      color: previewLang === "en" ? "var(--ink-inv)" : "var(--ink-2)" }}>
+                    EN
+                  </button>
+                  <button onClick={() => setPreviewLang("zh")}
+                    style={{ ...s.btnGhost, fontSize: 11, padding: "4px 10px",
+                      background: previewLang === "zh" ? "var(--ink-1)" : "transparent",
+                      color: previewLang === "zh" ? "var(--ink-inv)" : "var(--ink-2)" }}>
+                    中
+                  </button>
+                </div>
+                <button onClick={() => setShowPromptPreview(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
+              </div>
+              <pre style={{
+                ...s.input, fontFamily: "var(--font-mono)", fontSize: 12,
+                whiteSpace: "pre-wrap", lineHeight: 1.55, maxHeight: "60vh", overflowY: "auto",
+                color: "var(--ink-1)", background: "var(--bg-elevated)",
+              }}>{previewPrompt}</pre>
+              <div style={{ ...s.muted, marginTop: 6, lineHeight: 1.5 }}>{t("coach.prompt_hint")}{previewLang === "zh" ? ` ${t("coach.prompt_zh_note")}` : ""}</div>
             </div>
           </div>
-          <pre style={{
-            ...s.input, fontFamily: "var(--font-mono)", fontSize: 11,
-            whiteSpace: "pre-wrap", lineHeight: 1.55, maxHeight: 380, overflowY: "auto",
-            color: "var(--ink-1)", background: "var(--bg-elevated)",
-          }}>{previewPrompt}</pre>
-          <div style={{ ...s.muted, marginTop: 6, lineHeight: 1.5 }}>{t("coach.prompt_hint")}{previewLang === "zh" ? ` ${t("coach.prompt_zh_note")}` : ""}</div>
-        </div>
-      )}
-      </div>
-      </div>
+        </ModalRoot>
       )}
 
       {/* CHAT VIEW (hidden on mobile when in the settings sub-page) ──────── */}
@@ -900,7 +877,7 @@ Rules:
                 minHeight: 0,
                 display: "inline-flex", alignItems: "center", justifyContent: "center",
               }}>
-              ⚙{(coachMemory || showCoachConfig || showMemory || showPromptPreview) ? " ●" : ""}
+              ⚙{coachMemory ? " ●" : ""}
             </button>
             <button onClick={sendChat} disabled={chatLoading || !chatInput.trim()}
               aria-label={t("coach.send")}
