@@ -405,6 +405,8 @@ const dict = {
   "pr.toughest":              { en: "Toughest tier",        zh: "最高难度" },
 
   // ===== AI Coach tab =====
+  "coach.menu_open":          { en: "Settings",             zh: "设置" },
+  "coach.menu_close":         { en: "Close",                zh: "收起" },
   "coach.edit_profile":       { en: "⚙ Edit Profile",       zh: "⚙ 编辑资料" },
   "coach.hide_config":        { en: "Hide Config",          zh: "隐藏配置" },
   "coach.show_config":        { en: "Coach Config",         zh: "教练配置" },
@@ -441,7 +443,7 @@ const dict = {
   "coach.network_error":      { en: "Network error: {msg}\nURL used: {url}\n\nOpen DevTools (F12) → Network tab → try Send again to see the failing request.", zh: "网络错误：{msg}\n请求 URL：{url}\n\n打开开发者工具 (F12) → Network 标签 → 再次点击发送以查看失败请求。" },
   "coach.input_placeholder":  { en: "Type your message — daily check-in, training question, or anything you want the coach to see.", zh: "输入你想和教练说的话 —— 今日打卡、训练疑问，或任何想让 ta 看到的内容。" },
   "coach.send":               { en: "Send",                 zh: "发送" },
-  "coach.tip":                { en: "Tip: Ctrl/⌘+Enter to send · Chat history saved locally", zh: "提示：Ctrl/⌘+Enter 发送 · 聊天记录保存在本地" },
+  "coach.tip":                { en: "",                     zh: "" },
   "coach.long_chat_hint":     { en: "Chat is getting long ({n} messages). Older turns start competing with the system prompt for the model's attention — consider distilling the takeaways into Memory, then clearing the chat for a clean slate.", zh: "对话已有 {n} 条，开始变长。旧消息会与系统提示词争夺模型注意力 —— 建议把要点固化到 Memory，再清空对话从新开始。" },
   "coach.long_chat_action":   { en: "Open Memory",          zh: "打开 Memory" },
 

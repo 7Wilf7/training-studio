@@ -107,7 +107,7 @@ export function PersonalRecordsBar({ races, itraPI, setItraPI }) {
       <div style={{
         display: "grid",
         gridTemplateColumns: isMobile
-          ? "repeat(2, minmax(0, 1fr))"
+          ? "1fr"
           : "repeat(auto-fit, minmax(200px, 1fr))",
         gap: 1,
         border: "1px solid var(--rule)",
@@ -154,60 +154,129 @@ function PRCell({ rec, itraPI, setItraPI, t, isMobile }) {
     setItraEditing(false);
   }
 
+  const categoryColor = RACE_CATEGORY_COLOR[rec.category] || "var(--rule)";
+
+  // Mobile layout: a thin horizontal strip with a 4px color stripe on the
+  // left, two text rows (category+metric / name+date), and the optional
+  // collapsible details. Much shorter than the desktop card.
+  if (isMobile) {
+    return (
+      <div style={{
+        position: "relative",
+        background: "var(--bg-elevated)",
+        borderLeft: "4px solid " + categoryColor,
+        padding: "10px 12px 10px 14px",
+      }}>
+        {isTrail && (
+          <ITRABadge
+            itraEditing={itraEditing} itraDraft={itraDraft} setItraDraft={setItraDraft}
+            inputRef={inputRef} commitItra={commitItra} cancelItra={cancelItra}
+            startItra={startItra} itraPI={itraPI} t={t}
+          />
+        )}
+
+        {/* Row 1: category (left) + metric value (right) */}
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
+          <div style={{
+            display: "flex", alignItems: "baseline", gap: 6, minWidth: 0,
+            paddingRight: isTrail ? 60 : 0,
+          }}>
+            <span style={{ fontSize: 12, color: "var(--ink-2)", fontWeight: 500 }}>
+              {t(`enum.race_cat.${rec.category}`)}
+            </span>
+            {(rec.metric === "distance" || rec.metric === "difficulty") && (
+              <span style={{
+                fontSize: 9, color: "var(--ink-3)", fontFamily: "var(--font-mono)",
+                textTransform: "uppercase", letterSpacing: "0.05em",
+              }}>
+                {rec.metric === "distance" ? t("pr.longest") : t("pr.toughest")}
+              </span>
+            )}
+          </div>
+          {rec.best && (
+            <div style={{
+              ...s.metricVal, fontSize: 16, lineHeight: 1.1, marginTop: 0,
+              display: "flex", alignItems: "baseline", gap: 4, flexShrink: 0,
+            }}>
+              {rec.metric === "distance" ? (
+                <>
+                  <span>{rec.best.distance}</span>
+                  <span style={{ fontSize: 10, color: "var(--ink-3)", fontWeight: 400, fontFamily: "var(--font-mono)" }}>km</span>
+                </>
+              ) : rec.metric === "difficulty" ? (
+                <span>{rec.best.subtype}</span>
+              ) : (
+                <span>{formatHMS(rec.bestSeconds)}</span>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Row 2: race name (left, truncated) + date (right) — OR empty state */}
+        {rec.best ? (
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, marginTop: 4 }}>
+            <div style={{
+              fontSize: 12, color: "var(--ink-2)", minWidth: 0, flex: 1,
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}>
+              {rec.best.name}
+            </div>
+            <div style={{ ...s.dataNum, fontSize: 11, color: "var(--ink-3)", flexShrink: 0 }}>
+              {rec.best.date}
+            </div>
+          </div>
+        ) : (
+          <div style={{ ...s.muted, fontSize: 12, marginTop: 4 }}>
+            {t("pr.no_times", { n: rec.all.length })}
+          </div>
+        )}
+
+        {rec.all.length > 1 && (
+          <details style={{ marginTop: 6 }}>
+            <summary style={{ ...s.muted, cursor: "pointer", fontSize: 11 }}>
+              + {t("pr.other_finishes", { n: rec.all.length - 1, plural: rec.all.length > 2 ? "es" : "" })}
+            </summary>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6 }}>
+              {rec.all.slice(1).map(r => (
+                <div key={r.id} style={{ ...s.dataNum, fontSize: 11, color: "var(--ink-2)" }}>
+                  {rec.metric === "distance" ? (r.distance > 0 ? `${r.distance}km` : "—")
+                    : rec.metric === "difficulty" ? (r.subtype || "—")
+                    : formatHMS(resultSeconds(r))}
+                  {" · "}<span style={{ fontFamily: "var(--font-sans)" }}>{r.name}</span> · <span style={{ color: "var(--ink-3)" }}>{r.date}</span>
+                </div>
+              ))}
+            </div>
+          </details>
+        )}
+      </div>
+    );
+  }
+
+  // Desktop layout: taller card with a 3px top color rule.
   return (
     <div style={{
       position: "relative",
-      padding: isMobile ? "12px 14px 14px" : "18px 22px 20px",
+      padding: "18px 22px 20px",
       background: "var(--bg-elevated)",
-      borderTop: "3px solid " + (RACE_CATEGORY_COLOR[rec.category] || "var(--rule)"),
+      borderTop: "3px solid " + categoryColor,
     }}>
-      {/* ITRA badge — Trail card only. Tiny chip in the top-right corner. */}
       {isTrail && (
-        <div style={{ position: "absolute", top: 8, right: 10 }}>
-          {itraEditing ? (
-            <div style={{ display: "flex", gap: 4, alignItems: "center" }} onClick={e => e.stopPropagation()}>
-              <input ref={inputRef} type="number" value={itraDraft}
-                placeholder={t("pr.itra_placeholder")}
-                onChange={e => setItraDraft(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === "Enter") commitItra();
-                  if (e.key === "Escape") cancelItra();
-                }}
-                style={{ ...s.input, width: 70, padding: "2px 6px", fontSize: 11, height: 24 }} />
-              <button onClick={commitItra} style={{
-                ...s.btnGhost, fontSize: 10, padding: "2px 7px", lineHeight: 1.4,
-              }}>{t("common.save")}</button>
-            </div>
-          ) : (
-            <button onClick={startItra} title={t("pr.itra_title")}
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: 10, fontWeight: 600,
-                padding: "2px 7px",
-                border: "1px solid var(--moss)",
-                background: "var(--moss-bg)",
-                color: "var(--moss-deep)",
-                cursor: "pointer",
-                letterSpacing: "0.04em",
-                textTransform: "uppercase",
-              }}>
-              ITRA {itraPI || "+"}
-            </button>
-          )}
-        </div>
+        <ITRABadge
+          itraEditing={itraEditing} itraDraft={itraDraft} setItraDraft={setItraDraft}
+          inputRef={inputRef} commitItra={commitItra} cancelItra={cancelItra}
+          startItra={startItra} itraPI={itraPI} t={t}
+        />
       )}
 
       <div style={{
-        fontSize: isMobile ? 12 : 13, color: "var(--ink-2)",
-        marginBottom: isMobile ? 4 : 6, fontWeight: 500,
-        display: "flex", alignItems: "baseline", gap: 6,
-        flexWrap: "wrap",
-        paddingRight: isTrail ? (isMobile ? 52 : 70) : 0,
+        fontSize: 13, color: "var(--ink-2)", marginBottom: 6, fontWeight: 500,
+        display: "flex", alignItems: "baseline", gap: 8,
+        paddingRight: isTrail ? 70 : 0,
       }}>
         <span>{t(`enum.race_cat.${rec.category}`)}</span>
         {(rec.metric === "distance" || rec.metric === "difficulty") && (
           <span style={{
-            fontSize: isMobile ? 9 : 10, color: "var(--ink-3)", fontFamily: "var(--font-mono)",
+            fontSize: 10, color: "var(--ink-3)", fontFamily: "var(--font-mono)",
             textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 400,
           }}>
             {rec.metric === "distance" ? t("pr.longest") : t("pr.toughest")}
@@ -216,11 +285,11 @@ function PRCell({ rec, itraPI, setItraPI, t, isMobile }) {
       </div>
       {rec.best ? (
         <>
-          <div style={{ ...s.metricVal, fontSize: isMobile ? 18 : 24, display: "flex", alignItems: "baseline", gap: 6 }}>
+          <div style={{ ...s.metricVal, fontSize: 24, display: "flex", alignItems: "baseline", gap: 6 }}>
             {rec.metric === "distance" ? (
               <>
                 <span>{rec.best.distance}</span>
-                <span style={{ fontSize: isMobile ? 11 : 13, color: "var(--ink-3)", fontWeight: 400, fontFamily: "var(--font-mono)" }}>km</span>
+                <span style={{ fontSize: 13, color: "var(--ink-3)", fontWeight: 400, fontFamily: "var(--font-mono)" }}>km</span>
               </>
             ) : rec.metric === "difficulty" ? (
               <span>{rec.best.subtype}</span>
@@ -228,29 +297,22 @@ function PRCell({ rec, itraPI, setItraPI, t, isMobile }) {
               <span>{formatHMS(rec.bestSeconds)}</span>
             )}
           </div>
-          <div style={{
-            fontSize: isMobile ? 12 : 13, color: "var(--ink-2)",
-            marginTop: isMobile ? 6 : 10, lineHeight: 1.4,
-            overflow: "hidden", textOverflow: "ellipsis",
-            display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
-          }}>
+          <div style={{ fontSize: 13, color: "var(--ink-2)", marginTop: 10, lineHeight: 1.45 }}>
             {rec.best.name}
-          </div>
-          <div style={{ ...s.dataNum, fontSize: isMobile ? 11 : 12, color: "var(--ink-3)", marginTop: 3 }}>
-            {rec.best.date}
+            <div style={{ ...s.dataNum, fontSize: 12, color: "var(--ink-3)", marginTop: 3 }}>{rec.best.date}</div>
           </div>
         </>
       ) : (
-        <div style={{ ...s.muted, marginTop: 4, fontSize: isMobile ? 12 : 13 }}>{t("pr.no_times", { n: rec.all.length })}</div>
+        <div style={{ ...s.muted, marginTop: 4 }}>{t("pr.no_times", { n: rec.all.length })}</div>
       )}
       {rec.all.length > 1 && (
-        <details style={{ marginTop: isMobile ? 6 : 10 }}>
-          <summary style={{ ...s.muted, cursor: "pointer", fontSize: isMobile ? 11 : 12 }}>
+        <details style={{ marginTop: 10 }}>
+          <summary style={{ ...s.muted, cursor: "pointer", fontSize: 12 }}>
             + {t("pr.other_finishes", { n: rec.all.length - 1, plural: rec.all.length > 2 ? "es" : "" })}
           </summary>
           <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 8 }}>
             {rec.all.slice(1).map(r => (
-              <div key={r.id} style={{ ...s.dataNum, fontSize: isMobile ? 11 : 12, color: "var(--ink-2)" }}>
+              <div key={r.id} style={{ ...s.dataNum, fontSize: 12, color: "var(--ink-2)" }}>
                 {rec.metric === "distance" ? (r.distance > 0 ? `${r.distance}km` : "—")
                   : rec.metric === "difficulty" ? (r.subtype || "—")
                   : formatHMS(resultSeconds(r))}
@@ -259,6 +321,49 @@ function PRCell({ rec, itraPI, setItraPI, t, isMobile }) {
             ))}
           </div>
         </details>
+      )}
+    </div>
+  );
+}
+
+// ITRA chip — Trail card only. Same visual on desktop and mobile; the
+// inline editor (click chip → input + Save) lives in the same corner.
+function ITRABadge({
+  itraEditing, itraDraft, setItraDraft,
+  inputRef, commitItra, cancelItra, startItra,
+  itraPI, t,
+}) {
+  return (
+    <div style={{ position: "absolute", top: 8, right: 10 }}>
+      {itraEditing ? (
+        <div style={{ display: "flex", gap: 4, alignItems: "center" }} onClick={e => e.stopPropagation()}>
+          <input ref={inputRef} type="number" value={itraDraft}
+            placeholder={t("pr.itra_placeholder")}
+            onChange={e => setItraDraft(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === "Enter") commitItra();
+              if (e.key === "Escape") cancelItra();
+            }}
+            style={{ ...s.input, width: 70, padding: "2px 6px", fontSize: 11, height: 24 }} />
+          <button onClick={commitItra} style={{
+            ...s.btnGhost, fontSize: 10, padding: "2px 7px", lineHeight: 1.4,
+          }}>{t("common.save")}</button>
+        </div>
+      ) : (
+        <button onClick={startItra} title={t("pr.itra_title")}
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 10, fontWeight: 600,
+            padding: "2px 7px",
+            border: "1px solid var(--moss)",
+            background: "var(--moss-bg)",
+            color: "var(--moss-deep)",
+            cursor: "pointer",
+            letterSpacing: "0.04em",
+            textTransform: "uppercase",
+          }}>
+          ITRA {itraPI || "+"}
+        </button>
       )}
     </div>
   );

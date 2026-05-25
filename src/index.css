@@ -131,8 +131,13 @@ summary::-webkit-details-marker { display: none; }
    out by setting min-height inline.
    ============================================================ */
 @media (max-width: 767px) {
+  /* Default to 16px to dodge iOS Safari's auto-zoom-on-focus. Individual
+     inputs that intentionally need a smaller size can opt out by setting
+     the --mobile-input-fs custom property inline (var fallback = 16px).
+     The !important is required because most form controls already carry
+     an inline `fontSize`. */
   input, select, textarea {
-    font-size: 16px !important;
+    font-size: var(--mobile-input-fs, 16px) !important;
   }
   button {
     min-height: 40px;
