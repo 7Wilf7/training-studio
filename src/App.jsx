@@ -324,7 +324,7 @@ function AuthedApp({ user, signOut, changePassword }) {
     <LanguageProvider lang={lang} setLang={setLang}>
       <AppShell
         user={user} signOut={signOut} changePassword={changePassword}
-        logs={logs}
+        logs={logs} refreshLogs={refreshLogs}
         addLog={addLog} updateLog={updateLog} bulkAddLogs={bulkAddLogs} deleteLogs={deleteLogs}
         races={races}
         addRace={addRace} updateRace={updateRace} deleteRace={deleteRace}
@@ -347,7 +347,7 @@ function AuthedApp({ user, signOut, changePassword }) {
 
 function AppShell({
   user, signOut, changePassword,
-  logs, addLog, updateLog, bulkAddLogs, deleteLogs,
+  logs, refreshLogs, addLog, updateLog, bulkAddLogs, deleteLogs,
   races, addRace, updateRace, deleteRace,
   chatMessages, appendChatMessage, appendLocalChatMessage, clearAllChatMessages,
   dailyNotes, setDailyTags,
