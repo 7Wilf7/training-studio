@@ -335,12 +335,15 @@ export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete, it
       <div>
         {/* Sticky header: top tab strip + (Races sub-tab strip when active).
             Glues both nav rows to the top of the scrolling main; lists below
-            scroll under them. Side bleed to escape main's 14px gutters. */}
+            scroll under them. Side bleed escapes main's 14px gutters; top
+            bleed escapes main's safe-area/14px top padding so scrolled
+            content doesn't show through above the sticky. */}
         <div style={{
           position: "sticky", top: 0, zIndex: 10,
           background: "var(--bg)",
           marginLeft: -14, marginRight: -14, paddingLeft: 14, paddingRight: 14,
-          paddingTop: 4,
+          marginTop: "calc(-1 * max(env(safe-area-inset-top), 14px))",
+          paddingTop: "calc(max(env(safe-area-inset-top), 14px) + 4px)",
         }}>
         {/* Top tab strip: Races (left) | PR (right) */}
         <div style={{ display: "flex", borderBottom: "1px solid var(--rule)", marginBottom: 14 }}>

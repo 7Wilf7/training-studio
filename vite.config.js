@@ -12,7 +12,7 @@ export default defineConfig({
       // get a refresh between actions; acceptable for a single-user tool.
       registerType: 'autoUpdate',
       // Files the SW pre-caches so the app shell opens offline.
-      includeAssets: ['favicon.svg', 'favicon.png', 'training-studio.svg'],
+      includeAssets: ['favicon.jpg'],
       manifest: {
         name: "Wilf's Training Studio",
         short_name: 'Training Studio',
@@ -24,16 +24,18 @@ export default defineConfig({
         start_url: '/',
         scope: '/',
         lang: 'en',
+        // Single 512x512 JPG covers both `any` (normal launcher icons) and
+        // `maskable` (Android adaptive icons — outer 20% may be cropped, but
+        // the icon's content sits in the inner safe zone).
         icons: [
-          { src: '/training-studio.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
-          { src: '/training-studio.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'maskable' },
-          { src: '/favicon.png', sizes: '128x128', type: 'image/png' },
+          { src: '/favicon.jpg', sizes: '512x512', type: 'image/jpeg', purpose: 'any' },
+          { src: '/favicon.jpg', sizes: '512x512', type: 'image/jpeg', purpose: 'maskable' },
         ],
       },
       workbox: {
-        // Pre-cache the build output. Default globs miss .webmanifest;
-        // include explicitly so the manifest itself is cached.
-        globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest,woff,woff2}'],
+        // Pre-cache the build output. Default globs miss .webmanifest and
+        // .jpg; include explicitly so the manifest + icon are cached.
+        globPatterns: ['**/*.{js,css,html,svg,png,jpg,jpeg,ico,webmanifest,woff,woff2}'],
         // Bump the per-file size cap; the JS bundle is ~600kB unminified.
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         runtimeCaching: [

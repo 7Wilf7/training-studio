@@ -720,9 +720,12 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
 // ─── Mobile metric helpers ────────────────────────────────────────────────
 // Per-activity-type compact summary shown in row 2 of every card; the
 // remaining numbers are deferred to ExpandedMetrics below (tap to reveal).
-//   Road Run               → distance · duration · pace
-//   Trail / Hiking / Floor → distance · ascent · duration
-//   Strength / HIIT        → duration · HR
+// Order is intentionally duration-first across all types so the first
+// metric column visually aligns down the list.
+//   Road Run         → duration · distance · pace
+//   Trail / Hiking   → duration · distance · ascent
+//   Floor Climbing   → duration · ascent
+//   Strength / HIIT  → duration · HR
 // ──────────────────────────────────────────────────────────────────────────
 
 function MetricDistance({ km }) {
@@ -794,18 +797,28 @@ function CompactMetrics({ log: l }) {
   if (l.type === "Road Run") {
     return (
       <>
-        {l.distance > 0 && <MetricDistance km={l.distance} />}
         {l.duration > 0 && <MetricDuration sec={l.duration} />}
+        {l.distance > 0 && <MetricDistance km={l.distance} />}
         {l.pace > 0 && <MetricPace p={l.pace} />}
       </>
     );
   }
-  if (l.type === "Trail Run" || l.type === "Hiking" || l.type === "Floor Climbing") {
+  if (l.type === "Trail Run" || l.type === "Hiking") {
     return (
       <>
+        {l.duration > 0 && <MetricDuration sec={l.duration} />}
         {l.distance > 0 && <MetricDistance km={l.distance} />}
         {l.ascent > 0 && <MetricAscent m={l.ascent} />}
+      </>
+    );
+  }
+  if (l.type === "Floor Climbing") {
+    // Stair/floor climbing has no meaningful distance to a user — surface
+    // duration + ascent only; distance (if recorded) drops into Expanded.
+    return (
+      <>
         {l.duration > 0 && <MetricDuration sec={l.duration} />}
+        {l.ascent > 0 && <MetricAscent m={l.ascent} />}
       </>
     );
   }
@@ -822,7 +835,8 @@ function ExpandedMetrics({ log: l }) {
   // Everything that's NOT already in the CompactMetrics summary, rendered
   // as a wrap-flex below the divider. Items with no value (0/missing) skip.
   const isRoad = l.type === "Road Run";
-  const isTrailLike = l.type === "Trail Run" || l.type === "Hiking" || l.type === "Floor Climbing";
+  const isTrailOrHike = l.type === "Trail Run" || l.type === "Hiking";
+  const isFloor = l.type === "Floor Climbing";
   const isStrengthLike = l.type === "Strength" || l.type === "HIIT";
 
   return (
@@ -836,10 +850,14 @@ function ExpandedMetrics({ log: l }) {
       {isRoad && l.gap > 0 && <MetricGAP p={l.gap} />}
       {isRoad && l.hr > 0 && <MetricHR hr={l.hr} maxHR={l.maxHR} />}
       {isRoad && l.cadence > 0 && <MetricCadence spm={l.cadence} />}
-      {/* Trail-like extras */}
-      {isTrailLike && l.pace > 0 && <MetricPace p={l.pace} />}
-      {isTrailLike && l.hr > 0 && <MetricHR hr={l.hr} maxHR={l.maxHR} />}
-      {isTrailLike && l.cadence > 0 && <MetricCadence spm={l.cadence} />}
+      {/* Trail / Hiking extras */}
+      {isTrailOrHike && l.pace > 0 && <MetricPace p={l.pace} />}
+      {isTrailOrHike && l.hr > 0 && <MetricHR hr={l.hr} maxHR={l.maxHR} />}
+      {isTrailOrHike && l.cadence > 0 && <MetricCadence spm={l.cadence} />}
+      {/* Floor Climbing extras — distance moves here since it's not in compact */}
+      {isFloor && l.distance > 0 && <MetricDistance km={l.distance} />}
+      {isFloor && l.pace > 0 && <MetricPace p={l.pace} />}
+      {isFloor && l.hr > 0 && <MetricHR hr={l.hr} maxHR={l.maxHR} />}
       {/* Strength / HIIT extras */}
       {isStrengthLike && l.distance > 0 && <MetricDistance km={l.distance} />}
       {/* Universal: TE if present */}
