@@ -36,5 +36,13 @@ export function useAuth() {
     if (error) throw error;
   }
 
-  return { user, loading, signIn, signOut };
+  // Supabase signs the request with the live session token; no current-password
+  // check is required (and the API doesn't expose one). Throws on failure so
+  // the caller can surface the error message verbatim.
+  async function changePassword(newPassword) {
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) throw error;
+  }
+
+  return { user, loading, signIn, signOut, changePassword };
 }

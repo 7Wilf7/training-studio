@@ -10,6 +10,7 @@ import { CalendarTab } from "./components/CalendarTab";
 import { ConfirmDeleteModal } from "./components/ConfirmDeleteModal";
 import { ProfileEditor } from "./components/ProfileEditor";
 import { ApiSettingsModal } from "./components/ApiSettingsModal";
+import { ChangePasswordModal } from "./components/ChangePasswordModal";
 import { UserBadge } from "./components/Auth/UserBadge";
 import { LoginScreen } from "./components/Auth/LoginScreen";
 import { MobileShell } from "./components/MobileShell";
@@ -36,14 +37,14 @@ function LoadingScreen() {
 }
 
 export default function App() {
-  const { user, loading, signIn, signOut } = useAuth();
+  const { user, loading, signIn, signOut, changePassword } = useAuth();
 
   if (loading) return <LoadingScreen />;
   if (!user) return <LoginScreen onClose={() => {}} signIn={signIn} />;
-  return <AuthedApp user={user} signOut={signOut} />;
+  return <AuthedApp user={user} signOut={signOut} changePassword={changePassword} />;
 }
 
-function AuthedApp({ user, signOut }) {
+function AuthedApp({ user, signOut, changePassword }) {
   // ── Supabase-backed: workouts (3.3c) + races (3.3d) + chatMessages (3.3e)
   //    + dailyNotes (Calendar day-level tags, e.g. ['massage'])
   const [logs, setLogs] = useState([]);
@@ -218,6 +219,17 @@ function AuthedApp({ user, signOut }) {
     }
   }
 
+  // On-demand refetch — used by AI Coach right before sendChat to guarantee
+  // the prompt's [Recent Activities] block reflects writes from OTHER tabs /
+  // devices (single-tab writes already update local state immediately via
+  // addLog/bulkAddLogs/updateLog). Returns the fresh list so the caller can
+  // use it for THIS turn without waiting for the next React re-render.
+  async function refreshLogs() {
+    const fresh = await db.workouts.listMyWorkouts();
+    setLogs(fresh);
+    return fresh;
+  }
+
   // ── Race mutations (3.3d). Same shape as workouts: await server, then
   // patch local state with the canonical row. ─────────────────────────────
   async function addRace(raceData) {
@@ -311,7 +323,7 @@ function AuthedApp({ user, signOut }) {
   return (
     <LanguageProvider lang={lang} setLang={setLang}>
       <AppShell
-        user={user} signOut={signOut}
+        user={user} signOut={signOut} changePassword={changePassword}
         logs={logs}
         addLog={addLog} updateLog={updateLog} bulkAddLogs={bulkAddLogs} deleteLogs={deleteLogs}
         races={races}
@@ -334,7 +346,7 @@ function AuthedApp({ user, signOut }) {
 }
 
 function AppShell({
-  user, signOut,
+  user, signOut, changePassword,
   logs, addLog, updateLog, bulkAddLogs, deleteLogs,
   races, addRace, updateRace, deleteRace,
   chatMessages, appendChatMessage, appendLocalChatMessage, clearAllChatMessages,
@@ -356,6 +368,7 @@ function AppShell({
   const [now, setNow] = useState(new Date());
   const [profileEditorMode, setProfileEditorMode] = useState(null);
   const [showApiSettings, setShowApiSettings] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
 
   // First-time setup: force the wizard until profile is complete (incl. displayName)
   useEffect(() => {
@@ -454,6 +467,7 @@ function AppShell({
       {tab === 3 && (
         <AICoachTab
           logs={logs}
+          refreshLogs={refreshLogs}
           races={races}
           profile={profile}
           coachConfig={coachConfig}
@@ -500,6 +514,13 @@ function AppShell({
           onClose={() => setShowApiSettings(false)}
         />
       )}
+
+      {showChangePassword && (
+        <ChangePasswordModal
+          changePassword={changePassword}
+          onClose={() => setShowChangePassword(false)}
+        />
+      )}
     </>
   );
 
@@ -515,6 +536,7 @@ function AppShell({
         onOpenProfile={() => setProfileEditorMode("edit")}
         onOpenApiSettings={() => setShowApiSettings(true)}
         onToggleLang={toggleLang}
+        onChangePassword={() => setShowChangePassword(true)}
         signOut={signOut}
       />
     ) : tabContent;
@@ -622,7 +644,7 @@ function AppShell({
               style={{ border: "1px solid var(--rule)", borderRight: "none", background: "var(--bg-elevated)", height: 32, width: 38, fontSize: 15, color: "var(--ink-2)", borderRadius: 0 }}>
               ⚙
             </button>
-            <UserBadge user={user} signOut={signOut} />
+            <UserBadge user={user} signOut={signOut} onChangePassword={() => setShowChangePassword(true)} />
           </div>
         </div>
       </div>

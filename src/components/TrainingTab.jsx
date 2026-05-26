@@ -48,17 +48,14 @@ export function TrainingTab({
   // Mobile-only sticky header. Glues the three navigation rows to the top
   // of MobileShell's scrolling main: All activities ▼ / Activities-Charts
   // toggle / period selector (when in activities view). Negative side
-  // margins bleed past main's 14px gutters so the sticky background covers
-  // the scroll content all the way to the screen edges. Negative top margin
-  // bleeds past main's top padding (safe-area-inset-top or 14px) so scrolled
-  // content doesn't show through above the sticky.
+  // margins bleed past main's 14px horizontal gutters. The top safe-area
+  // lives OUTSIDE main as a separate spacer in MobileShell, so this sticky
+  // truly pins at top:0 of the scrollport — no bleed-up gymnastics needed.
   const stickyHeaderStyle = isMobile ? {
     position: "sticky", top: 0, zIndex: 10,
     background: "var(--bg)",
     marginLeft: -14, marginRight: -14, paddingLeft: 14, paddingRight: 14,
-    marginTop: "calc(-1 * max(env(safe-area-inset-top), 14px))",
-    paddingTop: "calc(max(env(safe-area-inset-top), 14px) + 4px)",
-    paddingBottom: 4,
+    paddingTop: 14, paddingBottom: 4,
     marginBottom: 6,
   } : undefined;
 

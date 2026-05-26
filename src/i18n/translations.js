@@ -32,7 +32,19 @@ const dict = {
   "settings.language":       { en: "Language",              zh: "语言" },
   "settings.guide":          { en: "User guide",            zh: "使用手册" },
   "settings.guide_desc":     { en: "Opens in a new tab",    zh: "新标签页打开" },
+  "settings.change_password": { en: "Change password",      zh: "修改密码" },
   "settings.sign_out":       { en: "Sign out",              zh: "退出登录" },
+
+  // ===== Password change modal =====
+  "pwd.title":               { en: "Change password",       zh: "修改密码" },
+  "pwd.new":                 { en: "New password",          zh: "新密码" },
+  "pwd.confirm":             { en: "Confirm new password",  zh: "再次输入新密码" },
+  "pwd.hint":                { en: "At least 6 characters.", zh: "至少 6 位。" },
+  "pwd.mismatch":            { en: "Passwords do not match.", zh: "两次输入的密码不一致。" },
+  "pwd.too_short":           { en: "Password must be at least 6 characters.", zh: "密码至少 6 位。" },
+  "pwd.success":             { en: "Password updated.",     zh: "密码已更新。" },
+  "pwd.error":               { en: "Failed to update password: ", zh: "修改密码失败：" },
+  "pwd.save":                { en: "Update password",       zh: "更新密码" },
 
   // ===== Common =====
   "common.cancel":        { en: "Cancel",                   zh: "取消" },

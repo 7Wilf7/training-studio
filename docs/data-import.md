@@ -9,10 +9,12 @@
 3. 点列表右上角的 **Export CSV** 按钮。
 4. 保存到本地。
 
+> 手机也能用这个流程：手机浏览器登录 Garmin Connect 网页版导出 CSV，存到手机，再回到 Training Studio 上传。
+
 ## 导入流程
 
-1. 打开 **Training** tab → **Activities** 子视图。
-2. 点 **Upload .csv**，选刚才保存的文件。
+1. 打开 Training，进入 Activities 子视图。
+2. 点 **Upload .csv**（手机端是 **Upload**），选刚才保存的文件。
 3. 可能依次出现两个审核弹窗：
    - **未知活动类型** —— 如果某些行的活动类型识别不了（比如「Open Water Swim」「Padel」），会让你逐条手动选一个对应类型。
    - **重复警告** —— 如果某行的日期/类型/时长跟已有记录完全一致，会让你选 **Skip duplicates（跳过重复）** 或 **Add anyway（强制加入）**。

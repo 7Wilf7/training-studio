@@ -160,7 +160,7 @@ function formatHistoryRace(r) {
 }
 
 export function AICoachTab({
-  logs, races, profile, coachConfig, setCoachConfig,
+  logs, refreshLogs, races, profile, coachConfig, setCoachConfig,
   coachMemory, setCoachMemory,
   chatMessages, appendChatMessage, appendLocalChatMessage,
   bulkAddLogs,
@@ -318,12 +318,16 @@ Output the memory text only, nothing else.`;
   // Dynamic data block injected into the system prompt. Only the section titles
   // are localized; values (dates, race names, numbers) stay verbatim across
   // languages so the model receives consistent data.
-  function buildDataBlock(useLang = "en") {
+  // `logsOverride` lets sendChat pass freshly-refetched logs directly without
+  // waiting for the next React render (avoids the "I just added a workout
+  // but Coach can't see it" cross-tab/device race condition).
+  function buildDataBlock(useLang = "en", logsOverride = null) {
     const D = DATA_LABELS[useLang] || DATA_LABELS.en;
+    const sourceLogs = logsOverride || logs;
     // Strip future-planned entries — the LLM should only see what actually
     // happened. Planned rows would otherwise be misread as "recent activity"
     // (e.g. "your last run was 10km" when the user hasn't run it yet).
-    const recentLogs = logs.filter(l => !l.isPlanned).slice(0, 10).map(l =>
+    const recentLogs = sourceLogs.filter(l => !l.isPlanned).slice(0, 10).map(l =>
       `${l.date} ${l.type}${l.subTypes.length ? "(" + l.subTypes.join(",") + ")" : ""} ${l.distance > 0 ? l.distance + "km" : ""} ${formatDuration(l.duration)}${l.pace ? " " + formatPaceFromSec(l.pace) + "/km" : ""}${l.hr ? " HR" + l.hr : ""}${l.maxHR ? "/" + l.maxHR : ""}${l.ascent ? " +" + l.ascent + "m" : ""}${l.cadence ? " cad" + l.cadence : ""}${l.aerobicTE ? " TE" + l.aerobicTE : ""}${l.gap ? " GAP" + formatPaceFromSec(l.gap) : ""}`
     ).join("\n");
     const targetRaces = races.filter(r => r.isTarget)
@@ -454,11 +458,25 @@ Rules:
     const userMsg = chatInput.trim();
     setChatLoading(true);
 
+    // Refetch workouts from the DB so the prompt reflects writes from OTHER
+    // tabs / devices since this React tree mounted. Single-tab adds are
+    // already covered by addLog's optimistic setLogs, but cross-context
+    // staleness was the user-visible "Coach can't see my new workout" bug.
+    // If refresh fails (network), fall back to whatever's in props.
+    let freshLogs = logs;
+    if (refreshLogs) {
+      try {
+        freshLogs = await refreshLogs();
+      } catch (err) {
+        console.warn("[AI Coach] refreshLogs failed, using cached state:", err);
+      }
+    }
+
     // Canonical English prompt for LLM (more stable). The model still replies
     // in the user's language because FIXED_SYSTEM_PROMPT includes that directive.
     const systemPrompt = buildSystemPrompt({
       profile, coachConfig, coachMemory,
-      dataBlock: buildDataBlock("en"),
+      dataBlock: buildDataBlock("en", freshLogs),
       lang: "en",
     });
     // Snapshot the history + this turn's user message for the API call. The
@@ -533,6 +551,9 @@ Rules:
     <div style={isMobile ? {
       display: "flex", flexDirection: "column",
       height: "100%", minHeight: 0,
+      // Top gutter — MobileShell's main has no top padding (sticky tabs own
+      // their own); non-sticky tabs like this one add it themselves.
+      paddingTop: 14,
     } : {}}>
       {/* DESKTOP top button row: ⚙ Settings collapses the row of advanced
           controls; tap to expand, tap again to collapse. */}

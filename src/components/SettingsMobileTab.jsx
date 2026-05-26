@@ -14,6 +14,7 @@ export function SettingsMobileTab({
   onOpenProfile,
   onOpenApiSettings,
   onToggleLang,
+  onChangePassword,
   signOut,
 }) {
   const t = useT();
@@ -33,6 +34,10 @@ export function SettingsMobileTab({
         primary={t("settings.profile")}
         secondary={t("settings.profile_desc")}
         onClick={onOpenProfile}
+      />
+      <Cell
+        primary={t("settings.change_password")}
+        onClick={onChangePassword}
       />
 
       <SectionHeader label={t("settings.preferences")} />
