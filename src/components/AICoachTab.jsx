@@ -3,175 +3,36 @@ import { s } from "../styles";
 import {
   DEFAULT_API_ENDPOINT,
   COACH_STYLES, OUTPUT_LENGTHS, INTERVENTION_LEVELS,
-  ACTIVITY_TYPES, SPARTAN_SUBTYPES,
 } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
-import { useIsNarrow, useIsMobile } from "../hooks/useMediaQuery";
-import { formatDuration, formatPaceFromSec } from "../utils/format";
+import { useIsMobile } from "../hooks/useMediaQuery";
 import { buildSystemPrompt } from "../utils/profile";
-import { CoachPlanImportModal } from "./CoachPlanImportModal";
+import { buildDataBlock } from "../utils/coachPrompt";
 import { ModalRoot } from "./ModalRoot";
+import { Spinner } from "./Spinner";
 
 // At this many persisted messages, surface a soft hint suggesting the user
 // distill Memory + clear the chat. Older turns start competing with the
 // system prompt for the model's attention past ~20 turns.
 const LONG_CHAT_HINT_THRESHOLD = 20;
 
-// Local time formatter — explicit per-component build, locale-independent.
-// `now.toISOString()` returns UTC, which mislabels as GMT+8 in the data
-// block; this returns the user's wall-clock time as "YYYY-MM-DD HH:MM".
-function formatLocalDateTime(d) {
-  const p = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
-}
-
-// Difficulty rank for Spartan subtypes — higher = harder.
-const SPARTAN_RANK = SPARTAN_SUBTYPES.reduce((acc, name, i) => {
-  acc[name] = i + 1;
-  return acc;
-}, {});
-
-// Pick a representative subset of history races to send to the coach.
-// Per category:
-//   • 10K / HM / Marathon / Hyrox / Other / Uncategorized → latest 3 by date
-//   • Trail   → latest 3 + longest by distance (if not already in the 3)
-//   • Spartan → latest 3 + toughest by subtype rank (if not already in the 3)
-// Goal: keep the prompt focused on recent form, while always anchoring trail
-// and Spartan signal with the user's peak performance for each.
-function selectHistoryForPrompt(historyRaces) {
-  const groups = {};
-  for (const r of historyRaces) {
-    const cat = r.category || "Uncategorized";
-    (groups[cat] = groups[cat] || []).push(r);
-  }
-  const picked = new Set();
-  for (const [cat, group] of Object.entries(groups)) {
-    const byDate = [...group].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
-    byDate.slice(0, 3).forEach(r => picked.add(r.id));
-    if (cat === "Trail") {
-      const longest = [...group].filter(r => r.distance > 0)
-        .sort((a, b) => b.distance - a.distance)[0];
-      if (longest) picked.add(longest.id);
-    } else if (cat === "Spartan") {
-      const toughest = [...group].filter(r => SPARTAN_RANK[r.subtype])
-        .sort((a, b) => SPARTAN_RANK[b.subtype] - SPARTAN_RANK[a.subtype])[0];
-      if (toughest) picked.add(toughest.id);
-    }
-  }
-  return historyRaces
-    .filter(r => picked.has(r.id))
-    .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
-}
-
-// Tolerant JSON-array extraction from a coach reply. The LLM may wrap its
-// output in markdown fences, prefix it with commentary, or even return a
-// plain object — we try a few peelings before giving up.
-function parsePlansFromLLM(text) {
-  if (!text) return [];
-  let cleaned = text.trim();
-  // Strip ```json … ``` or ``` … ``` fences if present.
-  cleaned = cleaned.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/i, "");
-  try {
-    const parsed = JSON.parse(cleaned);
-    if (Array.isArray(parsed)) return parsed;
-  } catch { /* fall through */ }
-  // Last resort — find the FIRST `[ … ]` substring and try that.
-  const m = cleaned.match(/\[[\s\S]*\]/);
-  if (m) {
-    try {
-      const parsed = JSON.parse(m[0]);
-      if (Array.isArray(parsed)) return parsed;
-    } catch { /* give up */ }
-  }
-  return [];
-}
-
-// Locale-aware headers for the dynamic data block (current date / target races /
-// race history / recent activities). Numbers + race names stay as-is — only the
-// section titles + the priority label change. The "en" version is canonical
-// (LLM-facing); "zh" is for the in-app preview only.
-const DATA_LABELS = {
-  en: {
-    currentDate: "[Current Date]",
-    targets: "[Target Races]",
-    history: "[Race History]",
-    recent: "[Recent Activities (last 10)]",
-    none: "None",
-    priorityTag: (p) => `[Priority ${p}]`,
-  },
-  zh: {
-    currentDate: "[当前时间]",
-    targets: "[目标比赛]",
-    history: "[比赛历史]",
-    recent: "[近期活动（最近 10 条）]",
-    none: "无",
-    priorityTag: (p) => `[${p} 级目标]`,
-  },
-};
-
-// Format a race finish time as H:MM:SS (h unpadded; m/s padded). Returns ""
-// when no time recorded so callers can omit the "→ time" suffix.
-function formatRaceTime(r) {
-  if (![r.resultH, r.resultM, r.resultS].some(Boolean)) return "";
-  return `${r.resultH || "0"}:${String(r.resultM || "0").padStart(2, "0")}:${String(r.resultS || "0").padStart(2, "0")}`;
-}
-
-// Build the category tag for a race entry. Spartan includes its tier
-// (Sprint/Super/Beast/Ultra) inline so the LLM doesn't have to guess.
-function categoryTagFor(r, brackets = "[]") {
-  if (!r.category) return "";
-  const inside = r.category === "Spartan" && r.subtype ? `${r.category} ${r.subtype}` : r.category;
-  return `${brackets[0]}${inside}${brackets[1]}`;
-}
-
-// Target race line — no more "goal: X" (targets don't capture a finish time).
-// Priority is spelled out ("Priority A" / "A 级目标") so the LLM doesn't have
-// to infer the meaning of a bare `[A]`. Distance + ascent carry units.
-function formatTargetRace(r, lang) {
-  const L_ = DATA_LABELS[lang] || DATA_LABELS.en;
-  const priority = r.priority ? L_.priorityTag(r.priority) : "";
-  const catTag = categoryTagFor(r, "()");
-  const dateStr = r.date ? `on ${r.date}` : "";
-  const metrics = [];
-  if (r.distance > 0) metrics.push(`${r.distance} km`);
-  if (r.ascent && parseInt(r.ascent) > 0) metrics.push(`+${r.ascent} m`);
-  const metricStr = metrics.length ? `(${metrics.join(", ")})` : "";
-  return [priority, r.name, catTag, dateStr, metricStr].filter(Boolean).join(" ");
-}
-
-// History race line — only emit metrics that are meaningful for the category:
-//   Trail   → distance + ascent (the defining metrics)
-//   Spartan → tier inline with category tag
-//   Road / Hyrox / Other → distance is implicit in the category, so just time
-// "→ time" appended only when a finish time was recorded.
-function formatHistoryRace(r) {
-  const parts = [r.date, r.name, categoryTagFor(r, "[]")].filter(Boolean);
-  if (r.category === "Trail") {
-    const metrics = [];
-    if (r.distance > 0) metrics.push(`${r.distance} km`);
-    if (r.ascent && parseInt(r.ascent) > 0) metrics.push(`+${r.ascent} m`);
-    if (metrics.length) parts.push(metrics.join(", "));
-  }
-  let line = parts.join(" ");
-  const t = formatRaceTime(r);
-  if (t) line += ` → ${t}`;
-  if (r.itraScore) line += ` ITRA ${r.itraScore}`;
-  return line;
-}
-
 export function AICoachTab({
-  logs, refreshLogs, races, profile, coachConfig, setCoachConfig,
+  logs, races, profile, coachConfig, setCoachConfig,
   coachMemory, setCoachMemory,
-  chatMessages, appendChatMessage, appendLocalChatMessage,
-  bulkAddLogs,
+  chatMessages,
   now, setConfirmDelete,
   apiKey, apiModel, onEditProfile,
+  // Lifted from AppShell so they survive tab switches — the user can send
+  // a message, tab away, and the spinner badge on the AI Coach tab still
+  // shows the model is working.
+  chatLoading, extractingForMsgId, sendChat, importToCalendar,
 }) {
   // DeepSeek is the only supported provider now; endpoint is hardcoded.
+  // (Used here ONLY by the memory-proposal call, which still lives in this
+  // tab because it's only triggered from the Memory modal opened inside it.)
   const apiEndpoint = DEFAULT_API_ENDPOINT;
   const t = useT();
   const { lang } = useLanguage();
-  const isNarrow = useIsNarrow();
   const isMobile = useIsMobile();
   const [showCoachConfig, setShowCoachConfig] = useState(false);
   const [showPromptPreview, setShowPromptPreview] = useState(false);
@@ -187,7 +48,6 @@ export function AICoachTab({
   // disappears the moment the user starts typing, instead of being pre-filled
   // content the user has to delete.
   const [chatInput, setChatInput] = useState("");
-  const [chatLoading, setChatLoading] = useState(false);
 
   // Single ⚙ toggle replaces the row of toggle buttons (config / memory /
   // prompt preview / edit profile / clear chat). Open the menu to access
@@ -210,12 +70,6 @@ export function AICoachTab({
     if (!el) return;
     el.scrollTop = el.scrollHeight;
   }, [chatMessages.length, chatLoading]);
-  // Plan-import state. `extractingForIdx` = msg index whose "→ Calendar"
-  // button is currently calling the LLM; `planProposal` opens the review
-  // modal once the structured array is parsed.
-  const [extractingForIdx, setExtractingForIdx] = useState(null);
-  const [planProposal, setPlanProposal] = useState(null);
-
   function clearChat() {
     setConfirmDelete({ type: "chat", id: null });
   }
@@ -327,224 +181,24 @@ Output the memory text only, nothing else.`;
   // `logsOverride` lets sendChat pass freshly-refetched logs directly without
   // waiting for the next React render (avoids the "I just added a workout
   // but Coach can't see it" cross-tab/device race condition).
-  function buildDataBlock(useLang = "en", logsOverride = null) {
-    const D = DATA_LABELS[useLang] || DATA_LABELS.en;
-    const sourceLogs = logsOverride || logs;
-    // Strip future-planned entries — the LLM should only see what actually
-    // happened. Planned rows would otherwise be misread as "recent activity"
-    // (e.g. "your last run was 10km" when the user hasn't run it yet).
-    const recentLogs = sourceLogs.filter(l => !l.isPlanned).slice(0, 10).map(l =>
-      `${l.date} ${l.type}${l.subTypes.length ? "(" + l.subTypes.join(",") + ")" : ""} ${l.distance > 0 ? l.distance + "km" : ""} ${formatDuration(l.duration)}${l.pace ? " " + formatPaceFromSec(l.pace) + "/km" : ""}${l.hr ? " HR" + l.hr : ""}${l.maxHR ? "/" + l.maxHR : ""}${l.ascent ? " +" + l.ascent + "m" : ""}${l.cadence ? " cad" + l.cadence : ""}${l.aerobicTE ? " TE" + l.aerobicTE : ""}${l.gap ? " GAP" + formatPaceFromSec(l.gap) : ""}`
-    ).join("\n");
-    const targetRaces = races.filter(r => r.isTarget)
-      .map(r => formatTargetRace(r, useLang)).join("\n") || D.none;
-    const historyRaces = selectHistoryForPrompt(races.filter(r => !r.isTarget))
-      .map(formatHistoryRace).join("\n") || D.none;
-
-    return `${D.currentDate} ${formatLocalDateTime(now)} GMT+8
-
-${D.targets}
-${targetRaces}
-
-${D.history}
-${historyRaces}
-
-${D.recent}
-${recentLogs}`;
-  }
-
-  // Preview honors the user's toggle. The actual prompt sent to the LLM (in
-  // sendChat below) always uses English for stable instruction-following.
+  // Preview honors the user's toggle. The actual prompt sent to the LLM by
+  // sendChat (in AppShell) always uses English for stable instruction-
+  // following; this preview is read-only and respects whichever language
+  // toggle the user picked above.
   const previewPrompt = buildSystemPrompt({
     profile, coachConfig, coachMemory,
-    dataBlock: buildDataBlock(previewLang),
+    dataBlock: buildDataBlock({ logs, races, now, lang: previewLang }),
     lang: previewLang,
   });
 
-  // Second-pass LLM call: take the last assistant reply and ask the model to
-  // re-emit any concrete training suggestions as a structured JSON array.
-  // We send this as a fresh single-turn request (no chat history needed) and
-  // do NOT persist either side — it's a one-shot extraction.
-  async function importToCalendar(assistantContent, msgIdx) {
-    if (!apiKey) {
-      alert(t("coach.no_key"));
-      return;
-    }
-    setExtractingForIdx(msgIdx);
-
-    // Anchor relative dates ("Wednesday", "明天") on today's date in GMT+8.
-    const todayStr = now.toISOString().slice(0, 10);
-    const dayOfWeek = now.toLocaleDateString("en-US", { weekday: "long" });
-    const typeUnion = ACTIVITY_TYPES.map(at => `"${at}"`).join(" | ");
-
-    const extractPrompt = `You are a structured-data extractor. The user's AI running coach just produced the reply below. Extract any concrete training suggestions into a JSON array.
-
-Today is ${todayStr} (${dayOfWeek}, GMT+8).
-
-Coach's reply:
----
-${assistantContent}
----
-
-Output a JSON array. Each item:
-{
-  "date": "YYYY-MM-DD",
-  "type": ${typeUnion},
-  "distance": number (kilometres, optional — omit if not specified),
-  "duration": number (MINUTES, optional — omit if not specified),
-  "subTypes": ["Easy Run" | "Aerobic Run" | "Tempo Run" | "Interval Run" | "Race" | "Upper Body" | "Lower Body" | "Core"] (optional, only when relevant),
-  "notes": string (brief — optional)
-}
-
-Rules:
-- Only extract suggestions that have a clear day (explicit date OR a weekday like "Wednesday" / "周三" / "tomorrow"). Resolve weekdays to the next upcoming occurrence from today.
-- Skip vague advice ("rest more", "stay hydrated"), past references, and analysis-only text.
-- If the coach explicitly suggests a rest / recovery day with no activity, set type to "Recovery".
-- If you cannot find any concrete plan, output [].
-- Output the JSON array ONLY. No prose, no markdown fences, no comments.`;
-
-    try {
-      const resp = await fetch(apiEndpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-direct-browser-access": "true",
-        },
-        body: JSON.stringify({
-          model: apiModel,
-          // 8000 = DeepSeek's hard output ceiling. A long multi-week plan can
-          // easily exceed 1500 tokens; truncating mid-JSON makes parsePlansFromLLM
-          // fail silently (user sees "no plans found" when really we got cut off).
-          max_tokens: 8000,
-          messages: [{ role: "user", content: extractPrompt }],
-        }),
-      });
-      const data = await resp.json();
-      if (!resp.ok || data.error) {
-        alert(t("coach.api_error", { msg: data.error?.message || `HTTP ${resp.status}` }));
-        return;
-      }
-      const text = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || "";
-      const plans = parsePlansFromLLM(text);
-      if (plans.length === 0) {
-        alert(t("coach.import_no_plans"));
-        return;
-      }
-      setPlanProposal({ plans });
-    } catch (err) {
-      console.error("[AI Coach] Plan-extract error:", err);
-      alert(t("coach.network_error", { msg: err.message, url: apiEndpoint }));
-    } finally {
-      setExtractingForIdx(null);
-    }
-  }
-
-  async function confirmImportPlans(workouts) {
-    try {
-      await bulkAddLogs(workouts, { source: "ai_coach_plan" });
-      setPlanProposal(null);
-      // Lightweight confirmation. The user will see the new pills on
-      // the Calendar view themselves — no need for a heavy banner.
-      alert(t("coach.import_success", { n: workouts.length }));
-    } catch {
-      // bulkAddLogs wrapper already showed an alert; leave the modal open so
-      // the user can adjust and retry without losing their edits.
-    }
-  }
-
-  async function sendChat() {
-    if (!chatInput.trim() || chatLoading) return;
-    if (!apiKey) {
-      // Transient — refreshing should clear this hint, not pollute history.
-      appendLocalChatMessage("assistant", t("coach.no_key"));
-      return;
-    }
+  // Wrapper around the lifted sendChat — clears the input box on the way
+  // through. Guards against empty input + already-loading at this layer so
+  // we don't even bother calling up if the input is empty.
+  async function handleSend() {
     const userMsg = chatInput.trim();
-    setChatLoading(true);
-
-    // Refetch workouts from the DB so the prompt reflects writes from OTHER
-    // tabs / devices since this React tree mounted. Single-tab adds are
-    // already covered by addLog's optimistic setLogs, but cross-context
-    // staleness was the user-visible "Coach can't see my new workout" bug.
-    // If refresh fails (network), fall back to whatever's in props.
-    let freshLogs = logs;
-    if (refreshLogs) {
-      try {
-        freshLogs = await refreshLogs();
-      } catch (err) {
-        console.warn("[AI Coach] refreshLogs failed, using cached state:", err);
-      }
-    }
-
-    // Canonical English prompt for LLM (more stable). The model still replies
-    // in the user's language because FIXED_SYSTEM_PROMPT includes that directive.
-    const systemPrompt = buildSystemPrompt({
-      profile, coachConfig, coachMemory,
-      dataBlock: buildDataBlock("en", freshLogs),
-      lang: "en",
-    });
-    // Snapshot the history + this turn's user message for the API call. The
-    // closure value of chatMessages matches what the user sees right now;
-    // appending to the live state happens via the wrapper just below.
-    const messagesToSend = [...chatMessages, { role: "user", content: userMsg }];
+    if (!userMsg || chatLoading) return;
     setChatInput("");
-
-    // Persist the user turn first. If this fails, the wrapper has already
-    // alerted — bail out before spending an API call.
-    try {
-      await appendChatMessage("user", userMsg);
-    } catch {
-      setChatLoading(false);
-      return;
-    }
-
-    console.log("[AI Coach] POST to:", apiEndpoint, "key length:", apiKey.length, "prompt length:", systemPrompt.length);
-    try {
-      const resp = await fetch(apiEndpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-direct-browser-access": "true",
-        },
-        body: JSON.stringify({
-          model: apiModel,
-          // Practical ceiling: DeepSeek's hard output cap is 8192 tokens on
-          // the Anthropic-compat endpoint, so 8000 leaves a small margin.
-          // The model decides how much to actually write — this is just the
-          // "don't get cut off mid-sentence" headroom.
-          max_tokens: 8000,
-          system: systemPrompt,
-          messages: messagesToSend,
-        }),
-      });
-      const data = await resp.json();
-      if (!resp.ok || data.error) {
-        const msg = data.error?.message || `HTTP ${resp.status}`;
-        console.error("[AI Coach] API error:", data);
-        // Transient error bubble — kept out of the DB.
-        appendLocalChatMessage("assistant", t("coach.api_error", { msg }));
-      } else {
-        const reply = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || t("coach.no_response");
-        if (!reply || reply === t("coach.no_response")) {
-          // Diagnostic: API said 200 OK with no error, but we extracted no
-          // text. Most likely the model ID is unknown to DeepSeek (they
-          // silently return an empty payload). Dump full response so we can see.
-          console.warn("[AI Coach] Empty reply. Full response:", data, "model sent:", apiModel);
-        }
-        try {
-          await appendChatMessage("assistant", reply);
-        } catch { /* alerted by wrapper */ }
-      }
-    } catch (err) {
-      console.error("[AI Coach] Network error fetching", apiEndpoint, err);
-      // Transient error bubble — kept out of the DB.
-      appendLocalChatMessage("assistant", t("coach.network_error", { msg: err.message, url: apiEndpoint }));
-    }
-    setChatLoading(false);
+    await sendChat(userMsg);
   }
 
   // Mobile has two views inside this tab — chat (default) and a settings
@@ -799,8 +453,8 @@ Rules:
               // an "Import to Calendar" affordance — a tiny 📅 icon button sitting
               // to the right of the bubble. Avoids the extra row the old wide
               // button took up under every assistant message.
-              const canImport = m.role === "assistant" && !m.isLocal && bulkAddLogs;
-              const extracting = extractingForIdx === i;
+              const canImport = m.role === "assistant" && !m.isLocal && importToCalendar;
+              const extracting = extractingForMsgId === m.id;
               return (
                 <div key={i} style={{
                   alignSelf: m.role === "user" ? "flex-end" : "flex-start",
@@ -816,7 +470,7 @@ Rules:
                   }}>{m.content}</div>
                   {canImport && (
                     <button
-                      onClick={() => importToCalendar(m.content, i)}
+                      onClick={() => importToCalendar(m.content, m.id)}
                       disabled={extracting}
                       aria-label={t("coach.import_button")}
                       title={extracting ? t("coach.extracting") : t("coach.import_button")}
@@ -827,17 +481,25 @@ Rules:
                         width: 32, height: 32, minHeight: 32,
                         padding: 0, fontSize: 15, lineHeight: 1,
                         cursor: extracting ? "default" : "pointer",
-                        opacity: extracting ? 0.5 : 1,
                         flexShrink: 0,
                         display: "inline-flex", alignItems: "center", justifyContent: "center",
                       }}>
-                      📅
+                      {extracting ? <Spinner size={14} thickness={1.5} color="var(--moss)" /> : "📅"}
                     </button>
                   )}
                 </div>
               );
             })}
-            {chatLoading && <div style={{ alignSelf: "flex-start", color: "#888", fontSize: 13 }}>{t("coach.thinking")}</div>}
+            {chatLoading && (
+              <div style={{
+                alignSelf: "flex-start", color: "#888", fontSize: 13,
+                display: "inline-flex", alignItems: "center", gap: 8,
+                padding: "10px 14px",
+              }}>
+                <Spinner size={12} thickness={1.5} color="var(--moss)" />
+                {t("coach.thinking")}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -859,7 +521,7 @@ Rules:
           placeholder={t("coach.input_placeholder")}
           value={chatInput}
           onChange={e => setChatInput(e.target.value)}
-          onKeyDown={e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) sendChat(); }}
+          onKeyDown={e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) handleSend(); }}
           style={{
             ...s.input,
             resize: isMobile ? "none" : "vertical",
@@ -883,7 +545,7 @@ Rules:
               }}>
               ⚙{coachMemory ? " ●" : ""}
             </button>
-            <button onClick={sendChat} disabled={chatLoading || !chatInput.trim()}
+            <button onClick={handleSend} disabled={chatLoading || !chatInput.trim()}
               aria-label={t("coach.send")}
               style={{
                 ...s.btn,
@@ -904,7 +566,7 @@ Rules:
               style={{ ...s.btnGhost, padding: "8px 10px", fontSize: 13, lineHeight: 1.2 }}>
               ⚙{coachMemory ? " ●" : ""}
             </button>
-            <button onClick={sendChat} disabled={chatLoading || !chatInput.trim()}
+            <button onClick={handleSend} disabled={chatLoading || !chatInput.trim()}
               style={{
                 ...s.btn, padding: "10px 20px",
                 opacity: chatLoading || !chatInput.trim() ? 0.5 : 1,
@@ -1125,13 +787,9 @@ Rules:
         </ModalRoot>
       )}
 
-      {planProposal && (
-        <CoachPlanImportModal
-          plans={planProposal.plans}
-          onConfirm={confirmImportPlans}
-          onCancel={() => setPlanProposal(null)}
-        />
-      )}
+      {/* The plan-import review modal lives at AppShell level (so it pops up
+          even if the user walked away from this tab while extraction was
+          running). See <CoachPlanImportModal> in App.jsx. */}
     </div>
   );
 }

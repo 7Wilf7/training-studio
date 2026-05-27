@@ -117,6 +117,24 @@ input[type="number"] { -moz-appearance: textfield; }
 summary { list-style: none; }
 summary::-webkit-details-marker { display: none; }
 
+/* Spin keyframe — used by the AI Coach "thinking" indicator. The spinner
+   stays visible across tab switches (state is held in AppShell, not in
+   AICoachTab) so the user has a constant visual cue that the model is
+   still working even after they leave the chat tab. */
+@keyframes ts-spin {
+  to { transform: rotate(360deg); }
+}
+.ts-spinner {
+  display: inline-block;
+  vertical-align: middle;
+  border-radius: 50%;
+  border-style: solid;
+  border-color: currentColor;
+  border-right-color: transparent;
+  border-top-color: transparent;
+  animation: ts-spin 0.8s linear infinite;
+}
+
 /* ============================================================
    Mobile-only overrides
    ------------------------------------------------------------

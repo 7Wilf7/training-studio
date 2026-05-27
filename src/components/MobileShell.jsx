@@ -1,4 +1,5 @@
 import { useT } from "../i18n/LanguageContext";
+import { Spinner } from "./Spinner";
 
 /**
  * Mobile chrome — no top header, content slot, fixed bottom 5-tab nav.
@@ -10,8 +11,12 @@ import { useT } from "../i18n/LanguageContext";
  * Layout uses 100dvh so the bottom bar sits above mobile browser chrome
  * (Safari URL bar collapse, Android nav bar). safe-area-inset-bottom
  * keeps labels above iPhone's home indicator in PWA standalone mode.
+ *
+ * `coachBusy` — when AI Coach has any in-flight request (chat send or plan
+ * import), the AI Coach tab cell shows a small spinner badge. The state
+ * lives in AppShell so it stays alive across tab switches.
  */
-export function MobileShell({ children, tab, setTab }) {
+export function MobileShell({ children, tab, setTab, coachBusy = false }) {
   const t = useT();
 
   const TABS = [
@@ -72,6 +77,7 @@ export function MobileShell({ children, tab, setTab }) {
       }}>
         {TABS.map(({ key, idx }) => {
           const active = tab === idx;
+          const showSpinner = idx === 3 && coachBusy;
           return (
             <button
               key={key}
@@ -87,13 +93,14 @@ export function MobileShell({ children, tab, setTab }) {
                 fontSize: 12,
                 fontWeight: active ? 600 : 500,
                 color: active ? "var(--ink-1)" : "var(--ink-3)",
-                display: "flex", alignItems: "center", justifyContent: "center",
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
                 borderRadius: 0,
                 cursor: "pointer",
                 WebkitTapHighlightColor: "transparent",
               }}
             >
               {t(key)}
+              {showSpinner && <Spinner size={10} thickness={1.5} color="var(--moss)" />}
             </button>
           );
         })}

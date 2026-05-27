@@ -1,6 +1,10 @@
 import { useState, useEffect } from "react";
-import { TABS, DEFAULT_MODEL, DEFAULT_PROFILE, DEFAULT_COACH_CONFIG, DEFAULT_LANG } from "./constants";
-import { isProfileComplete } from "./utils/profile";
+import {
+  TABS, DEFAULT_MODEL, DEFAULT_PROFILE, DEFAULT_COACH_CONFIG, DEFAULT_LANG,
+  DEFAULT_API_ENDPOINT, ACTIVITY_TYPES,
+} from "./constants";
+import { isProfileComplete, buildSystemPrompt } from "./utils/profile";
+import { buildDataBlock, parsePlansFromLLM } from "./utils/coachPrompt";
 import { LanguageProvider, useT } from "./i18n/LanguageContext";
 import { INITIAL_FILTER } from "./components/GlobalFilter";
 import { TrainingTab } from "./components/TrainingTab";
@@ -11,6 +15,8 @@ import { ConfirmDeleteModal } from "./components/ConfirmDeleteModal";
 import { ProfileEditor } from "./components/ProfileEditor";
 import { ApiSettingsModal } from "./components/ApiSettingsModal";
 import { ChangePasswordModal } from "./components/ChangePasswordModal";
+import { CoachPlanImportModal } from "./components/CoachPlanImportModal";
+import { Spinner } from "./components/Spinner";
 import { UserBadge } from "./components/Auth/UserBadge";
 import { LoginScreen } from "./components/Auth/LoginScreen";
 import { MobileShell } from "./components/MobileShell";
@@ -370,6 +376,184 @@ function AppShell({
   const [showApiSettings, setShowApiSettings] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
 
+  // ── AI Coach in-flight state, lifted from AICoachTab so it SURVIVES tab
+  //    switches. Previously the fetch and chatLoading both lived in
+  //    AICoachTab → switching away mid-send unmounted the component, the
+  //    "Coach is thinking…" indicator disappeared, and the user couldn't
+  //    tell whether the request was still alive. Lifting these here keeps
+  //    the request running (closure over AppShell-scope state) and lets
+  //    the tab bar render a persistent spinner badge while the model works.
+  //      chatLoading           — sendChat fetch in flight
+  //      extractingForMsgId    — importToCalendar fetch in flight (per msg)
+  //      planProposal          — opens the plan-import review modal once
+  //                              extraction returns a non-empty array
+  const [chatLoading, setChatLoading] = useState(false);
+  const [extractingForMsgId, setExtractingForMsgId] = useState(null);
+  const [planProposal, setPlanProposal] = useState(null);
+
+  // ── Lifted sendChat — talks to DeepSeek's Anthropic-compat endpoint.
+  //    Takes the user's typed message; reads everything else from props/
+  //    state in this scope. Persists user + assistant turns via the
+  //    appendChatMessage wrapper (which writes to Supabase + updates the
+  //    chatMessages prop coming from AuthedApp). On API or network errors,
+  //    emits a transient local-only bubble that won't pollute the DB.
+  async function sendChat(userMsg) {
+    if (!userMsg || chatLoading) return false;
+    if (!apiKey) {
+      appendLocalChatMessage("assistant", t("coach.no_key"));
+      return false;
+    }
+    setChatLoading(true);
+
+    // Refresh logs first so the prompt reflects cross-tab/device writes
+    // since this React tree mounted. Single-tab adds are already covered
+    // by addLog's optimistic setLogs.
+    let freshLogs = logs;
+    try {
+      freshLogs = await refreshLogs();
+    } catch (err) {
+      console.warn("[AI Coach] refreshLogs failed, using cached state:", err);
+    }
+
+    const systemPrompt = buildSystemPrompt({
+      profile, coachConfig, coachMemory,
+      dataBlock: buildDataBlock({ logs: freshLogs, races, now, lang: "en" }),
+      lang: "en",
+    });
+    const messagesToSend = [...chatMessages, { role: "user", content: userMsg }];
+
+    try {
+      await appendChatMessage("user", userMsg);
+    } catch {
+      setChatLoading(false);
+      return false;
+    }
+
+    try {
+      const resp = await fetch(DEFAULT_API_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+        },
+        body: JSON.stringify({
+          model: apiModel,
+          max_tokens: 8000,
+          system: systemPrompt,
+          messages: messagesToSend,
+        }),
+      });
+      const data = await resp.json();
+      if (!resp.ok || data.error) {
+        const msg = data.error?.message || `HTTP ${resp.status}`;
+        console.error("[AI Coach] API error:", data);
+        appendLocalChatMessage("assistant", t("coach.api_error", { msg }));
+      } else {
+        const reply = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || t("coach.no_response");
+        try {
+          await appendChatMessage("assistant", reply);
+        } catch { /* alerted by wrapper */ }
+      }
+    } catch (err) {
+      console.error("[AI Coach] Network error:", err);
+      appendLocalChatMessage("assistant", t("coach.network_error", { msg: err.message, url: DEFAULT_API_ENDPOINT }));
+    }
+    setChatLoading(false);
+    return true;
+  }
+
+  // ── Lifted importToCalendar — second-pass LLM call: take an assistant
+  //    reply and re-emit any concrete training suggestions as a structured
+  //    JSON array, then open the review modal. Tagged by message id (not
+  //    index, since indices shift across re-renders) so AICoachTab can
+  //    show per-message extraction state.
+  async function importToCalendar(assistantContent, msgId) {
+    if (!apiKey) {
+      alert(t("coach.no_key"));
+      return;
+    }
+    setExtractingForMsgId(msgId);
+    const todayStr = now.toISOString().slice(0, 10);
+    const dayOfWeek = now.toLocaleDateString("en-US", { weekday: "long" });
+    const typeUnion = ACTIVITY_TYPES.map(at => `"${at}"`).join(" | ");
+    const extractPrompt = `You are a structured-data extractor. The user's AI running coach just produced the reply below. Extract any concrete training suggestions into a JSON array.
+
+Today is ${todayStr} (${dayOfWeek}, GMT+8).
+
+Coach's reply:
+---
+${assistantContent}
+---
+
+Output a JSON array. Each item:
+{
+  "date": "YYYY-MM-DD",
+  "type": ${typeUnion},
+  "distance": number (kilometres, optional — omit if not specified),
+  "duration": number (MINUTES, optional — omit if not specified),
+  "subTypes": ["Easy Run" | "Aerobic Run" | "Tempo Run" | "Interval Run" | "Race" | "Upper Body" | "Lower Body" | "Core"] (optional, only when relevant),
+  "notes": string (brief — optional)
+}
+
+Rules:
+- Only extract suggestions that have a clear day (explicit date OR a weekday like "Wednesday" / "周三" / "tomorrow"). Resolve weekdays to the next upcoming occurrence from today.
+- Skip vague advice ("rest more", "stay hydrated"), past references, and analysis-only text.
+- If the coach explicitly suggests a rest / recovery day with no activity, set type to "Recovery".
+- If you cannot find any concrete plan, output [].
+- Output the JSON array ONLY. No prose, no markdown fences, no comments.`;
+
+    try {
+      const resp = await fetch(DEFAULT_API_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+        },
+        body: JSON.stringify({
+          model: apiModel,
+          max_tokens: 8000,
+          messages: [{ role: "user", content: extractPrompt }],
+        }),
+      });
+      const data = await resp.json();
+      if (!resp.ok || data.error) {
+        alert(t("coach.api_error", { msg: data.error?.message || `HTTP ${resp.status}` }));
+        return;
+      }
+      const text = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || "";
+      const plans = parsePlansFromLLM(text);
+      if (plans.length === 0) {
+        alert(t("coach.import_no_plans"));
+        return;
+      }
+      setPlanProposal({ plans });
+    } catch (err) {
+      console.error("[AI Coach] Plan-extract error:", err);
+      alert(t("coach.network_error", { msg: err.message, url: DEFAULT_API_ENDPOINT }));
+    } finally {
+      setExtractingForMsgId(null);
+    }
+  }
+
+  async function confirmImportPlans(workouts) {
+    try {
+      await bulkAddLogs(workouts, { source: "ai_coach_plan" });
+      setPlanProposal(null);
+      alert(t("coach.import_success", { n: workouts.length }));
+    } catch {
+      // bulkAddLogs already alerted; keep modal open for retry
+    }
+  }
+
+  // True when ANY long-running AI Coach operation is in flight. Used to
+  // render the spinner badge on the AI Coach tab label so the user knows
+  // the model is still working even when they've switched to another tab.
+  const coachBusy = chatLoading || !!extractingForMsgId;
+
   // First-time setup: force the wizard until profile is complete (incl. displayName)
   useEffect(() => {
     if (!isProfileComplete(profile)) {
@@ -467,7 +651,6 @@ function AppShell({
       {tab === 3 && (
         <AICoachTab
           logs={logs}
-          refreshLogs={refreshLogs}
           races={races}
           profile={profile}
           coachConfig={coachConfig}
@@ -475,14 +658,17 @@ function AppShell({
           coachMemory={coachMemory}
           setCoachMemory={setCoachMemory}
           chatMessages={chatMessages}
-          appendChatMessage={appendChatMessage}
           appendLocalChatMessage={appendLocalChatMessage}
-          bulkAddLogs={bulkAddLogs}
           now={now}
           setConfirmDelete={setConfirmDelete}
           apiKey={apiKey}
           apiModel={apiModel}
           onEditProfile={() => setProfileEditorMode("edit")}
+          /* Lifted state + handlers — see AppShell top for definitions. */
+          chatLoading={chatLoading}
+          extractingForMsgId={extractingForMsgId}
+          sendChat={sendChat}
+          importToCalendar={importToCalendar}
         />
       )}
     </>
@@ -521,6 +707,17 @@ function AppShell({
           onClose={() => setShowChangePassword(false)}
         />
       )}
+
+      {/* Plan-import review modal — rendered at AppShell level (not inside
+          AICoachTab) so the user sees it pop up even if they walked away
+          from the AI Coach tab while the extraction was running. */}
+      {planProposal && (
+        <CoachPlanImportModal
+          plans={planProposal.plans}
+          onConfirm={confirmImportPlans}
+          onCancel={() => setPlanProposal(null)}
+        />
+      )}
     </>
   );
 
@@ -542,7 +739,7 @@ function AppShell({
     ) : tabContent;
     return (
       <>
-        <MobileShell tab={tab} setTab={setTab}>
+        <MobileShell tab={tab} setTab={setTab} coachBusy={coachBusy}>
           {mobileContent}
         </MobileShell>
         {modals}
@@ -665,6 +862,7 @@ function AppShell({
         {TABS.map((label, i) => {
           const key = ["tabs.training", "tabs.calendar", "tabs.races", "tabs.ai_coach"][i];
           const active = tab === i;
+          const showSpinner = i === 3 && coachBusy;
           return (
             <button key={label} onClick={() => setTab(i)} style={{
               flex: 1, textAlign: "center",
@@ -679,8 +877,10 @@ function AppShell({
               borderBottom: active ? "2px solid var(--ink-1)" : "2px solid transparent",
               marginBottom: -1,
               transition: "color 120ms",
+              display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
             }}>
               {t(key)}
+              {showSpinner && <Spinner size={12} thickness={1.5} color="var(--moss)" />}
             </button>
           );
         })}
