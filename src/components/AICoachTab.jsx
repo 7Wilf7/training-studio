@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { s } from "../styles";
 import {
   API_PROVIDERS, DEFAULT_API_PROVIDER, getEndpointUrl,
@@ -10,6 +12,83 @@ import { buildSystemPrompt } from "../utils/profile";
 import { buildDataBlock } from "../utils/coachPrompt";
 import { ModalRoot } from "./ModalRoot";
 import { Spinner } from "./Spinner";
+
+// Custom renderers for the markdown nodes that actually show up in coach
+// replies. Keys to know:
+//   - All elements `inherit` color from the bubble so user (dark) and
+//     assistant (light) bubbles both read cleanly.
+//   - GFM tables are wrapped in an overflow-x: auto div so 7-day weekly-plan
+//     tables don't blow out the mobile viewport — the table itself stays
+//     full-width, the user just horizontally scrolls inside the bubble.
+//   - Code blocks get a subtle background that works against both bubble
+//     colors.
+//   - Margin/padding are tightened from browser defaults so a "###" heading
+//     doesn't open up a huge gap inside a chat bubble.
+// react-markdown passes a `node` AST entry alongside the standard HTML props.
+// We don't need it for any of these renderers — drop it before spreading so
+// React doesn't warn about unknown DOM attributes.
+const stripNode = ({ node, ...rest }) => rest; // eslint-disable-line no-unused-vars
+
+const MD_COMPONENTS = {
+  table: (p) => (
+    <div style={{ overflowX: "auto", maxWidth: "100%", margin: "8px 0" }}>
+      <table {...stripNode(p)} style={{
+        borderCollapse: "collapse", fontSize: 12,
+        minWidth: "max-content",
+      }} />
+    </div>
+  ),
+  th: (p) => (
+    <th {...stripNode(p)} style={{
+      border: "1px solid", borderColor: "rgba(128,128,128,0.4)",
+      padding: "5px 8px", textAlign: "left", fontWeight: 600,
+      background: "rgba(128,128,128,0.08)",
+      whiteSpace: "nowrap",
+    }} />
+  ),
+  td: (p) => (
+    <td {...stripNode(p)} style={{
+      border: "1px solid", borderColor: "rgba(128,128,128,0.4)",
+      padding: "5px 8px", verticalAlign: "top",
+    }} />
+  ),
+  code: (p) => {
+    const { inline, ...rest } = stripNode(p);
+    return inline
+      ? <code {...rest} style={{
+          fontFamily: "var(--font-mono)", fontSize: "0.9em",
+          background: "rgba(128,128,128,0.18)", padding: "1px 5px",
+          borderRadius: 3,
+        }} />
+      : <code {...rest} style={{
+          fontFamily: "var(--font-mono)", fontSize: "0.85em",
+          display: "block", whiteSpace: "pre",
+        }} />;
+  },
+  pre: (p) => (
+    <pre {...stripNode(p)} style={{
+      background: "rgba(128,128,128,0.15)", padding: "8px 10px",
+      borderRadius: 4, overflowX: "auto", margin: "6px 0",
+      fontFamily: "var(--font-mono)", fontSize: 12, lineHeight: 1.5,
+    }} />
+  ),
+  h1: (p) => <h3 {...stripNode(p)} style={{ fontSize: 14, fontWeight: 600, margin: "10px 0 4px" }} />,
+  h2: (p) => <h3 {...stripNode(p)} style={{ fontSize: 14, fontWeight: 600, margin: "10px 0 4px" }} />,
+  h3: (p) => <h4 {...stripNode(p)} style={{ fontSize: 13, fontWeight: 600, margin: "8px 0 4px" }} />,
+  h4: (p) => <h5 {...stripNode(p)} style={{ fontSize: 13, fontWeight: 600, margin: "8px 0 4px" }} />,
+  p:  (p) => <p  {...stripNode(p)} style={{ margin: "4px 0", whiteSpace: "pre-wrap" }} />,
+  ul: (p) => <ul {...stripNode(p)} style={{ margin: "4px 0", paddingLeft: 20 }} />,
+  ol: (p) => <ol {...stripNode(p)} style={{ margin: "4px 0", paddingLeft: 20 }} />,
+  li: (p) => <li {...stripNode(p)} style={{ margin: "2px 0", lineHeight: 1.6 }} />,
+  hr: (p) => <hr {...stripNode(p)} style={{ border: "none", borderTop: "1px solid currentColor", opacity: 0.25, margin: "8px 0" }} />,
+  a:  (p) => <a  {...stripNode(p)} target="_blank" rel="noreferrer" style={{ color: "inherit", textDecoration: "underline" }} />,
+  blockquote: (p) => (
+    <blockquote {...stripNode(p)} style={{
+      borderLeft: "2px solid", borderLeftColor: "rgba(128,128,128,0.5)",
+      paddingLeft: 10, margin: "6px 0", opacity: 0.9,
+    }} />
+  ),
+};
 
 // At this many persisted messages, surface a soft hint suggesting the user
 // distill Memory + clear the chat. Older turns start competing with the
@@ -513,9 +592,19 @@ Output the memory text only, nothing else.`;
                       background: isUser ? "#222" : "#f5f5f5",
                       color: isUser ? "#fff" : "#222",
                       borderRadius: 10, padding: "10px 14px",
-                      fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-wrap",
-                      minWidth: 0,
-                    }}>{m.content}</div>
+                      fontSize: 13, lineHeight: 1.7,
+                      minWidth: 0, maxWidth: "100%",
+                      // Belt-and-braces: even though tables get their own
+                      // scroll container, very long unbroken tokens (URLs,
+                      // model IDs) could still push the bubble wide. Wrap.
+                      wordBreak: "break-word", overflowWrap: "anywhere",
+                    }}>
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={MD_COMPONENTS}>
+                        {m.content}
+                      </ReactMarkdown>
+                    </div>
 
                     {/* Calendar import affordance — text button below the bubble.
                         Gated by the showCalendarButton coach setting (default ON).
