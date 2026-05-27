@@ -4,6 +4,13 @@
 
 ## 2026-05-27（周三）—— 大杂烩：AI 卡顿修复 + Claude 接入 + 个性化跑步推荐
 
+**UI 操作区打磨**
+
+- 手机底部导航从纯文字改成图标 + 文字，Training / Calendar / Races / AI Coach / Settings 更容易扫。
+- 电脑端顶部工具条和主 tab 也同步加上图标，Guide / 语言 / API / 个人资料入口更容易识别。
+- Training 的 Add / Upload / Select / Sort 操作集中成带图标的一行，手机端更紧凑。
+- AI Coach 对话框上方新增状态 chip，直接显示当前 Provider、教练模式、Memory 状态和日历导入按钮状态。
+
 **AI Coach 回复支持 Markdown 渲染**
 
 - 教练常用的格式（表格、`**粗体**`、`### 标题`、列表、`` `代码` ``、引用块）以前全是字面字符显示，读起来费劲。现在统一用 markdown 引擎渲染。

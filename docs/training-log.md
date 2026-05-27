@@ -50,8 +50,10 @@
 
 ## 批量操作
 
-- **Select mode**（Activities 顶部那一排按钮里的 Select）：勾选多行批量删除。
+- **Add / Upload / Select / Sort** 现在集中在 Activities 顶部同一行，并配有图标，手机端也保持一行显示。
+- **Select mode**：勾选多行批量删除。
 - **Upload .csv**：打开 Garmin CSV 导入流程，详见 [数据导入](data-import.md)。
+- **Sort**：按日期、距离、时长或心率排序当前列表。
 
 ## 筛选和时间范围
 

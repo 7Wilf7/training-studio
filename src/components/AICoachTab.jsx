@@ -12,6 +12,7 @@ import { buildSystemPrompt } from "../utils/profile";
 import { buildDataBlock } from "../utils/coachPrompt";
 import { ModalRoot } from "./ModalRoot";
 import { Spinner } from "./Spinner";
+import { CalendarIcon, CoachIcon, SettingsIcon } from "./Icons";
 
 // Custom renderers for the markdown nodes that actually show up in coach
 // replies. Keys to know:
@@ -395,6 +396,38 @@ Output the memory text only, nothing else.`;
   // everything inline.
   const inSettings = isMobile && showCoachMenu;
   const inChat = !inSettings;
+  const memoryReady = !!coachMemory?.trim();
+  const calendarImportOn = coachConfig.showCalendarButton !== false;
+  const providerLabel = provider.label || apiProvider;
+  const coachStyleLabel = t(`enum.coach.${coachConfig.style || "balanced"}`);
+  const outputLabel = t(`enum.length.${coachConfig.outputLength || "standard"}`);
+  const interventionLabel = t(`enum.intervention.${coachConfig.intervention || "standard"}`);
+  const memoryLabel = lang === "zh"
+    ? (memoryReady ? "已设置" : "未设置")
+    : (memoryReady ? "ready" : "empty");
+  const calendarLabel = lang === "zh"
+    ? (calendarImportOn ? "显示" : "隐藏")
+    : (calendarImportOn ? "shown" : "hidden");
+  const statusPill = (icon, label, value, active = true) => (
+    <span style={{
+      display: "inline-flex",
+      alignItems: "center",
+      gap: 6,
+      minHeight: 26,
+      padding: "4px 9px",
+      border: "1px solid var(--rule)",
+      borderRadius: 2,
+      background: active ? "var(--bg-elevated)" : "var(--bg)",
+      color: active ? "var(--ink-2)" : "var(--ink-3)",
+      fontSize: 11,
+      fontFamily: "var(--font-sans)",
+      whiteSpace: "nowrap",
+    }}>
+      <span style={{ color: active ? "var(--moss)" : "var(--ink-3)", display: "inline-flex" }}>{icon}</span>
+      <span style={{ color: "var(--ink-3)" }}>{label}</span>
+      <span style={{ color: active ? "var(--ink-1)" : "var(--ink-3)", fontWeight: 600 }}>{value}</span>
+    </span>
+  );
 
   return (
     <div style={isMobile ? {
@@ -630,6 +663,20 @@ Output the memory text only, nothing else.`;
 
       {/* CHAT VIEW (hidden on mobile when in the settings sub-page) ──────── */}
       {inChat && (<>
+
+      <div style={{
+        display: "flex",
+        gap: 6,
+        flexWrap: "wrap",
+        alignItems: "center",
+        marginBottom: 10,
+        paddingBottom: isMobile ? 8 : 0,
+      }}>
+        {statusPill(<CoachIcon size={12} />, "Provider", providerLabel)}
+        {statusPill(<SettingsIcon size={12} />, "Mode", `${coachStyleLabel} / ${outputLabel} / ${interventionLabel}`)}
+        {statusPill(<CoachIcon size={12} />, "Memory", memoryLabel, memoryReady)}
+        {statusPill(<CalendarIcon size={12} />, "Import", calendarLabel, calendarImportOn)}
+      </div>
       {/* Soft hint once chat history grows past the threshold — older turns
           start competing with the system prompt for the model's attention.
           One-tap to open Memory; not blocking. */}

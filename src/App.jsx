@@ -21,6 +21,9 @@ import { UserBadge } from "./components/Auth/UserBadge";
 import { LoginScreen } from "./components/Auth/LoginScreen";
 import { MobileShell } from "./components/MobileShell";
 import { SettingsMobileTab } from "./components/SettingsMobileTab";
+import {
+  BookIcon, CalendarIcon, CoachIcon, FootIcon, GlobeIcon, KeyIcon, SettingsIcon, TrophyIcon,
+} from "./components/Icons";
 import { useAuth } from "./hooks/useAuth";
 import { useIsMobile, useIsNarrow } from "./hooks/useMediaQuery";
 import * as db from "./lib/db";
@@ -671,6 +674,28 @@ Rules:
   const titleText = profile.displayName
     ? t("header.title", { name: profile.displayName })
     : t("header.title_empty");
+  const desktopTabs = [
+    { label: TABS[0], key: "tabs.training", Icon: FootIcon },
+    { label: TABS[1], key: "tabs.calendar", Icon: CalendarIcon },
+    { label: TABS[2], key: "tabs.races", Icon: TrophyIcon },
+    { label: TABS[3], key: "tabs.ai_coach", Icon: CoachIcon },
+  ];
+  const headerCell = {
+    border: "1px solid var(--rule)",
+    borderRight: "none",
+    background: "var(--bg-elevated)",
+    height: 32,
+    padding: "0 11px",
+    fontSize: 13,
+    color: "var(--ink-2)",
+    fontFamily: "var(--font-sans)",
+    borderRadius: 0,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    textDecoration: "none",
+  };
 
   // Keep the browser tab title in sync with the displayed page title
   useEffect(() => { document.title = titleText; }, [titleText]);
@@ -908,20 +933,33 @@ Rules:
             <a href="https://training-studio.gitbook.io/training-studio-docs"
               target="_blank" rel="noreferrer"
               title={t("header.guide_tooltip")}
-              style={{ border: "1px solid var(--rule)", borderRight: "none", background: "var(--bg-elevated)", height: 32, padding: "0 12px", fontSize: 13, color: "var(--ink-2)", fontFamily: "var(--font-sans)", borderRadius: 0, display: "inline-flex", alignItems: "center", textDecoration: "none" }}>
+              style={headerCell}>
+              <BookIcon size={13} />
               {t("header.guide")}
             </a>
             <button onClick={toggleLang} title={t("header.lang_tooltip")}
-              style={{ border: "1px solid var(--rule)", borderRight: "none", background: "var(--bg-elevated)", height: 32, padding: "0 12px", fontSize: 13, color: "var(--ink-2)", fontFamily: "var(--font-sans)", borderRadius: 0 }}>
+              style={headerCell}>
+              <GlobeIcon size={13} />
               {lang === "en" ? "中" : "EN"}
             </button>
             <button onClick={() => setShowApiSettings(true)} title={t("header.api_tooltip")}
-              style={{ border: "1px solid var(--rule)", borderRight: "none", background: apiKey ? "var(--bg-elevated)" : "rgba(181,78,26,0.08)", height: 32, padding: "0 12px", fontSize: 13, color: apiKey ? "var(--ink-2)" : "var(--warn)", fontFamily: "var(--font-sans)", borderRadius: 0 }}>
-              {t("header.api")}{!apiKey && " ⚠"}
+              style={{
+                ...headerCell,
+                background: apiKey ? "var(--bg-elevated)" : "rgba(181,78,26,0.08)",
+                color: apiKey ? "var(--ink-2)" : "var(--warn)",
+              }}>
+              <KeyIcon size={13} />
+              {t("header.api")}
+              {!apiKey && (
+                <span style={{
+                  width: 6, height: 6, borderRadius: "50%",
+                  background: "var(--warn)", display: "inline-block",
+                }} />
+              )}
             </button>
             <button onClick={() => setProfileEditorMode("edit")} title={t("header.profile")}
-              style={{ border: "1px solid var(--rule)", borderRight: "none", background: "var(--bg-elevated)", height: 32, width: 38, fontSize: 15, color: "var(--ink-2)", borderRadius: 0 }}>
-              ⚙
+              style={{ ...headerCell, width: 38, padding: 0 }}>
+              <SettingsIcon size={14} />
             </button>
             <UserBadge user={user} signOut={signOut} onChangePassword={() => setShowChangePassword(true)} />
           </div>
@@ -939,8 +977,7 @@ Rules:
         borderBottom: "1px solid var(--rule)",
         overflowX: "auto", WebkitOverflowScrolling: "touch",
       }}>
-        {TABS.map((label, i) => {
-          const key = ["tabs.training", "tabs.calendar", "tabs.races", "tabs.ai_coach"][i];
+        {desktopTabs.map(({ label, key, Icon }, i) => {
           const active = tab === i;
           const showSpinner = i === 3 && coachBusy;
           return (
@@ -959,8 +996,22 @@ Rules:
               transition: "color 120ms",
               display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
             }}>
+              <span style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+                <Icon size={15} />
+                {showSpinner && (
+                  <span style={{
+                    position: "absolute",
+                    right: -9,
+                    top: -6,
+                    background: "var(--bg)",
+                    borderRadius: 8,
+                    lineHeight: 0,
+                  }}>
+                    <Spinner size={10} thickness={1.4} color="var(--moss)" />
+                  </span>
+                )}
+              </span>
               {t(key)}
-              {showSpinner && <Spinner size={12} thickness={1.5} color="var(--moss)" />}
             </button>
           );
         })}

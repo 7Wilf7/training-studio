@@ -1,5 +1,6 @@
 import { useT } from "../i18n/LanguageContext";
 import { Spinner } from "./Spinner";
+import { CalendarIcon, CoachIcon, FootIcon, SettingsIcon, TrophyIcon } from "./Icons";
 
 /**
  * Mobile chrome — no top header, content slot, fixed bottom 5-tab nav.
@@ -20,11 +21,11 @@ export function MobileShell({ children, tab, setTab, coachBusy = false }) {
   const t = useT();
 
   const TABS = [
-    { key: "tabs.training", idx: 0 },
-    { key: "tabs.calendar", idx: 1 },
-    { key: "tabs.races",    idx: 2 },
-    { key: "tabs.ai_coach", idx: 3 },
-    { key: "tabs.settings", idx: 4 },
+    { key: "tabs.training", idx: 0, Icon: FootIcon },
+    { key: "tabs.calendar", idx: 1, Icon: CalendarIcon },
+    { key: "tabs.races",    idx: 2, Icon: TrophyIcon },
+    { key: "tabs.ai_coach", idx: 3, Icon: CoachIcon },
+    { key: "tabs.settings", idx: 4, Icon: SettingsIcon },
   ];
 
   return (
@@ -75,7 +76,7 @@ export function MobileShell({ children, tab, setTab, coachBusy = false }) {
         display: "grid",
         gridTemplateColumns: "repeat(5, 1fr)",
       }}>
-        {TABS.map(({ key, idx }) => {
+        {TABS.map(({ key, idx, Icon }) => {
           const active = tab === idx;
           const showSpinner = idx === 3 && coachBusy;
           return (
@@ -90,17 +91,42 @@ export function MobileShell({ children, tab, setTab, coachBusy = false }) {
                 padding: "10px 4px 12px",
                 minHeight: 56,
                 fontFamily: "var(--font-sans)",
-                fontSize: 12,
+                fontSize: 11,
                 fontWeight: active ? 600 : 500,
                 color: active ? "var(--ink-1)" : "var(--ink-3)",
-                display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 3,
                 borderRadius: 0,
                 cursor: "pointer",
                 WebkitTapHighlightColor: "transparent",
               }}
             >
-              {t(key)}
-              {showSpinner && <Spinner size={10} thickness={1.5} color="var(--moss)" />}
+              <span style={{
+                position: "relative",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: active ? "var(--ink-1)" : "var(--ink-3)",
+              }}>
+                <Icon size={15} />
+                {showSpinner && (
+                  <span style={{
+                    position: "absolute",
+                    right: -8,
+                    top: -5,
+                    color: "var(--moss)",
+                    background: "var(--bg-elevated)",
+                    borderRadius: 8,
+                    lineHeight: 0,
+                  }}>
+                    <Spinner size={9} thickness={1.4} color="var(--moss)" />
+                  </span>
+                )}
+              </span>
+              <span>{t(key)}</span>
             </button>
           );
         })}

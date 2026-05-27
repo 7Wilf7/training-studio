@@ -9,7 +9,10 @@ import {
 } from "../utils/format";
 import { computeHRZones } from "../utils/profile";
 import { ActivityForm } from "./ActivityForm";
-import { ClockIcon, HeartIcon, PeakIcon, FootIcon, BoltIcon, GaugeIcon, RouteIcon, RunnerIcon } from "./Icons";
+import {
+  ClockIcon, HeartIcon, PeakIcon, FootIcon, BoltIcon, GaugeIcon, RouteIcon, RunnerIcon,
+  PlusIcon, UploadIcon, CheckSquareIcon, SortIcon,
+} from "./Icons";
 
 // Best-effort mapping from a Garmin "Activity Type" string to one of our top-level types.
 // Returns { type, unknown }. When unknown, type is a safe placeholder ("Road Run") so the row
@@ -281,38 +284,73 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
     }
   }
 
+  const actionBtnStyle = {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    padding: isMobile ? "6px 9px" : "6px 12px",
+    fontSize: 12,
+    flexShrink: 0,
+    minHeight: isMobile ? 36 : undefined,
+  };
+
   return (
     <div>
       {/* Compact single-row action bar — short labels so all four (Add /
           Upload / Select / Sort) fit on a 360-wide phone without wrapping. */}
       <div style={{ display: "flex", gap: 6, marginBottom: 14, alignItems: "center" }}>
         <button onClick={() => { setShowAdd(!showAdd); setEditingId(null); }}
-          style={{ ...s.btn, padding: "6px 12px", fontSize: 12, flexShrink: 0 }}>
-          + {t("activities.add_short")}
+          style={{ ...s.btn, ...actionBtnStyle }}>
+          <PlusIcon size={13} />
+          <span>{t("activities.add_short")}</span>
         </button>
         <button onClick={() => fileRef.current.click()}
-          style={{ ...s.btnGhost, padding: "6px 12px", fontSize: 12, flexShrink: 0 }}>
-          {t("activities.upload_short")}
+          style={{ ...s.btnGhost, ...actionBtnStyle }}>
+          <UploadIcon size={13} />
+          <span>{t("activities.upload_short")}</span>
         </button>
         <input ref={fileRef} type="file" accept=".csv" style={{ display: "none" }} onChange={handleFileSelect} />
         <button onClick={toggleSelectMode}
-          style={{ ...(selectMode ? s.btn : s.btnGhost), padding: "6px 12px", fontSize: 12, flexShrink: 0 }}>
-          {selectMode ? `✓ ${selectedIds.size}` : t("activities.select_short")}
+          style={{ ...(selectMode ? s.btn : s.btnGhost), ...actionBtnStyle }}>
+          <CheckSquareIcon size={13} />
+          <span>{selectMode ? selectedIds.size : t("activities.select_short")}</span>
         </button>
-        <select value={sortBy} onChange={e => setSortBy(e.target.value)}
-          style={{
-            marginLeft: "auto",
-            border: "1px solid var(--rule)", borderRadius: 2,
-            padding: "5px 8px", fontSize: 12,
-            background: "var(--bg-elevated)", color: "var(--ink-2)",
-            fontFamily: "var(--font-sans)", minWidth: 0,
-          }}>
-          {SORT_OPTIONS.map(o => (
-            <option key={o.id} value={o.id}>
-              ⇅ {t(`activities.sort.${o.id}`)}
-            </option>
-          ))}
-        </select>
+        <label style={{
+          marginLeft: "auto",
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 6,
+          border: "1px solid var(--rule)",
+          borderRadius: 2,
+          padding: isMobile ? "0 8px" : "0 10px",
+          minHeight: isMobile ? 36 : 32,
+          background: "var(--bg-elevated)",
+          color: "var(--ink-2)",
+          flexShrink: 1,
+          minWidth: 0,
+        }}>
+          <SortIcon size={13} />
+          <select value={sortBy} onChange={e => setSortBy(e.target.value)}
+            aria-label="Sort activities"
+            style={{
+              border: "none",
+              padding: 0,
+              fontSize: 12,
+              background: "transparent",
+              color: "var(--ink-2)",
+              fontFamily: "var(--font-sans)",
+              minWidth: 0,
+              maxWidth: isMobile ? 82 : 160,
+              outline: "none",
+            }}>
+            {SORT_OPTIONS.map(o => (
+              <option key={o.id} value={o.id}>
+                {t(`activities.sort.${o.id}`)}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
       {selectMode && (
