@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { s } from "../styles";
@@ -29,15 +29,115 @@ import { Spinner } from "./Spinner";
 // React doesn't warn about unknown DOM attributes.
 const stripNode = ({ node, ...rest }) => rest; // eslint-disable-line no-unused-vars
 
-const MD_COMPONENTS = {
-  table: (p) => (
-    <div style={{ overflowX: "auto", maxWidth: "100%", margin: "8px 0" }}>
-      <table {...stripNode(p)} style={{
-        borderCollapse: "collapse", fontSize: 12,
-        minWidth: "max-content",
-      }} />
+// Walk a hast subtree and collapse to plain text. Preserves newlines. Used
+// by the mobile table renderer — cells inside coach tables are usually
+// plain text or simple formatting, so flattening is acceptable.
+function hastToText(node) {
+  if (!node) return "";
+  if (node.type === "text") return node.value || "";
+  if (node.tagName === "br") return "\n";
+  if (Array.isArray(node.children)) {
+    return node.children.map(hastToText).join("");
+  }
+  return "";
+}
+
+// Pull thead headers + tbody rows out of a hast `table` node. Skips
+// whitespace nodes that the markdown → hast conversion leaves between
+// elements.
+function extractTable(tableNode) {
+  if (!tableNode || !Array.isArray(tableNode.children)) return { headers: [], rows: [] };
+  const sections = tableNode.children.filter(c => c.type === "element");
+  const thead = sections.find(c => c.tagName === "thead");
+  const tbody = sections.find(c => c.tagName === "tbody");
+
+  const headers = [];
+  if (thead) {
+    const headerRow = (thead.children || []).find(c => c.type === "element" && c.tagName === "tr");
+    if (headerRow) {
+      for (const th of headerRow.children || []) {
+        if (th.type === "element" && th.tagName === "th") {
+          headers.push(hastToText(th).trim());
+        }
+      }
+    }
+  }
+
+  const rows = [];
+  const trSource = tbody || tableNode;
+  for (const tr of trSource.children || []) {
+    if (tr.type !== "element" || tr.tagName !== "tr") continue;
+    const cells = [];
+    for (const cell of tr.children || []) {
+      if (cell.type !== "element") continue;
+      if (cell.tagName === "td" || cell.tagName === "th") {
+        cells.push(hastToText(cell).trim());
+      }
+    }
+    if (cells.length) rows.push(cells);
+  }
+  return { headers, rows };
+}
+
+// Mobile fallback for wide markdown tables. A 7-column weekly-plan table is
+// painful to read via horizontal scroll inside a small chat bubble; instead
+// each row becomes a stacked card, with the first cell as the card title
+// and the remaining cells as "label: value" pairs underneath. Only invoked
+// when the table is genuinely wide (cols >= 3) so narrow tables still fit
+// naturally without the conversion overhead.
+function MobileTableCards({ headers, rows }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, margin: "8px 0" }}>
+      {rows.map((cells, ri) => (
+        <div key={ri} style={{
+          border: "1px solid rgba(128,128,128,0.4)",
+          borderRadius: 6,
+          padding: "8px 10px",
+          fontSize: 12,
+        }}>
+          {cells[0] !== undefined && (
+            <div style={{ fontWeight: 600, marginBottom: 6, fontSize: 13, whiteSpace: "pre-wrap" }}>
+              {headers[0] ? `${headers[0]} ` : ""}{cells[0]}
+            </div>
+          )}
+          {cells.slice(1).map((cell, ci) => {
+            const header = headers[ci + 1];
+            return (
+              <div key={ci} style={{ display: "flex", gap: 6, lineHeight: 1.55, marginBottom: 3 }}>
+                {header && (
+                  <span style={{ fontWeight: 600, flexShrink: 0, opacity: 0.85 }}>{header}:</span>
+                )}
+                <span style={{ whiteSpace: "pre-wrap", flex: 1, minWidth: 0 }}>{cell || "—"}</span>
+              </div>
+            );
+          })}
+        </div>
+      ))}
     </div>
-  ),
+  );
+}
+
+function makeMdComponents(isMobile) {
+  return {
+  table: (p) => {
+    // Mobile + wide table → stacked row cards. Desktop and narrow tables
+    // keep the real <table> wrapped in overflow-x:auto.
+    if (isMobile && p.node) {
+      const { headers, rows } = extractTable(p.node);
+      const colCount = Math.max(headers.length, ...rows.map(r => r.length));
+      if (colCount >= 3) {
+        return <MobileTableCards headers={headers} rows={rows} />;
+      }
+    }
+    return (
+      <div style={{ overflowX: "auto", maxWidth: "100%", margin: "8px 0" }}>
+        <table {...stripNode(p)} style={{
+          borderCollapse: "collapse", fontSize: 12,
+          minWidth: "max-content",
+        }} />
+      </div>
+    );
+  },
   th: (p) => (
     <th {...stripNode(p)} style={{
       border: "1px solid", borderColor: "rgba(128,128,128,0.4)",
@@ -88,7 +188,8 @@ const MD_COMPONENTS = {
       paddingLeft: 10, margin: "6px 0", opacity: 0.9,
     }} />
   ),
-};
+  };
+}
 
 // At this many persisted messages, surface a soft hint suggesting the user
 // distill Memory + clear the chat. Older turns start competing with the
@@ -116,6 +217,10 @@ export function AICoachTab({
   const t = useT();
   const { lang } = useLanguage();
   const isMobile = useIsMobile();
+  // Markdown component map depends on isMobile (mobile swaps wide tables to
+  // stacked row cards). Memoize so we don't rebuild the renderer object on
+  // every chat message render.
+  const mdComponents = useMemo(() => makeMdComponents(isMobile), [isMobile]);
   const [showCoachConfig, setShowCoachConfig] = useState(false);
   const [showCalendarSettings, setShowCalendarSettings] = useState(false);
   const [showPromptPreview, setShowPromptPreview] = useState(false);
@@ -601,7 +706,7 @@ Output the memory text only, nothing else.`;
                     }}>
                       <ReactMarkdown
                         remarkPlugins={[remarkGfm]}
-                        components={MD_COMPONENTS}>
+                        components={mdComponents}>
                         {m.content}
                       </ReactMarkdown>
                     </div>
