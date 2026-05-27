@@ -14,7 +14,7 @@ export function TrainingTab({
   logs, addLog, updateLog, bulkAddLogs,
   filter, setFilter, filterDropdown, setFilterDropdown,
   period, setPeriod, periodDropdown, setPeriodDropdown,
-  setConfirmDelete,
+  setConfirmDelete, profile,
 }) {
   const t = useT();
   const isMobile = useIsMobile();
@@ -198,6 +198,7 @@ export function TrainingTab({
             bulkAddLogs={bulkAddLogs}
             periodLogs={periodLogs}
             setConfirmDelete={setConfirmDelete}
+            profile={profile}
           />
         </>
       )}

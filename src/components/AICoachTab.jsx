@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { s } from "../styles";
 import {
-  DEFAULT_API_ENDPOINT,
+  API_PROVIDERS, DEFAULT_API_PROVIDER,
   COACH_STYLES, OUTPUT_LENGTHS, INTERVENTION_LEVELS,
 } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
@@ -21,16 +21,17 @@ export function AICoachTab({
   coachMemory, setCoachMemory,
   chatMessages,
   now, setConfirmDelete,
-  apiKey, apiModel, onEditProfile,
+  apiProvider, apiKey, claudeApiKey, apiModel, onEditProfile,
   // Lifted from AppShell so they survive tab switches — the user can send
   // a message, tab away, and the spinner badge on the AI Coach tab still
   // shows the model is working.
   chatLoading, extractingForMsgId, sendChat, importToCalendar,
 }) {
-  // DeepSeek is the only supported provider now; endpoint is hardcoded.
-  // (Used here ONLY by the memory-proposal call, which still lives in this
-  // tab because it's only triggered from the Memory modal opened inside it.)
-  const apiEndpoint = DEFAULT_API_ENDPOINT;
+  // Provider-aware endpoint + key for the memory-proposal call, which still
+  // lives in this tab (only triggered from the Memory modal opened inside it).
+  const provider = API_PROVIDERS[apiProvider] || API_PROVIDERS[DEFAULT_API_PROVIDER];
+  const apiEndpoint = provider.endpoint;
+  const activeKey = apiProvider === "claude" ? claudeApiKey : apiKey;
   const t = useT();
   const { lang } = useLanguage();
   const isMobile = useIsMobile();
@@ -91,7 +92,7 @@ export function AICoachTab({
   // Ask the LLM to produce an updated memory from the current chat + existing memory.
   // User reviews the proposal before it replaces the live memory.
   async function proposeMemoryUpdate() {
-    if (!apiKey) {
+    if (!activeKey) {
       alert(t("coach.no_key"));
       return;
     }
@@ -130,7 +131,7 @@ Output the memory text only, nothing else.`;
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-api-key": apiKey,
+          "x-api-key": activeKey,
           "anthropic-version": "2023-06-01",
           "anthropic-dangerous-direct-browser-access": "true",
         },

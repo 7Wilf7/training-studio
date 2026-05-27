@@ -1,13 +1,37 @@
-// Heart-rate-based auto classification.
-// Returns one of: "Easy Run" / "Aerobic Run" / "Tempo Run" / "Interval Run", or "" for trail runs.
-// Recovery Run removed (Wilf rarely lands in <130 zone).
-export function autoClassifyRun(avgHR, isTrail) {
+// Personalised heart-rate-based run-type RECOMMENDATION. Returns one of
+// "Easy Run" / "Aerobic Run" / "Tempo Run", or "" when the average HR is too
+// high to attribute confidently (could be tempo, threshold, or an interval
+// session — we won't auto-pick Interval Run because avg HR alone can't tell).
+//
+//   - low Z2  → Easy Run
+//   - high Z2 → Aerobic Run
+//   - Z3      → Tempo Run
+//   - Z4+     → "" (let the user decide between Tempo / Interval / Threshold)
+//
+// hrZones is the 5-entry array produced by computeHRZones(profile). When it's
+// missing (user hasn't set Resting HR + Max HR yet), we fall back to the
+// previous hard-coded thresholds so the UX still does *something* useful.
+export function recommendRunType(avgHR, isTrail, hrZones) {
   if (isTrail) return "";
   if (!avgHR) return "Easy Run";
-  if (avgHR < 150) return "Easy Run";
-  if (avgHR < 165) return "Aerobic Run";
-  if (avgHR < 175) return "Tempo Run";
-  return "Interval Run";
+
+  if (!hrZones || hrZones.length < 4) {
+    if (avgHR < 150) return "Easy Run";
+    if (avgHR < 165) return "Aerobic Run";
+    if (avgHR < 175) return "Tempo Run";
+    return "";
+  }
+
+  const z2 = hrZones[1];
+  const z3 = hrZones[2];
+  if (!z2 || !z3) return "";
+
+  if (avgHR < z2.low) return "Easy Run";
+  const z2Mid = Math.round((z2.low + z2.high) / 2);
+  if (avgHR < z2Mid)  return "Easy Run";
+  if (avgHR <= z2.high) return "Aerobic Run";
+  if (avgHR <= z3.high) return "Tempo Run";
+  return "";
 }
 
 export function parseTimeToSeconds(t) {

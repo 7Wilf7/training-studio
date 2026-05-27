@@ -2,11 +2,13 @@ import { supabase } from '../supabase';
 import { getCurrentUserId } from './_auth';
 
 const FIELD_MAP = {
-  apiKey:       'api_key',
-  apiModel:     'api_model',
-  coachConfig:  'coach_config',   // jsonb — pass plain object, do NOT JSON.stringify
-  coachMemory:  'coach_memory',
-  lang:         'lang',
+  apiKey:        'api_key',           // DeepSeek key (legacy column kept for that provider)
+  apiModel:      'api_model',
+  apiProvider:   'api_provider',      // 'deepseek' | 'claude'
+  claudeApiKey:  'claude_api_key',    // Anthropic Claude API key
+  coachConfig:   'coach_config',      // jsonb — pass plain object, do NOT JSON.stringify
+  coachMemory:   'coach_memory',
+  lang:          'lang',
 };
 
 function fromRow(row) {

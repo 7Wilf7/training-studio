@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { s } from "../styles";
 import { ACTIVITY_TYPES, RUN_PACE_TYPES, RUN_FLAGS, STRENGTH_SUBS, RUN_GROUP_TYPES } from "../constants";
 import { useT } from "../i18n/LanguageContext";
-import { parseTimeToSeconds, formatPaceFromSec } from "../utils/format";
+import { parseTimeToSeconds, formatPaceFromSec, recommendRunType } from "../utils/format";
 import { useClickOutside } from "../utils/useClickOutside";
 
 // Decompose seconds into {h,m,s} strings for the duration inputs
@@ -66,7 +66,7 @@ function LabeledInput({ label, unit, value, onChange, placeholder, type = "numbe
   );
 }
 
-export function ActivityForm({ mode, initial, onSave, onCancel }) {
+export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
   const t = useT();
   const [form, setForm] = useState(() => initial ? fromLog(initial) : buildEmpty());
   // Snapshot of the form's initial state — used to detect unsaved changes when
@@ -183,20 +183,44 @@ export function ActivityForm({ mode, initial, onSave, onCancel }) {
         </label>
       </div>
 
-      {showPaceTypes && (
-        <div style={{ marginBottom: 10 }}>
-          <div style={{ ...s.label, marginBottom: 6 }}>
-            {t("form.run_type")} {t("form.run_type_required")}
+      {showPaceTypes && (() => {
+        // Personalized suggestion: when the user has entered avg HR, mark the
+        // pace type that falls into the matching zone. Personalized via hrZones
+        // (Karvonen on the user's Resting + Max HR). Falls back to legacy fixed
+        // thresholds when HR zones aren't configured yet. The suggestion is
+        // ADVISORY — we never change `pickedPace` automatically; the user must
+        // click the chip to apply it.
+        const hrNum = parseInt(form.hr, 10);
+        const suggested = hrNum > 0 ? recommendRunType(hrNum, false, hrZones) : "";
+        return (
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ ...s.label, marginBottom: 6 }}>
+              {t("form.run_type")} {t("form.run_type_required")}
+            </div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {RUN_PACE_TYPES.map(sub => {
+                const isSuggested = suggested && sub === suggested && pickedPace !== sub;
+                return (
+                  <button key={sub} type="button"
+                    onClick={() => setPace(pickedPace === sub ? "" : sub)}
+                    title={isSuggested ? t("form.run_type_suggested_hint") : undefined}
+                    style={{
+                      ...s.chip(pickedPace === sub),
+                      ...(isSuggested ? { boxShadow: "0 0 0 1px var(--moss)", color: "var(--moss-deep)" } : {}),
+                    }}>
+                    {t(`enum.subtype.${sub}`)}{isSuggested ? ` · ${t("form.run_type_suggested")}` : ""}
+                  </button>
+                );
+              })}
+            </div>
+            {suggested && (
+              <div style={{ ...s.muted, fontSize: 11, marginTop: 6, lineHeight: 1.5 }}>
+                {t("form.run_type_suggested_explain", { type: t(`enum.subtype.${suggested}`) })}
+              </div>
+            )}
           </div>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {RUN_PACE_TYPES.map(sub => (
-              <button key={sub} type="button"
-                onClick={() => setPace(pickedPace === sub ? "" : sub)}
-                style={s.chip(pickedPace === sub)}>{t(`enum.subtype.${sub}`)}</button>
-            ))}
-          </div>
-        </div>
-      )}
+        );
+      })()}
       {isRun && (
         <div style={{ marginBottom: 12 }}>
           <div style={{ ...s.label, marginBottom: 6 }}>{t("form.flags")}</div>

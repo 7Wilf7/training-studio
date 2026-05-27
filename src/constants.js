@@ -1,14 +1,36 @@
-// DeepSeek's Anthropic-compatible endpoint — fixed (no longer user-configurable).
-// We standardized on DeepSeek for cost/access; the URL stays hidden from the UI.
-export const DEFAULT_API_ENDPOINT = "https://api.deepseek.com/anthropic/v1/messages";
-export const DEEPSEEK_SIGNUP_URL = "https://platform.deepseek.com/";
+// Provider catalog — each entry covers everything the chat client needs:
+// endpoint URL, default model + alternatives shown as chips, signup URL for
+// users without a key, and (where applicable) the auth-header style. Both
+// providers expose an Anthropic-compatible API surface, so the request body
+// shape stays identical and only the URL + key change at the fetch site.
+export const API_PROVIDERS = {
+  deepseek: {
+    id: "deepseek",
+    label: "DeepSeek",
+    endpoint: "https://api.deepseek.com/anthropic/v1/messages",
+    signupUrl: "https://platform.deepseek.com/",
+    defaultModel: "deepseek-v4-pro",
+    models: ["deepseek-v4-pro", "deepseek-v4-flash"],
+  },
+  claude: {
+    id: "claude",
+    label: "Claude (Anthropic)",
+    endpoint: "https://api.anthropic.com/v1/messages",
+    signupUrl: "https://console.anthropic.com/",
+    defaultModel: "claude-sonnet-4-6",
+    models: ["claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
+  },
+};
 
-// Default model and supported presets — DeepSeek only.
-export const DEFAULT_MODEL = "deepseek-v4-pro";
-export const MODEL_PRESETS = [
-  "deepseek-v4-pro",      // higher quality, reasoning-heavy
-  "deepseek-v4-flash",    // faster + cheaper
-];
+export const DEFAULT_API_PROVIDER = "deepseek";
+
+// Legacy exports kept for any imports that still reference them — sourced
+// from the DeepSeek entry so behavior is unchanged for callers that haven't
+// migrated to the provider-aware shape yet.
+export const DEFAULT_API_ENDPOINT = API_PROVIDERS.deepseek.endpoint;
+export const DEEPSEEK_SIGNUP_URL = API_PROVIDERS.deepseek.signupUrl;
+export const DEFAULT_MODEL = API_PROVIDERS.deepseek.defaultModel;
+export const MODEL_PRESETS = API_PROVIDERS.deepseek.models;
 
 // Top-level tabs. PR is absorbed into Races (PersonalRecordsBar sits at the
 // top of the Races view). Calendar is a peer tab — its own month grid +

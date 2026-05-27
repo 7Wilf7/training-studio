@@ -4,9 +4,10 @@ import { RUN_SUBTYPES, RUN_FLAGS, RUN_PACE_TYPES, SORT_OPTIONS, ACTIVITY_TYPES, 
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsNarrow, useIsMobile } from "../hooks/useMediaQuery";
 import {
-  autoClassifyRun, parseTimeToSeconds,
+  recommendRunType, parseTimeToSeconds,
   formatDuration, formatPaceFromSec, formatDateShort, formatWeekdayShort, isDuplicate,
 } from "../utils/format";
+import { computeHRZones } from "../utils/profile";
 import { ActivityForm } from "./ActivityForm";
 import { ClockIcon, HeartIcon, PeakIcon, FootIcon, BoltIcon, GaugeIcon, RouteIcon, RunnerIcon } from "./Icons";
 
@@ -25,7 +26,17 @@ function mapGarminActivityType(at) {
   return { type: "Road Run", unknown: true };
 }
 
-export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs, setConfirmDelete }) {
+export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs, setConfirmDelete, profile }) {
+  // Personalized HR zones derived once per render from the user's profile
+  // (Resting HR + Max HR + selected Karvonen method). Threaded down into
+  // ActivityForm for the chip "recommended" badge, and used inline below for
+  // CSV-import row classification. recommendRunType() handles the null case
+  // by falling back to the legacy hard-coded thresholds.
+  const hrZones = useMemo(
+    () => computeHRZones(profile?.restingHR, profile?.maxHR, profile?.hrZoneMethod),
+    [profile?.restingHR, profile?.maxHR, profile?.hrZoneMethod]
+  );
+
   const t = useT();
   const { lang } = useLanguage();
   // < 1024px: phone OR small tablet. Both can't fit the 8-column metric
@@ -185,7 +196,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
       const isAerobicLike = mapped.type === "Strength" || mapped.type === "HIIT";
       const pace = (!isAerobicLike && distance > 0) ? Math.round(duration / distance) : 0;
       const date = c[iDate].split(" ")[0];
-      const subTypes = mapped.type === "Road Run" ? [autoClassifyRun(hr, false)] : [];
+      const subTypes = mapped.type === "Road Run" ? [recommendRunType(hr, false, hrZones)] : [];
 
       rows.push({
         id: Date.now() + i, date,
@@ -227,7 +238,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
       delete rest._originalType;
       // recompute subTypes if the user remapped a row into Running
       if (rest.type === "Road Run" && (!rest.subTypes || rest.subTypes.length === 0)) {
-        rest.subTypes = [autoClassifyRun(rest.hr, false)];
+        rest.subTypes = [recommendRunType(rest.hr, false, hrZones)];
       }
       return rest;
     });
@@ -416,6 +427,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
           initial={null}
           onSave={handleAddSubmit}
           onCancel={() => setShowAdd(false)}
+          hrZones={hrZones}
         />
       )}
 
@@ -436,6 +448,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
                 initial={l}
                 onSave={(data) => handleEditSubmit(l.id, data)}
                 onCancel={() => setEditingId(null)}
+                hrZones={hrZones}
               />
             );
           }

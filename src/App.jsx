@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import {
-  TABS, DEFAULT_MODEL, DEFAULT_PROFILE, DEFAULT_COACH_CONFIG, DEFAULT_LANG,
-  DEFAULT_API_ENDPOINT, ACTIVITY_TYPES,
+  TABS, DEFAULT_PROFILE, DEFAULT_COACH_CONFIG, DEFAULT_LANG,
+  API_PROVIDERS, DEFAULT_API_PROVIDER, ACTIVITY_TYPES,
 } from "./constants";
 import { isProfileComplete, buildSystemPrompt } from "./utils/profile";
 import { buildDataBlock, parsePlansFromLLM } from "./utils/coachPrompt";
@@ -61,8 +61,13 @@ function AuthedApp({ user, signOut, changePassword }) {
   // ── Supabase-backed (loaded async on mount) ─────────────────────────────
   const [profile, setProfileState] = useState(null);
   const [itraPI, setItraPIState] = useState("");
-  const [apiKey, setApiKeyState] = useState("");
-  const [apiModel, setApiModelState] = useState(DEFAULT_MODEL);
+  // Provider-aware: keys for BOTH providers are persisted so the user can
+  // flip between DeepSeek and Claude without re-pasting. apiProvider drives
+  // which key + endpoint + model preset list the chat client uses.
+  const [apiProvider, setApiProviderState] = useState(DEFAULT_API_PROVIDER);
+  const [apiKey, setApiKeyState] = useState("");          // DeepSeek key
+  const [claudeApiKey, setClaudeApiKeyState] = useState(""); // Claude key
+  const [apiModel, setApiModelState] = useState(API_PROVIDERS[DEFAULT_API_PROVIDER].defaultModel);
   const [coachConfig, setCoachConfigState] = useState(DEFAULT_COACH_CONFIG);
   const [coachMemory, setCoachMemoryState] = useState("");
   const [lang, setLangState] = useState(DEFAULT_LANG);
@@ -93,8 +98,13 @@ function AuthedApp({ user, signOut, changePassword }) {
 
         // Settings — same defensive merge.
         if (settingsData) {
+          const provider = (settingsData.apiProvider && API_PROVIDERS[settingsData.apiProvider])
+            ? settingsData.apiProvider
+            : DEFAULT_API_PROVIDER;
+          setApiProviderState(provider);
           setApiKeyState(settingsData.apiKey ?? "");
-          setApiModelState(settingsData.apiModel || DEFAULT_MODEL);
+          setClaudeApiKeyState(settingsData.claudeApiKey ?? "");
+          setApiModelState(settingsData.apiModel || API_PROVIDERS[provider].defaultModel);
           setCoachConfigState({
             ...DEFAULT_COACH_CONFIG,
             ...(settingsData.coachConfig || {}),
@@ -156,7 +166,9 @@ function AuthedApp({ user, signOut, changePassword }) {
   }
 
   async function updateSettings(patch) {
+    if ("apiProvider" in patch) setApiProviderState(patch.apiProvider);
     if ("apiKey" in patch) setApiKeyState(patch.apiKey);
+    if ("claudeApiKey" in patch) setClaudeApiKeyState(patch.claudeApiKey);
     if ("apiModel" in patch) setApiModelState(patch.apiModel);
     if ("coachConfig" in patch) setCoachConfigState(patch.coachConfig);
     if ("coachMemory" in patch) setCoachMemoryState(patch.coachMemory);
@@ -173,7 +185,9 @@ function AuthedApp({ user, signOut, changePassword }) {
   // setItraPI, setApiKey, ...) so nothing downstream has to change.
   const setProfile = (next) => updateProfile(next);
   const setItraPI = (v) => updateProfile({ itraPI: v });
+  const setApiProvider = (v) => updateSettings({ apiProvider: v });
   const setApiKey = (v) => updateSettings({ apiKey: v });
+  const setClaudeApiKey = (v) => updateSettings({ claudeApiKey: v });
   const setApiModel = (v) => updateSettings({ apiModel: v });
   const setCoachConfig = (v) => updateSettings({ coachConfig: v });
   const setCoachMemory = (v) => updateSettings({ coachMemory: v });
@@ -340,7 +354,9 @@ function AuthedApp({ user, signOut, changePassword }) {
         appendLocalChatMessage={appendLocalChatMessage}
         clearAllChatMessages={clearAllChatMessages}
         dailyNotes={dailyNotes} setDailyTags={setDailyTags}
+        apiProvider={apiProvider} setApiProvider={setApiProvider}
         apiKey={apiKey} setApiKey={setApiKey}
+        claudeApiKey={claudeApiKey} setClaudeApiKey={setClaudeApiKey}
         apiModel={apiModel} setApiModel={setApiModel}
         itraPI={itraPI} setItraPI={setItraPI}
         profile={profile} setProfile={setProfile}
@@ -358,7 +374,10 @@ function AppShell({
   races, addRace, updateRace, deleteRace,
   chatMessages, setChatMessages, appendChatMessage, appendLocalChatMessage, clearAllChatMessages,
   dailyNotes, setDailyTags,
-  apiKey, setApiKey, apiModel, setApiModel,
+  apiProvider, setApiProvider,
+  apiKey, setApiKey,
+  claudeApiKey, setClaudeApiKey,
+  apiModel, setApiModel,
   itraPI, setItraPI, profile, setProfile, coachConfig, setCoachConfig,
   coachMemory, setCoachMemory,
   lang, setLang,
@@ -400,7 +419,9 @@ function AppShell({
   //    emits a transient local-only bubble that won't pollute the DB.
   async function sendChat(userMsg) {
     if (!userMsg || chatLoading) return false;
-    if (!apiKey) {
+    const provider = API_PROVIDERS[apiProvider] || API_PROVIDERS[DEFAULT_API_PROVIDER];
+    const activeKey = apiProvider === "claude" ? claudeApiKey : apiKey;
+    if (!activeKey) {
       appendLocalChatMessage("assistant", t("coach.no_key"));
       return false;
     }
@@ -441,11 +462,11 @@ function AppShell({
     }
 
     try {
-      const resp = await fetch(DEFAULT_API_ENDPOINT, {
+      const resp = await fetch(provider.endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-api-key": apiKey,
+          "x-api-key": activeKey,
           "anthropic-version": "2023-06-01",
           "anthropic-dangerous-direct-browser-access": "true",
         },
@@ -469,7 +490,7 @@ function AppShell({
       }
     } catch (err) {
       console.error("[AI Coach] Network error:", err);
-      appendLocalChatMessage("assistant", t("coach.network_error", { msg: err.message, url: DEFAULT_API_ENDPOINT }));
+      appendLocalChatMessage("assistant", t("coach.network_error", { msg: err.message, url: provider.endpoint }));
     }
     setChatLoading(false);
     return true;
@@ -481,7 +502,9 @@ function AppShell({
   //    index, since indices shift across re-renders) so AICoachTab can
   //    show per-message extraction state.
   async function importToCalendar(assistantContent, msgId) {
-    if (!apiKey) {
+    const provider = API_PROVIDERS[apiProvider] || API_PROVIDERS[DEFAULT_API_PROVIDER];
+    const activeKey = apiProvider === "claude" ? claudeApiKey : apiKey;
+    if (!activeKey) {
       alert(t("coach.no_key"));
       return;
     }
@@ -516,11 +539,11 @@ Rules:
 - Output the JSON array ONLY. No prose, no markdown fences, no comments.`;
 
     try {
-      const resp = await fetch(DEFAULT_API_ENDPOINT, {
+      const resp = await fetch(provider.endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-api-key": apiKey,
+          "x-api-key": activeKey,
           "anthropic-version": "2023-06-01",
           "anthropic-dangerous-direct-browser-access": "true",
         },
@@ -544,7 +567,7 @@ Rules:
       setPlanProposal({ plans });
     } catch (err) {
       console.error("[AI Coach] Plan-extract error:", err);
-      alert(t("coach.network_error", { msg: err.message, url: DEFAULT_API_ENDPOINT }));
+      alert(t("coach.network_error", { msg: err.message, url: provider.endpoint }));
     } finally {
       setExtractingForMsgId(null);
     }
@@ -635,6 +658,7 @@ Rules:
           periodDropdown={periodDropdown}
           setPeriodDropdown={setPeriodDropdown}
           setConfirmDelete={setConfirmDelete}
+          profile={profile}
         />
       )}
       {tab === 1 && (
@@ -671,7 +695,9 @@ Rules:
           appendLocalChatMessage={appendLocalChatMessage}
           now={now}
           setConfirmDelete={setConfirmDelete}
+          apiProvider={apiProvider}
           apiKey={apiKey}
+          claudeApiKey={claudeApiKey}
           apiModel={apiModel}
           onEditProfile={() => setProfileEditorMode("edit")}
           /* Lifted state + handlers — see AppShell top for definitions. */
@@ -703,8 +729,12 @@ Rules:
 
       {showApiSettings && (
         <ApiSettingsModal
+          apiProvider={apiProvider}
+          setApiProvider={setApiProvider}
           apiKey={apiKey}
           setApiKey={setApiKey}
+          claudeApiKey={claudeApiKey}
+          setClaudeApiKey={setClaudeApiKey}
           apiModel={apiModel}
           setApiModel={setApiModel}
           onClose={() => setShowApiSettings(false)}
