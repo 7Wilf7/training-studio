@@ -8,6 +8,17 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
   },
+  build: {
+    // Rolldown 1.0.0 on linux-x64 (CI) tree-shakes way too aggressively —
+    // entire App.jsx + nearly all components get stripped, producing a
+    // half-size bundle with only the React runtime and a few constants.
+    // Same lockfile on Windows (win32-x64 binding) is correct. Until the
+    // Rolldown bug is fixed upstream, force tree-shaking off so CI matches
+    // local. Bundle size goes from ~390KB → ~790KB; cost is acceptable.
+    rolldownOptions: {
+      treeshake: false,
+    },
+  },
   plugins: [
     react(),
     VitePWA({
