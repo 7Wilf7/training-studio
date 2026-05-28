@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "assets:android": "node scripts/make-splash.mjs && capacitor-assets generate --android --iconBackgroundColor \"#1a1a1a\" --splashBackgroundColor \"#f2f1ec\" && node scripts/make-adaptive-foreground.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.4",
@@ -21,6 +22,7 @@
     "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@eslint/js": "^10.0.1",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
