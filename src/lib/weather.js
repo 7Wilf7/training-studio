@@ -443,6 +443,37 @@ export function useWeatherContext({ defaultLng, defaultLat, caiyunToken } = {}) 
   return { ...state, refetch: run };
 }
 
+// Reverse-geocode WGS84 coords → a short, localized place label (district /
+// city level, e.g. "广东省 广州市" or "Guangzhou, Guangdong"). Uses
+// BigDataCloud's free reverse-geocode-client endpoint: no API key, CORS-
+// enabled (works in the browser AND the Capacitor WebView), and localized via
+// localityLanguage. District/city granularity is intentional — street-level is
+// unnecessary for coaching/weather context and more privacy-sensitive.
+// Returns "" on any failure so callers can fall back to manual entry.
+export async function reverseGeocode({ lng, lat, lang = 'zh' }) {
+  if (!Number.isFinite(Number(lng)) || !Number.isFinite(Number(lat))) return '';
+  const localityLanguage = lang === 'en' ? 'en' : 'zh';
+  const url = `https://api.bigdatacloud.net/data/reverse-geocode-client`
+    + `?latitude=${roundCoord(lat)}&longitude=${roundCoord(lng)}&localityLanguage=${localityLanguage}`;
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) return '';
+    const d = await resp.json();
+    const province = (d.principalSubdivision || '').trim();
+    const city = (d.city || d.locality || '').trim();
+    if (!province && !city) return (d.locality || '').trim();
+    if (localityLanguage === 'zh') {
+      // Chinese addresses concatenate without separators; dedupe if the API
+      // returns the same string for both (e.g. municipalities like 上海市).
+      return province === city ? city : `${province}${city}`;
+    }
+    // English: "City, Province"
+    return [city, province].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(', ');
+  } catch {
+    return '';
+  }
+}
+
 // One-line summary string used inside the AI Coach prompt + activity rows.
 // "28°C 体感30°C 湿度65% 多云 风2m/s AQI50". Skips missing fields silently.
 export function formatWeatherShort(w, lang = 'zh') {

@@ -5,8 +5,9 @@ import {
   INJURY_HISTORY, EQUIPMENT_AVAILABLE, DEFAULT_PROFILE, HR_ZONE_METHODS,
 } from "../constants";
 import { calculateAge, isProfileComplete, computeHRZones } from "../utils/profile";
-import { useT } from "../i18n/LanguageContext";
+import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
+import { getCurrentLocation, reverseGeocode } from "../lib/weather";
 import { ModalRoot } from "./ModalRoot";
 
 function toggleArr(arr, id) {
@@ -14,16 +15,54 @@ function toggleArr(arr, id) {
   return a.includes(id) ? a.filter(x => x !== id) : [...a, id];
 }
 
-export function ProfileEditor({ profile, setProfile, onClose, mode = "edit" }) {
+// `defaultLocation` / `setDefaultLocation` are the weather coordinates (stored
+// in user_settings). Location now lives ONLY here in the profile: the address
+// text is profile.city (feeds the AI prompt) and the coords feed weather. The
+// old standalone Settings → Default location entry was removed.
+export function ProfileEditor({ profile, setProfile, onClose, mode = "edit", defaultLocation, setDefaultLocation }) {
   const t = useT();
+  const { lang } = useLanguage();
   const isMobile = useIsMobile();
   // Backfill any missing fields with defaults so the form is robust against older saved data
   const [draft, setDraft] = useState({ ...DEFAULT_PROFILE, ...(profile || {}) });
+  // Local coordinate draft (weather fallback). Saved alongside the profile.
+  const [locDraft, setLocDraft] = useState({
+    lng: defaultLocation?.lng != null ? String(defaultLocation.lng) : "",
+    lat: defaultLocation?.lat != null ? String(defaultLocation.lat) : "",
+  });
+  const [locating, setLocating] = useState(false);
+  const [locError, setLocError] = useState("");
   const age = calculateAge(draft.birthDate);
   const complete = isProfileComplete(draft);
 
+  // GPS → coords → reverse-geocode → fill the address text. One tap, no typing.
+  async function detectLocation() {
+    setLocating(true);
+    setLocError("");
+    try {
+      const loc = await getCurrentLocation({}); // force device path (no defaults)
+      setLocDraft({ lng: String(loc.lng), lat: String(loc.lat) });
+      const addr = await reverseGeocode({ lng: loc.lng, lat: loc.lat, lang });
+      if (addr) setDraft(d => ({ ...d, city: addr }));
+    } catch {
+      setLocError(t("profile.loc_error"));
+    }
+    setLocating(false);
+  }
+
   function save() {
     setProfile(draft);
+    // Persist the weather coordinates too (best-effort; profile is the source
+    // of truth for the address label). Empty coords clear the fallback.
+    if (setDefaultLocation) {
+      const lng = locDraft.lng === "" ? null : Number(locDraft.lng);
+      const lat = locDraft.lat === "" ? null : Number(locDraft.lat);
+      setDefaultLocation({
+        lng: Number.isFinite(lng) ? lng : null,
+        lat: Number.isFinite(lat) ? lat : null,
+        name: (draft.city || "").trim(),
+      });
+    }
     onClose();
   }
 
@@ -83,15 +122,40 @@ export function ProfileEditor({ profile, setProfile, onClose, mode = "edit" }) {
           </div>
         </div>
 
-        {/* City */}
+        {/* Location — address text (feeds the AI prompt) + GPS auto-fill +
+            optional manual coordinates (weather fallback). The single source
+            of location truth; the old Settings → Default location is gone. */}
         <div style={{ marginBottom: 14 }}>
           <div style={{ ...s.label, marginBottom: 4 }}>
             {t("profile.city")} <span style={{ color: "#c0392b" }}>*</span>
             <span style={{ ...s.muted, marginLeft: 6 }}>{t("profile.city_hint")}</span>
           </div>
-          <input type="text" value={draft.city} placeholder={t("profile.city_placeholder")}
-            onChange={e => setDraft({ ...draft, city: e.target.value })}
-            style={{ ...s.input, maxWidth: 280 }} />
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <input type="text" value={draft.city} placeholder={t("profile.city_placeholder")}
+              onChange={e => setDraft({ ...draft, city: e.target.value })}
+              style={{ ...s.input, maxWidth: 280, flex: "1 1 200px" }} />
+            <button type="button" onClick={detectLocation} disabled={locating}
+              style={{ ...s.btnGhost, fontSize: 12, padding: "8px 12px", whiteSpace: "nowrap", opacity: locating ? 0.5 : 1 }}>
+              {locating ? t("profile.loc_detecting") : t("profile.loc_detect")}
+            </button>
+          </div>
+          <div style={{ ...s.muted, fontSize: 11, marginTop: 6, lineHeight: 1.5 }}>{t("profile.loc_detect_hint")}</div>
+          {locError && (
+            <div style={{ color: "var(--danger)", fontSize: 11, marginTop: 6, lineHeight: 1.5 }}>{locError}</div>
+          )}
+
+          {/* Manual coordinates — fallback for when GPS is denied/unavailable
+              (e.g. a desktop). Optional; the address text above is what the
+              coach sees. */}
+          <div style={{ ...s.muted, fontSize: 11, marginTop: 12, marginBottom: 6 }}>{t("profile.loc_manual")}</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, maxWidth: 280 }}>
+            <input type="number" step="0.0001" value={locDraft.lng}
+              onChange={e => setLocDraft({ ...locDraft, lng: e.target.value })}
+              placeholder={t("profile.loc_lng")} style={s.input} />
+            <input type="number" step="0.0001" value={locDraft.lat}
+              onChange={e => setLocDraft({ ...locDraft, lat: e.target.value })}
+              placeholder={t("profile.loc_lat")} style={s.input} />
+          </div>
         </div>
 
         {/* Occupation (with Other free-text) */}

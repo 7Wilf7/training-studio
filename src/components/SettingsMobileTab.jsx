@@ -21,11 +21,9 @@ export function SettingsMobileTab({
   apiKey,
   caiyunApiKey,      // optional — undefined until #9 schema lands
   lang,
-  defaultLocation,
   onOpenProfile,
   onOpenApiSettings,
   onOpenWeatherApiSettings,
-  onOpenLocationSettings,
   onOpenGuide,
   onToggleLang,
   onChangePassword,
@@ -37,15 +35,6 @@ export function SettingsMobileTab({
 
   const displayName = profile?.displayName || "—";
   const email = user?.email || "";
-  // Default-location secondary line — name if labeled, raw coords if not, or
-  // the "not set" warning when nothing is configured.
-  const locName = defaultLocation?.name?.trim();
-  const hasLocCoords = Number.isFinite(defaultLocation?.lng) && Number.isFinite(defaultLocation?.lat);
-  const locSecondary = locName
-    ? t("settings.location_set", { name: locName })
-    : hasLocCoords
-      ? `${defaultLocation.lng}, ${defaultLocation.lat}`
-      : t("settings.location_missing");
 
   async function handleSignOut() {
     if (signingOut) return;
@@ -110,12 +99,6 @@ export function SettingsMobileTab({
         primary={t("settings.language")}
         rightValue={lang === "en" ? "English" : "中文"}
         onClick={onToggleLang}
-      />
-      <Cell
-        primary={t("settings.location")}
-        secondary={locSecondary}
-        secondaryWarn={!locName && !hasLocCoords}
-        onClick={onOpenLocationSettings}
       />
       <Cell
         primary={t("settings.guide")}

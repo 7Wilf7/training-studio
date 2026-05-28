@@ -17,7 +17,6 @@ import { CalendarTab } from "./components/CalendarTab";
 import { ConfirmDeleteModal } from "./components/ConfirmDeleteModal";
 import { ProfileEditor } from "./components/ProfileEditor";
 import { ApiSettingsModal } from "./components/ApiSettingsModal";
-import { LocationSettingsModal } from "./components/LocationSettingsModal";
 import { WeatherApiSettingsModal } from "./components/WeatherApiSettingsModal";
 import { ChangePasswordModal } from "./components/ChangePasswordModal";
 import { CoachPlanImportModal } from "./components/CoachPlanImportModal";
@@ -28,7 +27,7 @@ import { LoginScreen } from "./components/Auth/LoginScreen";
 import { MobileShell } from "./components/MobileShell";
 import { SettingsMobileTab } from "./components/SettingsMobileTab";
 import {
-  BookIcon, CalendarIcon, CloudIcon, CoachIcon, FootIcon, GlobeIcon, KeyIcon, PinIcon, SettingsIcon, TrophyIcon,
+  BookIcon, CalendarIcon, CloudIcon, CoachIcon, FootIcon, GlobeIcon, KeyIcon, SettingsIcon, TrophyIcon,
 } from "./components/Icons";
 import { useAuth } from "./hooks/useAuth";
 import { useIsMobile, useIsNarrow } from "./hooks/useMediaQuery";
@@ -672,7 +671,6 @@ function AppShell({
   const [profileEditorMode, setProfileEditorMode] = useState(null);
   const [showApiSettings, setShowApiSettings] = useState(false);
   const [showWeatherApiSettings, setShowWeatherApiSettings] = useState(false);
-  const [showLocationSettings, setShowLocationSettings] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
 
@@ -1096,7 +1094,9 @@ Rules:
           importToCalendar={importToCalendar}
           /* Shared weather context — preview + status pill consume this. */
           weatherCtx={weatherCtx}
-          onOpenLocationSettings={() => setShowLocationSettings(true)}
+          /* "need location" weather pill now routes to the profile editor,
+             where location (address + coords) lives. */
+          onOpenLocationSettings={() => setProfileEditorMode("edit")}
         />
       )}
     </>
@@ -1116,6 +1116,8 @@ Rules:
           setProfile={setProfile}
           mode={profileEditorMode}
           onClose={() => setProfileEditorMode(null)}
+          defaultLocation={defaultLocation}
+          setDefaultLocation={setDefaultLocation}
         />
       )}
 
@@ -1139,14 +1141,6 @@ Rules:
         <ChangePasswordModal
           changePassword={changePassword}
           onClose={() => setShowChangePassword(false)}
-        />
-      )}
-
-      {showLocationSettings && (
-        <LocationSettingsModal
-          defaultLocation={defaultLocation}
-          setDefaultLocation={setDefaultLocation}
-          onClose={() => setShowLocationSettings(false)}
         />
       )}
 
@@ -1183,11 +1177,9 @@ Rules:
         apiKey={apiKey}
         caiyunApiKey={caiyunApiKey}
         lang={lang}
-        defaultLocation={defaultLocation}
         onOpenProfile={() => setProfileEditorMode("edit")}
         onOpenApiSettings={() => setShowApiSettings(true)}
         onOpenWeatherApiSettings={() => setShowWeatherApiSettings(true)}
-        onOpenLocationSettings={() => setShowLocationSettings(true)}
         onOpenGuide={() => setShowGuide(true)}
         onToggleLang={toggleLang}
         onChangePassword={() => setShowChangePassword(true)}
@@ -1307,10 +1299,6 @@ Rules:
                   background: "var(--warn)", display: "inline-block",
                 }} />
               )}
-            </button>
-            <button onClick={() => setShowLocationSettings(true)} title={t("settings.location")}
-              style={{ ...headerCell, width: 38, padding: 0 }}>
-              <PinIcon size={13} />
             </button>
             <button onClick={() => setShowWeatherApiSettings(true)} title={t("settings.weather_api")}
               style={{ ...headerCell, width: 38, padding: 0 }}>
