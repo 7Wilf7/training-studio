@@ -320,35 +320,38 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
           marginLeft: "auto",
           display: "inline-flex",
           alignItems: "center",
-          // Mobile: drop the leading SortIcon → tighter padding → leaves room
-          // for the longest label ("Duration ↓" / "Distance ↓") + the native
-          // <select> dropdown chevron without truncation. Desktop keeps the
-          // icon since horizontal space isn't an issue.
-          gap: isMobile ? 0 : 6,
+          // Mobile drops SortIcon and uses our own chevron outside the
+          // select. Native select chevrons reserve different widths across
+          // browsers and can overflow this compact control.
+          gap: isMobile ? 4 : 6,
           border: "1px solid var(--rule)",
           borderRadius: 2,
-          padding: isMobile ? "0 6px" : "0 10px",
+          padding: isMobile ? "0 8px 0 8px" : "0 10px",
           minHeight: isMobile ? 36 : 32,
           background: "var(--bg-elevated)",
           color: "var(--ink-2)",
           flexShrink: 0,
           minWidth: 0,
+          overflow: "hidden",
         }}>
           {!isMobile && <SortIcon size={13} />}
           <select value={sortBy} onChange={e => setSortBy(e.target.value)}
             aria-label="Sort activities"
             style={{
               border: "none",
-              // Right padding reserves room for the native <select>'s built-in
-              // dropdown arrow so it doesn't overlap the label text.
-              padding: isMobile ? "0 4px 0 0" : 0,
+              padding: 0,
               fontSize: 12,
               background: "transparent",
               color: "var(--ink-2)",
               fontFamily: "var(--font-sans)",
               minWidth: 0,
-              maxWidth: isMobile ? 120 : 160,
+              maxWidth: isMobile ? 70 : 160,
               outline: "none",
+              // Hide the native chevron; the span below is sized by us.
+              appearance: "none",
+              WebkitAppearance: "none",
+              MozAppearance: "none",
+              cursor: "pointer",
             }}>
             {SORT_OPTIONS.map(o => (
               <option key={o.id} value={o.id}>
@@ -356,6 +359,11 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
               </option>
             ))}
           </select>
+          <span aria-hidden="true" style={{
+            fontSize: 10, color: "var(--ink-3)",
+            lineHeight: 1, pointerEvents: "none",
+            flexShrink: 0,
+          }}>▾</span>
         </label>
       </div>
 
