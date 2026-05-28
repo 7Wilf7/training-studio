@@ -90,7 +90,7 @@ export function CalendarDayModal({
   const headerDate = formatHeaderDate(dateKey, lang);
 
   return (
-    <ModalRoot>
+    <ModalRoot onClose={onClose}>
     <div
       onClick={onClose}
       style={{

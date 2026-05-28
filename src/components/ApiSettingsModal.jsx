@@ -74,7 +74,7 @@ export function ApiSettingsModal({
   const ratio = (dsCost && clCost && dsCost.total > 0) ? (clCost.total / dsCost.total) : null;
 
   return (
-    <ModalRoot>
+    <ModalRoot onClose={onClose}>
     <div onClick={onClose} style={s.modalOverlay(isMobile)}>
       <div onClick={e => e.stopPropagation()}
         style={s.modalCard(isMobile, { maxWidth: 600 })}>

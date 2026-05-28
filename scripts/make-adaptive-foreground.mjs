@@ -1,42 +1,88 @@
-// Generate ic_launcher_foreground.png in every mipmap-* density from
-// resources/icon-only.png. @capacitor/assets v3 doesn't touch these — it only
-// regenerates the legacy ic_launcher.png — so on Android 8+ launchers the
-// adaptive icon foreground would otherwise stay as the default Capacitor robot.
+// Regenerate ALL Android launcher icon rasters from the full-bleed favicon.jpg.
 //
-// Foreground canvas sizes are FIXED by Android (108dp logical, scaled per
-// density). The icon content sits in the inner 66% "safe zone" — outer ~17%
-// may be cropped or used for parallax depending on launcher mask.
+// Why favicon.jpg (not icon-only.png): favicon.jpg is the same artwork the PWA
+// uses — a FULL-BLEED 512×512 square whose edges are the design's own dark
+// (#1A1A1A). icon-only.png, by contrast, is a rounded tile floating on
+// transparent padding. Feeding the rounded-tile-on-transparent into the
+// adaptive foreground (shrunk to the 66% safe zone) on a flat #1A1A1A
+// background produced a visible "ring": textured tile in the middle, flat
+// color around it.
+//
+// The fix: full-bleed the favicon into the foreground so the artwork reaches
+// the canvas edge. Because the favicon's own border pixels ARE #1A1A1A — the
+// same as the adaptive <background> color — there's no seam no matter how the
+// launcher masks/parallaxes it. The white mountain mark sits centered (~60%
+// wide), so it survives the launcher's inner-66% crop with margin. Net result
+// matches the PWA icon: edge-to-edge artwork, no ring.
+//
+// @capacitor/assets is NOT run in CI (the release workflow only does
+// `cap sync`), so the committed PNGs here are authoritative — this script
+// writes them directly.
 import sharp from 'sharp';
 import { mkdir } from 'node:fs/promises';
 
-const SRC = 'resources/icon-only.png';
+const SRC = 'public/favicon.jpg';
+const BG = { r: 0x1a, g: 0x1a, b: 0x1a, alpha: 1 };   // matches ic_launcher_background.xml
 
-// canvas px = 108 * density_multiplier; icon content fills ~66% of canvas
-const DENSITIES = [
-  { name: 'mdpi',    canvas: 108 },
-  { name: 'hdpi',    canvas: 162 },
-  { name: 'xhdpi',   canvas: 216 },
-  { name: 'xxhdpi',  canvas: 324 },
-  { name: 'xxxhdpi', canvas: 432 },
+// Adaptive foreground layers (Android 8+). 108dp logical canvas scaled per
+// density. We fill the WHOLE canvas (full bleed) — the launcher applies the
+// mask + safe-zone crop itself.
+const FOREGROUND = [
+  { name: 'mdpi',    px: 108 },
+  { name: 'hdpi',    px: 162 },
+  { name: 'xhdpi',   px: 216 },
+  { name: 'xxhdpi',  px: 324 },
+  { name: 'xxxhdpi', px: 432 },
 ];
 
-const SAFE_ZONE_RATIO = 0.66;
+// Legacy square + round launcher icons (Android <8). Full bleed; the round
+// variant gets a circular alpha mask.
+const LEGACY = [
+  { name: 'ldpi',    px: 36 },
+  { name: 'mdpi',    px: 48 },
+  { name: 'hdpi',    px: 72 },
+  { name: 'xhdpi',   px: 96 },
+  { name: 'xxhdpi',  px: 144 },
+  { name: 'xxxhdpi', px: 192 },
+];
 
-for (const { name, canvas } of DENSITIES) {
+async function squarePng(px) {
+  return sharp(SRC)
+    .resize(px, px, { fit: 'cover' })
+    .flatten({ background: BG })
+    .png()
+    .toBuffer();
+}
+
+function circleMaskSvg(px) {
+  const r = px / 2;
+  return Buffer.from(
+    `<svg width="${px}" height="${px}"><circle cx="${r}" cy="${r}" r="${r}" fill="#fff"/></svg>`
+  );
+}
+
+for (const { name, px } of FOREGROUND) {
+  const dir = `android/app/src/main/res/mipmap-${name}`;
+  await mkdir(dir, { recursive: true });
+  const buf = await squarePng(px);
+  await sharp(buf).toFile(`${dir}/ic_launcher_foreground.png`);
+  console.log(`✓ ${dir}/ic_launcher_foreground.png  ${px}x${px} (full-bleed)`);
+}
+
+for (const { name, px } of LEGACY) {
   const dir = `android/app/src/main/res/mipmap-${name}`;
   await mkdir(dir, { recursive: true });
 
-  const iconSize = Math.round(canvas * SAFE_ZONE_RATIO);
-  const iconBuf = await sharp(SRC)
-    .resize(iconSize, iconSize, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
-    .toBuffer();
+  const sq = await squarePng(px);
+  await sharp(sq).toFile(`${dir}/ic_launcher.png`);
+  console.log(`✓ ${dir}/ic_launcher.png  ${px}x${px}`);
 
-  await sharp({
-    create: { width: canvas, height: canvas, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
-  })
-    .composite([{ input: iconBuf, gravity: 'center' }])
+  const round = await sharp(sq)
+    .composite([{ input: circleMaskSvg(px), blend: 'dest-in' }])
     .png()
-    .toFile(`${dir}/ic_launcher_foreground.png`);
-
-  console.log(`✓ ${dir}/ic_launcher_foreground.png  ${canvas}x${canvas} (icon ${iconSize}x${iconSize})`);
+    .toBuffer();
+  await sharp(round).toFile(`${dir}/ic_launcher_round.png`);
+  console.log(`✓ ${dir}/ic_launcher_round.png  ${px}x${px} (circle)`);
 }
+
+console.log('Done. Adaptive <background> stays #1A1A1A (matches favicon edges).');

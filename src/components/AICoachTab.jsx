@@ -538,7 +538,7 @@ Output the memory text only, nothing else.`;
           and the legacy 2-col desktop "memory + prompt" layout is dropped
           (one at a time is fine — these aren't compared often). */}
       {showCoachConfig && (
-        <ModalRoot>
+        <ModalRoot onClose={() => setShowCoachConfig(false)}>
           <div style={s.modalOverlay(isMobile)} onClick={() => setShowCoachConfig(false)}>
             <div style={s.modalCard(isMobile, { maxWidth: 600 })} onClick={(e) => e.stopPropagation()}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
@@ -591,7 +591,7 @@ Output the memory text only, nothing else.`;
           sub-page. Pulled out of the Coach Config modal because it's a display
           preference, not a behavior knob about the coach itself. */}
       {showCalendarSettings && (
-        <ModalRoot>
+        <ModalRoot onClose={() => setShowCalendarSettings(false)}>
           <div style={s.modalOverlay(isMobile)} onClick={() => setShowCalendarSettings(false)}>
             <div style={s.modalCard(isMobile, { maxWidth: 600 })} onClick={(e) => e.stopPropagation()}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
@@ -615,7 +615,7 @@ Output the memory text only, nothing else.`;
       )}
 
       {showMemory && (
-        <ModalRoot>
+        <ModalRoot onClose={() => setShowMemory(false)}>
           <div style={s.modalOverlay(isMobile)} onClick={() => setShowMemory(false)}>
             <div style={s.modalCard(isMobile, { maxWidth: 600 })} onClick={(e) => e.stopPropagation()}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
@@ -677,7 +677,7 @@ Output the memory text only, nothing else.`;
       )}
 
       {showPromptPreview && (
-        <ModalRoot>
+        <ModalRoot onClose={() => setShowPromptPreview(false)}>
           <div style={s.modalOverlay(isMobile)} onClick={() => setShowPromptPreview(false)}>
             <div style={s.modalCard(isMobile, { maxWidth: 680 })} onClick={(e) => e.stopPropagation()}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8, gap: 8 }}>
@@ -1002,7 +1002,7 @@ Output the memory text only, nothing else.`;
           plus shortcuts to Edit Profile and Clear Chat. Mobile keeps its
           in-place settings sub-page (rendered above when inSettings). */}
       {showCoachHub && !isMobile && (
-        <ModalRoot>
+        <ModalRoot onClose={() => setShowCoachHub(false)}>
           <div style={s.modalOverlay(false)} onClick={() => setShowCoachHub(false)}>
             <div onClick={(e) => e.stopPropagation()}
               style={{

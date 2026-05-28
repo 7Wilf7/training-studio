@@ -77,7 +77,7 @@ export function LocationSettingsModal({
   }
 
   return (
-    <ModalRoot>
+    <ModalRoot onClose={onClose}>
       <div onClick={onClose} style={s.modalOverlay(isMobile)}>
         <div onClick={(e) => e.stopPropagation()} style={s.modalCard(isMobile, { maxWidth: 520 })}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>

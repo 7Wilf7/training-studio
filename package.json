@@ -1,14 +1,14 @@
 {
   "name": "training-studio",
   "private": true,
-  "version": "0.2.1",
+  "version": "0.3.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "assets:android": "node scripts/make-splash.mjs && capacitor-assets generate --android --iconBackgroundColor \"#1a1a1a\" --splashBackgroundColor \"#f2f1ec\" && node scripts/make-adaptive-foreground.mjs"
+    "assets:android": "node scripts/make-adaptive-foreground.mjs && node scripts/make-splash.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.4",

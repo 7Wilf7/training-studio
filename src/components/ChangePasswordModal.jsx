@@ -61,7 +61,7 @@ export function ChangePasswordModal({ changePassword, onClose }) {
   // overlay layer (backdrop-filter) so the page behind reads as "frozen" —
   // emphasizes that the modal is the only thing the user can interact with.
   return (
-    <ModalRoot>
+    <ModalRoot onClose={onClose}>
       <div onClick={onClose} style={{
         position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
         background: "rgba(20,20,19,0.45)",

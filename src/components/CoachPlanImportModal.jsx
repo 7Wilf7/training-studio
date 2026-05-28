@@ -65,7 +65,7 @@ export function CoachPlanImportModal({ plans, onConfirm, onCancel }) {
   }
 
   return (
-    <ModalRoot>
+    <ModalRoot onClose={onCancel}>
     <div
       onClick={onCancel}
       style={{ ...s.modalOverlay(isMobile), background: "rgba(20,20,19,0.55)" }}

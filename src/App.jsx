@@ -1,4 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { Capacitor } from "@capacitor/core";
+import { App as CapacitorApp } from "@capacitor/app";
+import { popBackHandler, hasBackHandler } from "./lib/backStack";
 import {
   TABS, DEFAULT_PROFILE, DEFAULT_COACH_CONFIG, DEFAULT_LANG,
   API_PROVIDERS, DEFAULT_API_PROVIDER, getEndpointUrl, ACTIVITY_TYPES,
@@ -32,18 +35,36 @@ import * as db from "./lib/db";
 import { getCurrentLocation, captureSnapshotForWorkout, useWeatherContext } from "./lib/weather";
 import { postJson } from "./lib/apiFetch";
 
+// Boot screen — deliberately mirrors the native Android splash (logo +
+// "Training Studio" on the cream background) so on the APK the native splash →
+// web-view handoff is visually seamless: the user sees ONE logo screen, then
+// the app. No spinner / "Loading…" text — the logo IS the loading state.
+// Logo + text use vmin units so they track the stretched native splash size.
 function LoadingScreen() {
   return (
     <div style={{
       position: "fixed", inset: 0,
       display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-      gap: 10, background: "var(--bg)",
+      gap: "5vmin", background: "var(--bg)",
     }}>
-      <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--moss)", fontWeight: 600 }}>
-        ▲ Training Studio
-      </div>
-      <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-        Loading…
+      <img
+        src="/favicon.jpg"
+        alt="Training Studio"
+        style={{
+          width: "min(30vmin, 150px)",
+          height: "min(30vmin, 150px)",
+          borderRadius: "22%",
+          objectFit: "cover",
+        }}
+      />
+      <div style={{
+        fontFamily: "var(--font-sans)",
+        fontSize: "min(5.2vmin, 24px)",
+        fontWeight: 500,
+        color: "var(--ink-1)",
+        letterSpacing: "0.02em",
+      }}>
+        Training Studio
       </div>
     </div>
   );
@@ -900,6 +921,40 @@ Rules:
     }
     document.addEventListener("click", onClick);
     return () => document.removeEventListener("click", onClick);
+  }, []);
+
+  // ── Android hardware/gesture back button ────────────────────────────────
+  // Without a handler, Capacitor's default finishes the Activity → the app
+  // drops to the home screen and the next launch re-runs the splash (feels
+  // like the app was killed). We register a single listener and decide in JS:
+  //   1. A modal is open  → close the top-most one (back stack).
+  //   2. Not on Training  → go back to the Training tab.
+  //   3. Otherwise (root) → minimizeApp() — same as pressing Home, so the
+  //      Activity stays alive in the background and returning is instant
+  //      (no splash). We never call exitApp(), so the app stays resident.
+  // tabRef keeps the latest tab without re-registering the native listener.
+  // Updated in an effect (not during render) to satisfy the refs-in-render lint.
+  const tabRef = useRef(tab);
+  useEffect(() => { tabRef.current = tab; });
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform?.()) return;
+    let handle;
+    const sub = CapacitorApp.addListener("backButton", () => {
+      // 1. Close the most-recently-opened overlay, if any.
+      if (hasBackHandler()) {
+        popBackHandler();
+        return;
+      }
+      // 2. Non-root tab → return to Training (tab 0).
+      if (tabRef.current !== 0) {
+        setTab(0);
+        return;
+      }
+      // 3. Root → drop to background instead of exiting (stays resident).
+      CapacitorApp.minimizeApp();
+    });
+    sub.then(h => { handle = h; });
+    return () => { if (handle) handle.remove(); };
   }, []);
 
   function executeDelete() {

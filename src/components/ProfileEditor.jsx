@@ -28,7 +28,7 @@ export function ProfileEditor({ profile, setProfile, onClose, mode = "edit" }) {
   }
 
   return (
-    <ModalRoot>
+    <ModalRoot onClose={mode === "setup" ? undefined : onClose}>
     <div onClick={mode === "setup" ? undefined : onClose}
       style={s.modalOverlay(isMobile)}>
       <div onClick={e => e.stopPropagation()}

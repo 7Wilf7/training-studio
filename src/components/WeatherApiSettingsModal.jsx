@@ -50,7 +50,7 @@ export function WeatherApiSettingsModal({ caiyunApiKey, setCaiyunApiKey, onClose
   const hasKey = !!caiyunApiKey;
 
   return (
-    <ModalRoot>
+    <ModalRoot onClose={onClose}>
       <div onClick={onClose} style={{
         position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
         background: "rgba(20,20,19,0.45)",
