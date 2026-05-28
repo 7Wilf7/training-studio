@@ -19,7 +19,11 @@ android {
         // versionCode for every release (Android requires monotonic increase
         // to allow upgrades). versionName tracks our package.json semver.
         // CI overrides both via env vars; local builds use these defaults.
-        versionCode (System.getenv("ANDROID_VERSION_CODE") ?: "1").toInteger()
+        // Use Integer.parseInt instead of `.toInteger()` chained off a
+        // parens expression — Groovy parses `versionCode (X).foo()` as
+        // `versionCode(X).foo()`, calling .foo() on the setter's return
+        // value (null) instead of on X. Cost a CI run to find this out.
+        versionCode Integer.parseInt(System.getenv("ANDROID_VERSION_CODE") ?: "1")
         versionName System.getenv("ANDROID_VERSION_NAME") ?: "0.1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
