@@ -45,7 +45,12 @@ function raceToForm(race) {
   };
 }
 
-export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete, itraPI, setItraPI }) {
+export function RacesTab({
+  races, addRace, updateRace, now, setConfirmDelete, itraPI, setItraPI,
+  // Lifted to AppShell so the chosen top/sub tab survives switching away to
+  // another top-level tab and back (within one app session).
+  mobileTopTab, setMobileTopTab, mobileSubTab, setMobileSubTab,
+}) {
   const t = useT();
   const isNarrow = useIsNarrow();
   const isMobile = useIsMobile();
@@ -66,8 +71,8 @@ export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete, it
   // History — replacing the desktop's stacked sections. Defaults match the
   // user's primary use case: opening the Races bottom-nav tab lands on
   // upcoming target races.
-  const [mobileTopTab, setMobileTopTab] = useState("races"); // "pr" | "races"
-  const [mobileSubTab, setMobileSubTab] = useState("target"); // "target" | "history"
+  // mobileTopTab ("pr" | "races") + mobileSubTab ("target" | "history") are
+  // now passed in from AppShell (lifted for cross-tab session memory).
 
   function startAdd(mode) {
     if (editingRaceId) cancelEdit();

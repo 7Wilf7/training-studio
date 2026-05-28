@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { s, CONTOUR_BG } from "../styles";
 import { getPeriodRange } from "../utils/period";
 import { RUN_GROUP_TYPES } from "../constants";
@@ -50,11 +50,12 @@ export function TrainingTab({
   logs, addLog, updateLog, bulkAddLogs,
   filter, setFilter, filterDropdown, setFilterDropdown,
   period, setPeriod, periodDropdown, setPeriodDropdown,
+  view, setView,            // "activities" | "charts" — lifted to AppShell so
+                            // it survives top-tab switches within a session
   setConfirmDelete, profile,
 }) {
   const t = useT();
   const isMobile = useIsMobile();
-  const [view, setView] = useState("activities"); // "activities" | "charts"
 
   // Activities / Charts must NOT include planned workouts (those live on the
   // Calendar tab only). Planned rows would inflate PR / weekly km / averages.
@@ -98,8 +99,12 @@ export function TrainingTab({
     marginLeft: -14, marginRight: -14, paddingLeft: 14, paddingRight: 14,
     marginTop: "calc(-1 * max(env(safe-area-inset-top), 14px))",
     paddingTop: "calc(max(env(safe-area-inset-top), 14px) + 4px)",
-    paddingBottom: 4,
-    marginBottom: 6,
+    // The last child (period selector / view toggle) already carries its own
+    // 14px marginBottom. Keep the header's own bottom spacing minimal (2px) so
+    // the gap to the stats card matches the 16px rhythm everywhere else —
+    // previously 14 + 4 + 6 = 24px made this one gap visibly wider.
+    paddingBottom: 2,
+    marginBottom: 0,
   } : {
     position: "sticky", top: 0, zIndex: 10,
     background: "var(--bg)",

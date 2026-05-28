@@ -658,6 +658,15 @@ function AppShell({
   const [periodDropdown, setPeriodDropdown] = useState(null);
   const [filterDropdown, setFilterDropdown] = useState(null);
   const [globalFilter, setGlobalFilter] = useState(INITIAL_FILTER);
+  // Per-session sub-view memory — lifted out of the tab components so it
+  // survives switching top tabs (those components unmount when their tab is
+  // inactive). Resets only on a full app restart (fresh state on mount).
+  //   trainingView — Activities / Charts toggle inside Training
+  //   racesTopTab  — Races / PR top tabs inside Races (mobile)
+  //   racesSubTab  — Target / History sub-tabs inside Races
+  const [trainingView, setTrainingView] = useState("activities");
+  const [racesTopTab, setRacesTopTab] = useState("races");
+  const [racesSubTab, setRacesSubTab] = useState("target");
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [now, setNow] = useState(new Date());
   const [profileEditorMode, setProfileEditorMode] = useState(null);
@@ -1026,6 +1035,8 @@ Rules:
           setPeriod={setPeriod}
           periodDropdown={periodDropdown}
           setPeriodDropdown={setPeriodDropdown}
+          view={trainingView}
+          setView={setTrainingView}
           setConfirmDelete={setConfirmDelete}
           profile={profile}
         />
@@ -1053,6 +1064,10 @@ Rules:
           setConfirmDelete={setConfirmDelete}
           itraPI={itraPI}
           setItraPI={setItraPI}
+          mobileTopTab={racesTopTab}
+          setMobileTopTab={setRacesTopTab}
+          mobileSubTab={racesSubTab}
+          setMobileSubTab={setRacesSubTab}
         />
       )}
       {tab === 3 && (
