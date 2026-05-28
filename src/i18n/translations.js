@@ -32,6 +32,9 @@ const dict = {
   "settings.language":       { en: "Language",              zh: "语言" },
   "settings.guide":          { en: "User guide",            zh: "使用手册" },
   "settings.guide_desc":     { en: "Opens in a new tab",    zh: "新标签页打开" },
+  "settings.location":       { en: "Default location",      zh: "默认位置" },
+  "settings.location_set":   { en: "{name}",                zh: "{name}" },
+  "settings.location_missing": { en: "Not set — weather uses device GPS only", zh: "未设置 · 仅使用设备 GPS" },
   "settings.change_password": { en: "Change password",      zh: "修改密码" },
   "coach.profile_hub_hint":  { en: "Edit your runner profile — age, training history, HR zones, injury notes. These feed into every coach reply.", zh: "编辑你的跑者资料 —— 年龄、训练履历、心率区间、伤病备注。这些都会进入教练的每次回复。" },
   "coach.clear_hub_hint":    { en: "Permanently delete the entire chat history. Distill anything worth keeping into Memory first.", zh: "永久删除整个对话历史。先把值得留下的内容固化进长期记忆。" },
@@ -67,6 +70,22 @@ const dict = {
   "common.undo_warning":  { en: "This action cannot be undone.", zh: "此操作无法撤销。" },
   "common.no_data":       { en: "—",                        zh: "—" },
   "common.optional":      { en: "(optional)",               zh: "（可选）" },
+  "common.saving":        { en: "Saving…",                  zh: "保存中…" },
+
+  // ===== Default location (weather) =====
+  "location.title":          { en: "Default location for weather", zh: "天气默认位置" },
+  "location.hint":           { en: "Used when the device can't provide GPS — e.g. APK without location permission, or browser denied access. Caiyun expects WGS84 (international) coordinates, same as Google Maps. Tip: open Google Maps / Baidu Maps, long-press your spot, copy lng,lat.", zh: "当设备无法提供 GPS 时使用 —— 比如 APK 未授权位置权限、浏览器拒绝授权。彩云天气需要 WGS84 国际坐标（跟 Google Maps 一致）。Tip: 打开 Google 地图/百度地图，长按位置即可复制经纬度。" },
+  "location.name":           { en: "Label",                  zh: "地点名" },
+  "location.name_placeholder": { en: "Shanghai",             zh: "上海" },
+  "location.lng":            { en: "Longitude",              zh: "经度" },
+  "location.lat":            { en: "Latitude",               zh: "纬度" },
+  "location.detect_button":  { en: "Detect from this device", zh: "从当前设备获取" },
+  "location.detecting":      { en: "Detecting…",             zh: "获取中…" },
+  "location.error_bad_lng":  { en: "Longitude must be between -180 and 180.", zh: "经度必须在 -180 到 180 之间。" },
+  "location.error_bad_lat":  { en: "Latitude must be between -90 and 90.", zh: "纬度必须在 -90 到 90 之间。" },
+  "location.error_no_permission": { en: "Could not get your location. Make sure location permission is granted and try again, or enter coordinates manually.", zh: "无法获取位置。请确认已授予位置权限后重试，或手动输入经纬度。" },
+  "location.error_generic":  { en: "Detection failed: {msg}", zh: "获取失败：{msg}" },
+  "location.error_save":     { en: "Failed to save: {msg}",  zh: "保存失败：{msg}" },
 
   // ===== Confirm delete modal =====
   "confirm.title.log":    { en: "Delete this activity?",    zh: "删除这条活动记录？" },
@@ -409,6 +428,9 @@ const dict = {
   "form.alert_body":          { en: "Select at least one body part for Strength.", zh: "力量训练请至少选择一个身体部位。" },
   "form.alert_run":           { en: "Pick a run type (Easy / Aerobic / Tempo / Interval).", zh: "请选择跑步类型（轻松/有氧/节奏/间歇）。" },
   "form.discard_confirm":     { en: "Discard unsaved changes?", zh: "放弃未保存的修改？" },
+  "form.started_at":          { en: "Start time",           zh: "开始时间" },
+  "form.started_at_optional": { en: "optional",             zh: "可选" },
+  "form.started_at_hint":     { en: "Leave empty to use weather at the moment you save. Fill in to fetch historical/forecast weather for that timestamp.", zh: "留空：使用保存时的天气；填写：抓取对应时间点的历史/预报天气。" },
 
   // ===== Races tab =====
   "races.tab_pr":             { en: "Personal Records",     zh: "个人纪录" },

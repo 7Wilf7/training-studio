@@ -12,8 +12,10 @@ export function SettingsMobileTab({
   profile,
   apiKey,
   lang,
+  defaultLocation,
   onOpenProfile,
   onOpenApiSettings,
+  onOpenLocationSettings,
   onToggleLang,
   onChangePassword,
   signOut,
@@ -21,6 +23,15 @@ export function SettingsMobileTab({
   const t = useT();
   const displayName = profile?.displayName || "—";
   const email = user?.email || "";
+  // Default-location secondary line — name if labeled, raw coords if not, or
+  // the "not set" warning when nothing is configured.
+  const locName = defaultLocation?.name?.trim();
+  const hasLocCoords = Number.isFinite(defaultLocation?.lng) && Number.isFinite(defaultLocation?.lat);
+  const locSecondary = locName
+    ? t("settings.location_set", { name: locName })
+    : hasLocCoords
+      ? `${defaultLocation.lng}, ${defaultLocation.lat}`
+      : t("settings.location_missing");
 
   return (
     <div style={{ paddingBottom: 8 }}>
@@ -53,6 +64,12 @@ export function SettingsMobileTab({
         primary={t("settings.language")}
         rightValue={lang === "en" ? "English" : "中文"}
         onClick={onToggleLang}
+      />
+      <Cell
+        primary={t("settings.location")}
+        secondary={locSecondary}
+        secondaryWarn={!locName && !hasLocCoords}
+        onClick={onOpenLocationSettings}
       />
       <Cell
         primary={t("settings.guide")}

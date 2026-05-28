@@ -9,6 +9,11 @@ const FIELD_MAP = {
   coachConfig:   'coach_config',      // jsonb — pass plain object, do NOT JSON.stringify
   coachMemory:   'coach_memory',
   lang:          'lang',
+  // Default coordinates for weather fetch when device geolocation is unavailable
+  // (denied, offline, or APK without permission). WGS84, same as Caiyun expects.
+  defaultLng:    'default_lng',
+  defaultLat:    'default_lat',
+  defaultLocationName: 'default_location_name',  // friendly label, e.g. "上海"
 };
 
 function fromRow(row) {
@@ -19,6 +24,9 @@ function fromRow(row) {
     if (camel === 'coachConfig') {
       // jsonb arrives as a parsed object; null when unset.
       out[camel] = (v && typeof v === 'object') ? v : null;
+    } else if (camel === 'defaultLng' || camel === 'defaultLat') {
+      // numeric → keep as number, null when unset (caller checks isFinite).
+      out[camel] = (v === null || v === undefined) ? null : Number(v);
     } else {
       out[camel] = v ?? '';
     }

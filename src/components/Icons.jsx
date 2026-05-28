@@ -219,3 +219,14 @@ export function GlobeIcon({ size = 13 }) {
     </svg>
   );
 }
+
+// Map pin — used by the desktop header to open the default-location modal
+// and (optionally) by any future "this is your location" inline chip.
+export function PinIcon({ size = 13 }) {
+  return (
+    <svg {...baseProps(size)}>
+      <path d="M7 1.5 C4.5 1.5 2.8 3.3 2.8 5.5 C2.8 8.5 7 12.5 7 12.5 C7 12.5 11.2 8.5 11.2 5.5 C11.2 3.3 9.5 1.5 7 1.5 Z" />
+      <circle cx="7" cy="5.5" r="1.4" />
+    </svg>
+  );
+}

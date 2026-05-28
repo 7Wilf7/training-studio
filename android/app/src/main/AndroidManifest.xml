@@ -32,4 +32,12 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Location: required by @capacitor/geolocation for the weather feature.
+         FINE = street-level GPS, COARSE = network-based fallback. Both are
+         requested at runtime by the plugin (user gets a system dialog the
+         first time the weather code calls Geolocation.getCurrentPosition).
+         If the user denies, the app falls back to the default coords set
+         in Settings → Default location. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 </manifest>

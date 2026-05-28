@@ -1,10 +1,47 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import pkg from './package.json' with { type: 'json' }
 
+// Dev-only middleware that mounts /api/weather locally so `npm run dev` can
+// hit the Caiyun proxy the same way the Vercel deploy does. Reads
+// CAIYUN_TOKEN from .env.local (Vite's loadEnv only picks up VITE_* by
+// default; we pass '' as the third arg to get every var). The shipped
+// serverless function lives at api/weather.js — this just wires the same
+// behavior into the dev server so we don't have to install the vercel CLI.
+function devWeatherProxy(env) {
+  return {
+    name: 'dev-weather-proxy',
+    configureServer(server) {
+      server.middlewares.use('/api/weather', async (req, res) => {
+        // Inject the token from .env.local into process.env so the imported
+        // handler sees it the same way Vercel's runtime would.
+        if (env.CAIYUN_TOKEN && !process.env.CAIYUN_TOKEN) {
+          process.env.CAIYUN_TOKEN = env.CAIYUN_TOKEN;
+        }
+        const { default: handler } = await server.ssrLoadModule('/api/weather.js');
+        // Parse the querystring into req.query the way Vercel does — the
+        // raw Node req object doesn't have .query, only .url.
+        const url = new URL(req.url, 'http://localhost');
+        req.query = Object.fromEntries(url.searchParams.entries());
+        const wrappedRes = Object.assign(res, {
+          status(code) { res.statusCode = code; return wrappedRes; },
+          json(body) { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(body)); return wrappedRes; },
+          send(body) { res.end(body); return wrappedRes; },
+        });
+        await handler(req, wrappedRes);
+      });
+    },
+  };
+}
+
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  // Load every non-prefixed env var (third arg ''), so CAIYUN_TOKEN — which
+  // is intentionally NOT prefixed with VITE_ to keep it server-side — is
+  // available to the dev middleware. Production: Vercel injects it directly.
+  const env = loadEnv(mode, process.cwd(), '');
+  return {
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
   },
@@ -21,6 +58,7 @@ export default defineConfig({
   },
   plugins: [
     react(),
+    devWeatherProxy(env),
     VitePWA({
       // autoUpdate: SW reloads itself when a new build is deployed, no
       // "click to refresh" toast needed. Trade-off: a user mid-session may
@@ -102,4 +140,5 @@ export default defineConfig({
       },
     }),
   ],
+  };
 })

@@ -23,9 +23,21 @@ function normalizeDate(d) {
   return parsed.toISOString().slice(0, 10);
 }
 
+// Local time → "YYYY-MM-DDTHH:MM" for <input type="datetime-local">.
+// Built piece-by-piece because toISOString() returns UTC and would shift
+// by the GMT offset.
+function formatLocalDateTimeForInput(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
 function buildEmpty() {
   return {
     date: "",
+    startedAtLocal: "",     // optional — "YYYY-MM-DDTHH:MM" from datetime-local input
     type: "Road Run",
     subTypes: ["Easy Run"],
     distance: "",
@@ -42,6 +54,7 @@ function fromLog(log) {
   const d = splitDuration(log.duration || 0);
   return {
     date: normalizeDate(log.date),
+    startedAtLocal: formatLocalDateTimeForInput(log.startedAt),
     type: log.type || "Road Run",
     subTypes: Array.isArray(log.subTypes) ? log.subTypes : [],
     distance: log.distance ? String(log.distance) : "",
@@ -146,8 +159,19 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
     const dist = showDistance ? (parseFloat(form.distance) || 0) : 0;
     const pace = (dist > 0 && isRun) ? Math.round(dur / dist) : 0;
 
+    // Optional started_at — convert local "YYYY-MM-DDTHH:MM" to ISO. The DAL
+    // stores it as timestamptz; null means "we don't know when this started".
+    // The weather snapshot path in addLog uses this to decide realtime vs
+    // historical fetch.
+    let startedAt = null;
+    if (form.startedAtLocal) {
+      const d = new Date(form.startedAtLocal);
+      if (!isNaN(d.getTime())) startedAt = d.toISOString();
+    }
+
     onSave({
       date: form.date,
+      startedAt,
       type: form.type,
       subTypes: form.subTypes,
       distance: dist,
@@ -180,6 +204,23 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
           <select value={form.type} onChange={e => changeType(e.target.value)} style={s.input}>
             {ACTIVITY_TYPES.map(at => <option key={at} value={at}>{t(`enum.activity.${at}`)}</option>)}
           </select>
+        </label>
+      </div>
+
+      {/* Optional start time. Empty = "weather snapshot at the moment of save".
+          Filled = past timestamp → historical weather at that time; future =
+          forecast for that day. The hint is short so it doesn't dominate the
+          form for users who never need this field. */}
+      <div style={{ marginBottom: 12 }}>
+        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <span style={{ fontSize: 11, color: "#666", fontWeight: 500 }}>
+            {t("form.started_at")}
+            <span style={{ color: "#aaa", fontWeight: 400 }}> ({t("form.started_at_optional")})</span>
+          </span>
+          <input type="datetime-local" value={form.startedAtLocal}
+            onChange={e => setForm({ ...form, startedAtLocal: e.target.value })}
+            style={s.input} />
+          <span style={{ fontSize: 11, color: "#999", lineHeight: 1.4 }}>{t("form.started_at_hint")}</span>
         </label>
       </div>
 

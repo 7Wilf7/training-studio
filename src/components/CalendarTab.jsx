@@ -1,9 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { s } from "../styles";
 import { RUN_GROUP_TYPES, TYPE_COLOR } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { CalendarDayModal } from "./CalendarDayModal";
+import {
+  getCurrentLocation, fetchDailyForecasts, fetchRealtimeSnapshot, skyconMeta,
+} from "../lib/weather";
 
 // YYYY-MM-DD in LOCAL time. workouts.date is stored as 'YYYY-MM-DD' (no time
 // component). Using toISOString() would shift the date by the timezone offset
@@ -43,12 +46,57 @@ const MONTH_KEYS = [
   "period.month_short.9",  "period.month_short.10", "period.month_short.11",
 ];
 
-export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNotes, setDailyTags }) {
+export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNotes, setDailyTags, defaultLocation }) {
   const t = useT();
   const { lang } = useLanguage();
   const isMobile = useIsMobile();
   const today = new Date();
   const todayKey = dateKey(today);
+
+  // Daily forecast (next 7 days) + today's realtime — both keyed by
+  // YYYY-MM-DD so DayCell can do a single Map.get(key). Fetched once on
+  // mount; refetched only when the user navigates between viewed months
+  // is unnecessary (forecast doesn't extend past 7 days). Failures are
+  // silent — the calendar stays usable, weather chips just don't render.
+  const [forecastByDate, setForecastByDate] = useState(new Map());
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const loc = await getCurrentLocation({
+          defaultLng: defaultLocation?.lng,
+          defaultLat: defaultLocation?.lat,
+        });
+        const [forecasts, realtime] = await Promise.all([
+          fetchDailyForecasts({ lng: loc.lng, lat: loc.lat }),
+          fetchRealtimeSnapshot({ lng: loc.lng, lat: loc.lat }).catch(() => null),
+        ]);
+        if (cancelled) return;
+        const m = new Map();
+        for (const f of forecasts) m.set(f.date, f);
+        // Realtime supersedes the today-forecast entry — we have actual
+        // observed weather, not a prediction. Keep the same shape so
+        // DayCell doesn't care which source it came from.
+        if (realtime) {
+          m.set(todayKey, {
+            date: todayKey,
+            tempC: realtime.tempC,
+            apparentC: realtime.apparentC,
+            humidity: realtime.humidity,
+            skycon: realtime.skycon,
+            windSpeed: realtime.windSpeed,
+            aqi: realtime.aqi,
+            _source: 'realtime',
+          });
+        }
+        setForecastByDate(m);
+      } catch {
+        // Location unavailable / proxy down / quota — leave forecastByDate
+        // empty, calendar renders without weather chips.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [defaultLocation?.lng, defaultLocation?.lat, todayKey]);
 
   // Default view = current month. < > buttons step by ±1 month; "Today" resets.
   const [view, setViewMonth] = useState(() => ({
@@ -175,6 +223,20 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
           const dayLogs = byDate.get(key) || [];
           const dayNote = notesByDate.get(key) || null;
 
+          // Weather chip data: today + future cells get forecast/realtime
+          // straight from the Map; past cells fall back to the first
+          // workout's snapshot (if logged). Cells outside the current
+          // month suppress weather to keep the calendar from feeling
+          // cluttered around the edges.
+          let dayWeather = null;
+          if (inMonth) {
+            if (key >= todayKey) {
+              dayWeather = forecastByDate.get(key) || null;
+            } else if (dayLogs.length > 0) {
+              dayWeather = dayLogs.find(l => l.weather)?.weather || null;
+            }
+          }
+
           return (
             <DayCell
               key={key + "-" + i}
@@ -185,6 +247,7 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
               isWeekend={isWeekend}
               logs={dayLogs}
               note={dayNote}
+              weather={dayWeather}
               colIdx={i % 7}
               rowIdx={Math.floor(i / 7)}
               onClick={() => setOpenDay({ dateKey: key, isFuture })}
@@ -195,19 +258,28 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
         })}
       </div>
 
-      {openDay && (
-        <CalendarDayModal
-          dateKey={openDay.dateKey}
-          isFuture={openDay.isFuture}
-          logs={byDate.get(openDay.dateKey) || []}
-          note={notesByDate.get(openDay.dateKey) || null}
-          onClose={() => setOpenDay(null)}
-          addLog={addLog}
-          updateLog={updateLog}
-          setConfirmDelete={setConfirmDelete}
-          setDailyTags={setDailyTags}
-        />
-      )}
+      {openDay && (() => {
+        // Same lookup the cell did. For past days we fall back to the
+        // first logged workout's weather; today/future use the forecast.
+        const k = openDay.dateKey;
+        const modalWeather = k >= todayKey
+          ? (forecastByDate.get(k) || null)
+          : ((byDate.get(k) || []).find(l => l.weather)?.weather || null);
+        return (
+          <CalendarDayModal
+            dateKey={openDay.dateKey}
+            isFuture={openDay.isFuture}
+            logs={byDate.get(openDay.dateKey) || []}
+            note={notesByDate.get(openDay.dateKey) || null}
+            weather={modalWeather}
+            onClose={() => setOpenDay(null)}
+            addLog={addLog}
+            updateLog={updateLog}
+            setConfirmDelete={setConfirmDelete}
+            setDailyTags={setDailyTags}
+          />
+        );
+      })()}
     </div>
   );
 }
@@ -222,9 +294,16 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
 //     bottom-right corner — independent from workouts.
 //   - Empty + past/today → "Rest" placeholder; empty + future → "+ plan" hint
 // ─────────────────────────────────────────────────────────────────────────
-function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, colIdx, rowIdx, onClick, t, isMobile }) {
+function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, weather, colIdx, rowIdx, onClick, t, isMobile }) {
   const dayTags = note ? (note.tags || []) : [];
   const hasContent = logs.length > 0;
+  // Pre-compute the bits we need for the chip — the temperature varies by
+  // source (realtime/historical → tempC, daily forecast → tempAvgC), and
+  // the skycon icon falls back gracefully when unmapped.
+  const wTemp = weather ? (weather.tempC ?? weather.tempAvgC) : null;
+  const wTempMax = weather?.tempMaxC;
+  const wTempMin = weather?.tempMinC;
+  const wIcon = weather?.skycon ? skyconMeta(weather.skycon).icon : "";
 
   const cellBg = isToday
     ? "var(--moss-bg)"
@@ -309,6 +388,21 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, colI
             background: "var(--moss-deep)",
           }} title={dayTags.map(tag => t(`calendar.tag.${tag}`)).join(", ")} />
         )}
+
+        {/* Weather chip — top-right of the cell, tiny because mobile cells
+            are ~50px wide. Shows just the icon + temp; full numbers live
+            in the day modal. */}
+        {weather && Number.isFinite(wTemp) && (
+          <span style={{
+            position: "absolute", top: 3, right: 3,
+            fontFamily: "var(--font-mono)", fontSize: 9,
+            color: "var(--ink-3)", lineHeight: 1,
+            display: "inline-flex", alignItems: "center", gap: 1,
+          }}>
+            {wIcon && <span style={{ fontSize: 9 }}>{wIcon}</span>}
+            <span>{Math.round(wTemp)}°</span>
+          </span>
+        )}
       </div>
     );
   }
@@ -330,7 +424,9 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, colI
         overflow: "hidden",
       }}
     >
-      {/* Day number */}
+      {/* Day number + (right side) weather chip. Daily forecast shows
+          max/min range when both available; realtime shows the single
+          temp. Past days with logged weather show the logged temp. */}
       <div style={{
         display: "flex", alignItems: "center", gap: 6,
         marginBottom: 8,
@@ -348,6 +444,19 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, colI
           borderRadius: isToday ? 3 : 0,
           lineHeight: 1,
         }}>{date.getDate()}</span>
+        {weather && (Number.isFinite(wTemp) || Number.isFinite(wTempMax)) && (
+          <span style={{
+            marginLeft: "auto",
+            fontFamily: "var(--font-mono)", fontSize: 11,
+            color: "var(--ink-3)", fontVariantNumeric: "tabular-nums",
+            display: "inline-flex", alignItems: "center", gap: 4,
+          }}>
+            {wIcon && <span style={{ fontSize: 12 }}>{wIcon}</span>}
+            {Number.isFinite(wTempMax) && Number.isFinite(wTempMin)
+              ? <span>{Math.round(wTempMax)}°/{Math.round(wTempMin)}°</span>
+              : <span>{Math.round(wTemp)}°</span>}
+          </span>
+        )}
       </div>
 
       {/* Workouts */}

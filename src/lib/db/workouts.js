@@ -16,6 +16,8 @@ const FIELD_MAP = {
   gap:        'gap',
   isPlanned:  'is_planned',    // boolean — future plan (true) vs completed (false)
   tags:       'tags',          // text[]  — e.g. ['massage', 'stretching']
+  startedAt:  'started_at',    // timestamptz — when the activity actually started; null = unknown
+  weather:    'weather',       // jsonb — snapshot from src/lib/weather.js (tempC, apparentC, humidity, skycon, ...)
   createdAt:  'created_at',
   updatedAt:  'updated_at',
 };
@@ -27,6 +29,12 @@ const FIELD_MAP = {
 //               set by the write functions, not exposed to the form layer yet.
 const ARRAY_FIELDS = new Set(['subTypes', 'tags']);
 const BOOL_FIELDS  = new Set(['isPlanned']);
+// JSONB columns: arrive as parsed objects, write through unchanged. Do NOT
+// run them through the "missing → '' default" path in fromRow.
+const JSON_FIELDS  = new Set(['weather']);
+// Timestamps come back as ISO strings; preserve null when unset rather than
+// coercing to '' (the down-stream weather logic does Number(new Date(v))).
+const TS_FIELDS    = new Set(['startedAt']);
 const WRITE_SKIP = new Set(['createdAt', 'updatedAt']);  // server-managed
 
 // Columns the DB stores as INTEGER. Garmin CSV occasionally hands us floats
@@ -45,6 +53,12 @@ function fromRow(row) {
     } else if (BOOL_FIELDS.has(camel)) {
       // null → false (DEFAULT FALSE on the column, but defend anyway).
       out[camel] = v === true;
+    } else if (JSON_FIELDS.has(camel)) {
+      // jsonb → already an object; null when unset.
+      out[camel] = (v && typeof v === 'object') ? v : null;
+    } else if (TS_FIELDS.has(camel)) {
+      // timestamptz → ISO string, or null. Keep null so callers can branch.
+      out[camel] = v || null;
     } else {
       out[camel] = v ?? (typeof v === 'number' ? 0 : '');
     }

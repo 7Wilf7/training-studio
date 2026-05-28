@@ -14,6 +14,7 @@ import { CalendarTab } from "./components/CalendarTab";
 import { ConfirmDeleteModal } from "./components/ConfirmDeleteModal";
 import { ProfileEditor } from "./components/ProfileEditor";
 import { ApiSettingsModal } from "./components/ApiSettingsModal";
+import { LocationSettingsModal } from "./components/LocationSettingsModal";
 import { ChangePasswordModal } from "./components/ChangePasswordModal";
 import { CoachPlanImportModal } from "./components/CoachPlanImportModal";
 import { Spinner } from "./components/Spinner";
@@ -22,11 +23,12 @@ import { LoginScreen } from "./components/Auth/LoginScreen";
 import { MobileShell } from "./components/MobileShell";
 import { SettingsMobileTab } from "./components/SettingsMobileTab";
 import {
-  BookIcon, CalendarIcon, CoachIcon, FootIcon, GlobeIcon, KeyIcon, SettingsIcon, TrophyIcon,
+  BookIcon, CalendarIcon, CoachIcon, FootIcon, GlobeIcon, KeyIcon, PinIcon, SettingsIcon, TrophyIcon,
 } from "./components/Icons";
 import { useAuth } from "./hooks/useAuth";
 import { useIsMobile, useIsNarrow } from "./hooks/useMediaQuery";
 import * as db from "./lib/db";
+import { getCurrentLocation, captureSnapshotForWorkout, fetchRealtimeSnapshot, fetchDailyForecasts } from "./lib/weather";
 
 function LoadingScreen() {
   return (
@@ -87,6 +89,10 @@ function AuthedApp({ user, signOut, changePassword }) {
   const [coachConfig, setCoachConfigState] = useState(DEFAULT_COACH_CONFIG);
   const [coachMemory, setCoachMemoryState] = useState("");
   const [lang, setLangState] = useState(DEFAULT_LANG);
+  // Default location for weather fetch — used when navigator.geolocation /
+  // Capacitor Geolocation are unavailable or denied. lng/lat are WGS84 numbers
+  // (or null when unset), name is a free-text label the user types in.
+  const [defaultLocation, setDefaultLocationState] = useState({ lng: null, lat: null, name: "" });
   const [dataLoading, setDataLoading] = useState(true);
 
   // Fetch profile + user_settings + workouts once the auth'd user is known.
@@ -131,6 +137,11 @@ function AuthedApp({ user, signOut, changePassword }) {
           });
           setCoachMemoryState(settingsData.coachMemory ?? "");
           setLangState(settingsData.lang || DEFAULT_LANG);
+          setDefaultLocationState({
+            lng: Number.isFinite(settingsData.defaultLng) ? settingsData.defaultLng : null,
+            lat: Number.isFinite(settingsData.defaultLat) ? settingsData.defaultLat : null,
+            name: settingsData.defaultLocationName || "",
+          });
         }
 
         // Workouts — list already sorted date desc, created_at desc by the DAL.
@@ -212,12 +223,58 @@ function AuthedApp({ user, signOut, changePassword }) {
   const setCoachConfig = (v) => updateSettings({ coachConfig: v });
   const setCoachMemory = (v) => updateSettings({ coachMemory: v });
   const setLang = (v) => updateSettings({ lang: v });
+  // Patch the local state immediately AND persist to Supabase. updateSettings()
+  // doesn't refresh local state, so we do it eagerly here so the Settings page
+  // and any new addLog calls see the latest values without waiting for a
+  // refetch.
+  async function setDefaultLocation(patch) {
+    const next = { ...defaultLocation, ...patch };
+    setDefaultLocationState(next);
+    await updateSettings({
+      defaultLng: next.lng,
+      defaultLat: next.lat,
+      defaultLocationName: next.name,
+    });
+  }
+
+  // Best-effort weather capture before writing. Never blocks the save —
+  // location denied / network down / Caiyun quota exhausted all silently
+  // skip the snapshot, and the workout still gets created without weather.
+  // Skipped entirely for Garmin CSV imports (source !== 'manual') because
+  // those rows were recorded long ago at unknown locations; the calendar
+  // entry from "import to calendar" likewise skips because it's a plan, not
+  // a logged session — the calendar tab pulls forecast weather on demand.
+  async function captureWeatherForNewWorkout(workoutData) {
+    try {
+      const loc = await getCurrentLocation({
+        defaultLng: defaultLocation.lng,
+        defaultLat: defaultLocation.lat,
+      });
+      const snap = await captureSnapshotForWorkout({
+        date: workoutData.date,
+        startedAt: workoutData.startedAt,
+        lng: loc.lng,
+        lat: loc.lat,
+      });
+      return snap;
+    } catch (err) {
+      console.warn('[weather] snapshot skipped:', err.message);
+      return null;
+    }
+  }
 
   // ── Workout mutations (3.3c). Server-side write completes before local
   // state updates so we pick up the server-generated id / created_at. ──────
   async function addLog(workoutData, { source = "manual" } = {}) {
     try {
-      const created = await db.workouts.createWorkout(workoutData, { source });
+      let payload = workoutData;
+      // Only manually-entered activities get a fresh weather snapshot; bulk
+      // CSV imports and calendar plans use the source branches that skip it.
+      if (source === "manual" && !workoutData.weather && !workoutData.isPlanned) {
+        const weather = await captureWeatherForNewWorkout(workoutData);
+        if (weather) payload = { ...workoutData, weather };
+      }
+      const created = await db.workouts.createWorkout(payload, { source });
       setLogs(prev => [created, ...prev]);
       return created;
     } catch (err) {
@@ -384,6 +441,7 @@ function AuthedApp({ user, signOut, changePassword }) {
         coachConfig={coachConfig} setCoachConfig={setCoachConfig}
         coachMemory={coachMemory} setCoachMemory={setCoachMemory}
         lang={lang} setLang={setLang}
+        defaultLocation={defaultLocation} setDefaultLocation={setDefaultLocation}
       />
     </LanguageProvider>
   );
@@ -403,6 +461,7 @@ function AppShell({
   itraPI, setItraPI, profile, setProfile, coachConfig, setCoachConfig,
   coachMemory, setCoachMemory,
   lang, setLang,
+  defaultLocation, setDefaultLocation,
 }) {
   const t = useT();
   const isMobile = useIsMobile();
@@ -416,6 +475,7 @@ function AppShell({
   const [now, setNow] = useState(new Date());
   const [profileEditorMode, setProfileEditorMode] = useState(null);
   const [showApiSettings, setShowApiSettings] = useState(false);
+  const [showLocationSettings, setShowLocationSettings] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
 
   // ── AI Coach in-flight state, lifted from AICoachTab so it SURVIVES tab
@@ -467,9 +527,38 @@ function AppShell({
       console.warn("[AI Coach] refreshLogs failed, using cached state:", err);
     }
 
+    // Best-effort weather fetch for the prompt — silently skipped if location
+    // permission is denied / proxy is down / quota is exhausted. Adds zero
+    // latency in the failure path because both calls run in parallel with
+    // each other (and the fetch as a whole runs after the logs refresh so it
+    // doesn't slow down the chat turn when location isn't available).
+    let currentWeather = null;
+    let forecastByDate = null;
+    try {
+      const loc = await getCurrentLocation({
+        defaultLng: defaultLocation.lng,
+        defaultLat: defaultLocation.lat,
+      });
+      const [rt, daily] = await Promise.all([
+        fetchRealtimeSnapshot({ lng: loc.lng, lat: loc.lat }).catch(() => null),
+        fetchDailyForecasts({ lng: loc.lng, lat: loc.lat }).catch(() => null),
+      ]);
+      currentWeather = rt;
+      if (daily) {
+        const m = new Map();
+        for (const f of daily) m.set(f.date, f);
+        forecastByDate = m;
+      }
+    } catch {
+      // No location → no weather context, that's fine.
+    }
+
     const systemPrompt = buildSystemPrompt({
       profile, coachConfig, coachMemory,
-      dataBlock: buildDataBlock({ logs: freshLogs, races, now, lang: "en" }),
+      dataBlock: buildDataBlock({
+        logs: freshLogs, races, now, lang: "en",
+        currentWeather, forecastByDate,
+      }),
       lang: "en",
     });
 
@@ -731,6 +820,7 @@ Rules:
           setConfirmDelete={setConfirmDelete}
           dailyNotes={dailyNotes}
           setDailyTags={setDailyTags}
+          defaultLocation={defaultLocation}
         />
       )}
       {tab === 2 && (
@@ -813,6 +903,14 @@ Rules:
         />
       )}
 
+      {showLocationSettings && (
+        <LocationSettingsModal
+          defaultLocation={defaultLocation}
+          setDefaultLocation={setDefaultLocation}
+          onClose={() => setShowLocationSettings(false)}
+        />
+      )}
+
       {/* Plan-import review modal — rendered at AppShell level (not inside
           AICoachTab) so the user sees it pop up even if they walked away
           from the AI Coach tab while the extraction was running. */}
@@ -835,8 +933,10 @@ Rules:
         profile={profile}
         apiKey={apiKey}
         lang={lang}
+        defaultLocation={defaultLocation}
         onOpenProfile={() => setProfileEditorMode("edit")}
         onOpenApiSettings={() => setShowApiSettings(true)}
+        onOpenLocationSettings={() => setShowLocationSettings(true)}
         onToggleLang={toggleLang}
         onChangePassword={() => setShowChangePassword(true)}
         signOut={signOut}
@@ -956,6 +1056,10 @@ Rules:
                   background: "var(--warn)", display: "inline-block",
                 }} />
               )}
+            </button>
+            <button onClick={() => setShowLocationSettings(true)} title={t("settings.location")}
+              style={{ ...headerCell, width: 38, padding: 0 }}>
+              <PinIcon size={13} />
             </button>
             <button onClick={() => setProfileEditorMode("edit")} title={t("header.profile")}
               style={{ ...headerCell, width: 38, padding: 0 }}>

@@ -12,21 +12,91 @@ import { formatDuration, formatPaceFromSec } from "./format";
 export const DATA_LABELS = {
   en: {
     currentDate: "[Current Date]",
+    currentWeather: "[Current Weather]",
     targets: "[Target Races]",
     history: "[Race History]",
-    recent: "[Recent Activities (last 10)]",
+    recent: "[Recent Activities (last 10) — each line ends with the weather at training time when available]",
+    upcoming: "[Upcoming Planned Sessions — next 7 days, with daily forecast]",
     none: "None",
     priorityTag: (p) => `[Priority ${p}]`,
   },
   zh: {
     currentDate: "[当前时间]",
+    currentWeather: "[当前天气]",
     targets: "[目标比赛]",
     history: "[比赛历史]",
-    recent: "[近期活动（最近 10 条）]",
+    recent: "[近期活动（最近 10 条）—— 行尾附该次训练当时的天气（如有）]",
+    upcoming: "[未来计划训练 —— 接下来 7 天，附当日天气预报]",
     none: "无",
     priorityTag: (p) => `[${p} 级目标]`,
   },
 };
+
+// Render a stored weather snapshot (from workouts.weather) as a compact
+// inline suffix for the [Recent Activities] block. Skipped entirely when
+// the snapshot is missing — older rows recorded before weather support
+// landed shouldn't get a "weather: null" line that confuses the LLM.
+function formatWeatherInline(w) {
+  if (!w) return "";
+  const t = w.tempC ?? w.tempAvgC;
+  const apparent = w.apparentC ?? w.apparentAvgC;
+  const parts = [];
+  if (Number.isFinite(t)) parts.push(`${t}°C`);
+  if (Number.isFinite(apparent) && Math.abs(apparent - t) >= 1) {
+    parts.push(`feels ${apparent}°C`);
+  }
+  if (Number.isFinite(w.humidity)) {
+    const rh = w.humidity > 1 ? Math.round(w.humidity) : Math.round(w.humidity * 100);
+    parts.push(`RH${rh}%`);
+  }
+  if (w.skycon) parts.push(w.skycon);
+  if (Number.isFinite(w.windSpeed) && w.windSpeed >= 1) {
+    parts.push(`wind ${w.windSpeed}km/h`);
+  }
+  if (Number.isFinite(w.aqi) && w.aqi > 0) parts.push(`AQI${w.aqi}`);
+  return parts.length ? ` weather: ${parts.join(", ")}` : "";
+}
+
+// Realtime — slightly more verbose than the inline form because this is
+// the headline "what's it like right now" block.
+function formatCurrentWeather(w) {
+  if (!w) return "";
+  const t = w.tempC;
+  const apparent = w.apparentC;
+  const parts = [];
+  if (Number.isFinite(t)) parts.push(`${t}°C`);
+  if (Number.isFinite(apparent) && Math.abs(apparent - t) >= 1) {
+    parts.push(`feels ${apparent}°C`);
+  }
+  if (Number.isFinite(w.humidity)) {
+    const rh = w.humidity > 1 ? Math.round(w.humidity) : Math.round(w.humidity * 100);
+    parts.push(`humidity ${rh}%`);
+  }
+  if (w.skycon) parts.push(w.skycon);
+  if (Number.isFinite(w.windSpeed)) parts.push(`wind ${w.windSpeed}km/h`);
+  if (Number.isFinite(w.aqi)) parts.push(`AQI ${w.aqi}`);
+  return parts.join(", ");
+}
+
+// Forecast for a future training day.
+function formatDailyForecast(f) {
+  if (!f) return "";
+  const parts = [];
+  if (Number.isFinite(f.tempMaxC) && Number.isFinite(f.tempMinC)) {
+    parts.push(`${f.tempMinC}–${f.tempMaxC}°C`);
+  } else if (Number.isFinite(f.tempAvgC)) {
+    parts.push(`avg ${f.tempAvgC}°C`);
+  }
+  if (Number.isFinite(f.apparentAvgC)) parts.push(`feels ~${f.apparentAvgC}°C`);
+  if (Number.isFinite(f.humidity)) {
+    const rh = f.humidity > 1 ? Math.round(f.humidity) : Math.round(f.humidity * 100);
+    parts.push(`humidity ${rh}%`);
+  }
+  if (f.skycon) parts.push(f.skycon);
+  if (Number.isFinite(f.windSpeed)) parts.push(`wind ${f.windSpeed}km/h`);
+  if (Number.isFinite(f.aqi)) parts.push(`AQI ${f.aqi}`);
+  return parts.join(", ");
+}
 
 // Local time formatter — explicit per-component build, locale-independent.
 // `now.toISOString()` returns UTC, which mislabels as GMT+8 in the data
@@ -127,29 +197,61 @@ export function formatHistoryRace(r) {
 // Dynamic data block injected into the system prompt. Only the section titles
 // are localized; values (dates, race names, numbers) stay verbatim across
 // languages so the model receives consistent data.
-export function buildDataBlock({ logs, races, now, lang = "en" }) {
+// `currentWeather` is the realtime snapshot (or null when unavailable).
+// `forecastByDate` is a Map<YYYY-MM-DD, dailyForecast> covering the next 7
+// days; used to attach daily weather to planned sessions in that window.
+export function buildDataBlock({ logs, races, now, lang = "en", currentWeather = null, forecastByDate = null }) {
   const D = DATA_LABELS[lang] || DATA_LABELS.en;
   // Strip future-planned entries — the LLM should only see what actually
   // happened. Planned rows would otherwise be misread as "recent activity"
   // (e.g. "your last run was 10km" when the user hasn't run it yet).
+  // Each line ends with the weather snapshot when one was captured at
+  // training time. Skip the suffix entirely when missing — never write
+  // "weather: null", that confuses the LLM more than it helps.
   const recentLogs = logs.filter(l => !l.isPlanned).slice(0, 10).map(l =>
-    `${l.date} ${l.type}${l.subTypes.length ? "(" + l.subTypes.join(",") + ")" : ""} ${l.distance > 0 ? l.distance + "km" : ""} ${formatDuration(l.duration)}${l.pace ? " " + formatPaceFromSec(l.pace) + "/km" : ""}${l.hr ? " HR" + l.hr : ""}${l.maxHR ? "/" + l.maxHR : ""}${l.ascent ? " +" + l.ascent + "m" : ""}${l.cadence ? " cad" + l.cadence : ""}${l.aerobicTE ? " TE" + l.aerobicTE : ""}${l.gap ? " GAP" + formatPaceFromSec(l.gap) : ""}`
+    `${l.date} ${l.type}${l.subTypes.length ? "(" + l.subTypes.join(",") + ")" : ""} ${l.distance > 0 ? l.distance + "km" : ""} ${formatDuration(l.duration)}${l.pace ? " " + formatPaceFromSec(l.pace) + "/km" : ""}${l.hr ? " HR" + l.hr : ""}${l.maxHR ? "/" + l.maxHR : ""}${l.ascent ? " +" + l.ascent + "m" : ""}${l.cadence ? " cad" + l.cadence : ""}${l.aerobicTE ? " TE" + l.aerobicTE : ""}${l.gap ? " GAP" + formatPaceFromSec(l.gap) : ""}${formatWeatherInline(l.weather)}`
   ).join("\n");
   const targetRaces = races.filter(r => r.isTarget)
     .map(r => formatTargetRace(r, lang)).join("\n") || D.none;
   const historyRaces = selectHistoryForPrompt(races.filter(r => !r.isTarget))
     .map(formatHistoryRace).join("\n") || D.none;
 
-  return `${D.currentDate} ${formatLocalDateTime(now)} GMT+8
+  // Upcoming planned sessions in the next 7 days, each annotated with the
+  // daily forecast for that date. Skipped entirely when no forecast or no
+  // planned sessions in range — keeps the prompt clean when neither applies.
+  const todayMs = now.getTime();
+  const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+  const upcomingPlans = forecastByDate
+    ? logs.filter(l => l.isPlanned && l.date)
+        .filter(l => {
+          const planMs = new Date(`${l.date}T00:00:00`).getTime();
+          return planMs >= todayMs - 12 * 60 * 60 * 1000 && planMs <= todayMs + sevenDaysMs;
+        })
+        .sort((a, b) => (a.date || "").localeCompare(b.date || ""))
+        .map(l => {
+          const f = forecastByDate.get(l.date);
+          const planParts = [`${l.date} ${l.type}${l.subTypes.length ? "(" + l.subTypes.join(",") + ")" : ""}`];
+          if (l.distance > 0) planParts.push(`${l.distance}km`);
+          if (l.duration > 0) planParts.push(formatDuration(l.duration));
+          const fcStr = formatDailyForecast(f);
+          if (fcStr) planParts.push(`forecast: ${fcStr}`);
+          return planParts.join(" ");
+        })
+        .join("\n")
+    : "";
 
-${D.targets}
-${targetRaces}
-
-${D.history}
-${historyRaces}
-
-${D.recent}
-${recentLogs}`;
+  // Build the sections list, skipping any that have no content so we don't
+  // leak empty headers ([Current Weather] with no body, etc.) into the prompt.
+  const sections = [
+    `${D.currentDate} ${formatLocalDateTime(now)} GMT+8`,
+  ];
+  const cwStr = formatCurrentWeather(currentWeather);
+  if (cwStr) sections.push(`${D.currentWeather}\n${cwStr}`);
+  sections.push(`${D.targets}\n${targetRaces}`);
+  sections.push(`${D.history}\n${historyRaces}`);
+  sections.push(`${D.recent}\n${recentLogs}`);
+  if (upcomingPlans) sections.push(`${D.upcoming}\n${upcomingPlans}`);
+  return sections.join("\n\n");
 }
 
 // Tolerant JSON-array extraction from a coach reply. The LLM may wrap its

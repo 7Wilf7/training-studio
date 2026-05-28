@@ -1,6 +1,6 @@
 # Training Studio
 
-Wilf's Training Studio —— 从 Codex.ai artifact 搬过来的 React 单页应用。
+Wilf's Training Studio —— 从 Claude.ai artifact 搬过来的 React 单页应用。
 
 ## 技术栈
 - Vite 8 + React 19 (JSX, 非 TypeScript)

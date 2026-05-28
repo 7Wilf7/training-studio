@@ -4,6 +4,7 @@ import { ACTIVITY_TYPES, DAILY_TAGS, RUN_GROUP_TYPES, TYPE_COLOR } from "../cons
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { formatDuration } from "../utils/format";
+import { formatWeatherShort, skyconMeta } from "../lib/weather";
 import { ModalRoot } from "./ModalRoot";
 
 // Pretty header date: "Thu, May 21 2026" / "5月21日 周四 2026"
@@ -28,7 +29,7 @@ function logHeadline(log) {
 }
 
 export function CalendarDayModal({
-  dateKey, isFuture, logs, note, onClose,
+  dateKey, isFuture, logs, note, weather, onClose,
   addLog, setConfirmDelete, setDailyTags,
 }) {
   const t = useT();
@@ -139,6 +140,32 @@ export function CalendarDayModal({
         </div>
 
         <div style={{ height: 1, background: "var(--rule)", margin: "14px 0 16px" }} />
+
+        {/* Weather summary — single line at the top. For future days this is
+            the daily forecast (passed down from CalendarTab); for past days
+            with logged workouts, the parent passes the first workout's
+            snapshot. Hidden when no source is available (no location, or
+            past day with no logged weather). */}
+        {weather && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 10,
+            marginBottom: 16, padding: "10px 12px",
+            background: "var(--bg-elevated)",
+            border: "1px solid var(--rule)",
+            borderRadius: 4,
+          }}>
+            {weather.skycon && (
+              <span style={{ fontSize: 22 }} aria-hidden="true">{skyconMeta(weather.skycon, lang).icon}</span>
+            )}
+            <div style={{
+              fontFamily: "var(--font-mono)", fontSize: 13,
+              color: "var(--ink-1)", fontVariantNumeric: "tabular-nums",
+              flex: 1, minWidth: 0,
+            }}>
+              {formatWeatherShort(weather, lang) || (lang === "zh" ? "天气数据不可用" : "Weather unavailable")}
+            </div>
+          </div>
+        )}
 
         {/* Existing workouts on this day */}
         {logs.length > 0 ? (

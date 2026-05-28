@@ -846,6 +846,67 @@ function MetricCadence({ spm }) {
     </span>
   );
 }
+// Weather chip — compact (icon + temp + feels-like when meaningfully
+// different) for the main card, OR full (adds humidity / wind / AQI) for
+// the expanded view. The snapshot lives on log.weather; absent on rows
+// recorded before weather support landed or when geolocation was denied.
+function MetricWeather({ w, full = false }) {
+  if (!w) return null;
+  // Realtime + historical use tempC; forecast uses tempAvgC. Same for apparent.
+  const temp = w.tempC ?? w.tempAvgC;
+  const apparent = w.apparentC ?? w.apparentAvgC;
+  const showApparent = Number.isFinite(apparent) && Number.isFinite(temp) && Math.abs(apparent - temp) >= 2;
+  const meta = w.skycon ? skyconShort(w.skycon) : null;
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: 5,
+      color: "var(--ink-2)",
+    }}>
+      {meta && <span aria-hidden="true">{meta.icon}</span>}
+      {Number.isFinite(temp) && (
+        <span>{temp}<span style={{ color: "var(--ink-3)", fontSize: 10, marginLeft: 1 }}>°C</span></span>
+      )}
+      {showApparent && (
+        <span style={{ color: "var(--ink-3)", fontSize: 11 }}>
+          ({apparent}°)
+        </span>
+      )}
+      {full && Number.isFinite(w.humidity) && (
+        <span style={{ color: "var(--ink-3)", fontSize: 11 }}>
+          · RH{w.humidity > 1 ? Math.round(w.humidity) : Math.round(w.humidity * 100)}%
+        </span>
+      )}
+      {full && Number.isFinite(w.windSpeed) && w.windSpeed >= 1 && (
+        <span style={{ color: "var(--ink-3)", fontSize: 11 }}>
+          · {w.windSpeed}km/h
+        </span>
+      )}
+      {full && Number.isFinite(w.aqi) && w.aqi > 0 && (
+        <span style={{ color: "var(--ink-3)", fontSize: 11 }}>
+          · AQI{w.aqi}
+        </span>
+      )}
+    </span>
+  );
+}
+// Tiny inline lookup avoiding a circular import — duplicates the SKYCON_MAP
+// names/icons from src/lib/weather.js. Keep this small list in sync if you
+// add new entries there; adding a Caiyun skycon enum on this side is cheap
+// (just an icon + label) but missing one only loses the icon — the temp
+// numbers still render.
+const _SKYCON_ICON = {
+  CLEAR_DAY: '☀️', CLEAR_NIGHT: '🌙',
+  PARTLY_CLOUDY_DAY: '⛅', PARTLY_CLOUDY_NIGHT: '☁️',
+  CLOUDY: '☁️',
+  LIGHT_HAZE: '🌫️', MODERATE_HAZE: '🌫️', HEAVY_HAZE: '🌫️',
+  LIGHT_RAIN: '🌦️', MODERATE_RAIN: '🌧️', HEAVY_RAIN: '🌧️', STORM_RAIN: '⛈️',
+  FOG: '🌫️',
+  LIGHT_SNOW: '🌨️', MODERATE_SNOW: '🌨️', HEAVY_SNOW: '❄️', STORM_SNOW: '❄️',
+  DUST: '🌪️', SAND: '🌪️', WIND: '💨',
+};
+function skyconShort(name) {
+  return { icon: _SKYCON_ICON[name] || '☁️' };
+}
 
 function CompactMetrics({ log: l }) {
   if (l.type === "Road Run") {
@@ -854,6 +915,7 @@ function CompactMetrics({ log: l }) {
         {l.duration > 0 && <MetricDuration sec={l.duration} />}
         {l.distance > 0 && <MetricDistance km={l.distance} />}
         {l.pace > 0 && <MetricPace p={l.pace} />}
+        <MetricWeather w={l.weather} />
       </>
     );
   }
@@ -863,6 +925,7 @@ function CompactMetrics({ log: l }) {
         {l.duration > 0 && <MetricDuration sec={l.duration} />}
         {l.distance > 0 && <MetricDistance km={l.distance} />}
         {l.ascent > 0 && <MetricAscent m={l.ascent} />}
+        <MetricWeather w={l.weather} />
       </>
     );
   }
@@ -873,6 +936,7 @@ function CompactMetrics({ log: l }) {
       <>
         {l.duration > 0 && <MetricDuration sec={l.duration} />}
         {l.ascent > 0 && <MetricAscent m={l.ascent} />}
+        <MetricWeather w={l.weather} />
       </>
     );
   }
@@ -881,6 +945,7 @@ function CompactMetrics({ log: l }) {
     <>
       {l.duration > 0 && <MetricDuration sec={l.duration} />}
       {l.hr > 0 && <MetricHR hr={l.hr} maxHR={l.maxHR} />}
+      <MetricWeather w={l.weather} />
     </>
   );
 }
@@ -916,6 +981,11 @@ function ExpandedMetrics({ log: l }) {
       {isStrengthLike && l.distance > 0 && <MetricDistance km={l.distance} />}
       {/* Universal: TE if present */}
       {l.aerobicTE > 0 && <MetricTE te={l.aerobicTE} />}
+      {/* Weather details — full chip with humidity / wind / AQI. The compact
+          chip with just temp+icon already shows in CompactMetrics; this one
+          adds the rest so a user can see the full picture without leaving
+          the row. */}
+      {l.weather && <MetricWeather w={l.weather} full />}
     </div>
   );
 }
