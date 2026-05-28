@@ -111,9 +111,30 @@ export function TrainingTab({
     <div>
       <div style={stickyHeaderStyle}>
         {isMobile ? (
-          /* Mobile: stacked full-width rows — the screen is too narrow for a
-             single row. Filter, then the Activities/Charts toggle, then the
-             period bar (activities view only). */
+          /* Mobile: compress to TWO rows (was three).
+             Row 1 — type filter (left) + Activities/Charts toggle (right),
+             sharing one line to claw back vertical space.
+             Row 2 — period bar, full width (activities view only). */
+          <>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+              <div style={{ flexShrink: 0 }}>
+                <GlobalFilter filter={filter} setFilter={setFilter} compact />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <ViewToggle view={view} setView={setView} t={t} />
+              </div>
+            </div>
+            {view === "activities" && (
+              <PeriodSelector
+                period={period} setPeriod={setPeriod}
+                periodDropdown={periodDropdown} setPeriodDropdown={setPeriodDropdown}
+              />
+            )}
+          </>
+        ) : (
+          /* Desktop: original stacked layout — centered filter, full-width
+             toggle, full-width period bar. Plenty of room here; no need to
+             cram onto one line. */
           <>
             <GlobalFilter filter={filter} setFilter={setFilter} />
             <ViewToggle view={view} setView={setView} t={t} style={{ marginBottom: 14 }} />
@@ -124,28 +145,6 @@ export function TrainingTab({
               />
             )}
           </>
-        ) : (
-          /* Desktop: one row — filter pinned left, the Activities/Charts toggle
-             + period bar grouped on the right. Halves the header height and
-             uses the full width (no empty flanks). The period bar only shows in
-             Activities view (Charts has its own period control inside). */
-          <div style={{
-            display: "flex", alignItems: "center", gap: 14,
-            marginBottom: 12, minHeight: 38,
-          }}>
-            <GlobalFilter filter={filter} setFilter={setFilter} compact />
-            <div style={{ flex: 1 }} />
-            <div style={{ width: 200, flexShrink: 0 }}>
-              <ViewToggle view={view} setView={setView} t={t} />
-            </div>
-            {view === "activities" && (
-              <PeriodSelector
-                period={period} setPeriod={setPeriod}
-                periodDropdown={periodDropdown} setPeriodDropdown={setPeriodDropdown}
-                compact
-              />
-            )}
-          </div>
         )}
       </div>
 
