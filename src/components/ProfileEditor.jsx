@@ -35,6 +35,23 @@ export function ProfileEditor({ profile, setProfile, onClose, mode = "edit", def
   const age = calculateAge(draft.birthDate);
   const complete = isProfileComplete(draft);
 
+  // Snapshot the initial form state once (lazy init — never updated) so we can
+  // detect unsaved edits when the user tries to leave.
+  const [initialSnapshot] = useState(() => JSON.stringify({
+    draft: { ...DEFAULT_PROFILE, ...(profile || {}) },
+    loc: {
+      lng: defaultLocation?.lng != null ? String(defaultLocation.lng) : "",
+      lat: defaultLocation?.lat != null ? String(defaultLocation.lat) : "",
+    },
+  }));
+  const isDirty = () => JSON.stringify({ draft, loc: locDraft }) !== initialSnapshot;
+
+  // Guard close attempts (overlay click / X / Android back). Save() bypasses
+  // this and calls onClose directly. Setup mode can't be dismissed at all.
+  function attemptClose() {
+    if (!isDirty() || window.confirm(t("form.discard_confirm"))) onClose();
+  }
+
   // GPS → coords → reverse-geocode → fill the address text. One tap, no typing.
   async function detectLocation() {
     setLocating(true);
@@ -67,8 +84,8 @@ export function ProfileEditor({ profile, setProfile, onClose, mode = "edit", def
   }
 
   return (
-    <ModalRoot onClose={mode === "setup" ? undefined : onClose}>
-    <div onClick={mode === "setup" ? undefined : onClose}
+    <ModalRoot onClose={mode === "setup" ? undefined : attemptClose}>
+    <div onClick={mode === "setup" ? undefined : attemptClose}
       style={s.modalOverlay(isMobile)}>
       <div onClick={e => e.stopPropagation()}
         style={s.modalCard(isMobile, { maxWidth: 680, bg: "#fff" })}>
@@ -78,7 +95,7 @@ export function ProfileEditor({ profile, setProfile, onClose, mode = "edit", def
             {mode === "setup" ? t("profile.title_setup") : t("profile.title_edit")}
           </h2>
           {mode === "edit" && (
-            <button onClick={onClose} style={s.modalCloseBtn} aria-label="Close">×</button>
+            <button onClick={attemptClose} style={s.modalCloseBtn} aria-label="Close">×</button>
           )}
         </div>
         <p style={{ ...s.muted, marginBottom: 18, lineHeight: 1.5 }}>
@@ -304,7 +321,7 @@ export function ProfileEditor({ profile, setProfile, onClose, mode = "edit", def
             </span>
           )}
           {mode === "edit" && (
-            <button onClick={onClose} style={s.btnGhost}>{t("common.cancel")}</button>
+            <button onClick={attemptClose} style={s.btnGhost}>{t("common.cancel")}</button>
           )}
           <button onClick={save} disabled={!complete}
             style={{ ...s.btn, opacity: complete ? 1 : 0.5 }}>
