@@ -17,7 +17,12 @@
 import sharp from 'sharp';
 import { readdir, stat } from 'node:fs/promises';
 
-const LOGO_SRC = 'public/favicon.jpg';   // full-bleed dark tile, same as PWA/launcher
+// Pre-rounded, transparent-corner logo. This is favicon.jpg center-cropped to
+// drop its outer dark frame (the iOS-style bevel border) so the topo tile
+// reaches the rounded edge — matching how the launcher icon looks on the home
+// screen. Using favicon.jpg directly here showed that dark frame as an ugly
+// ring around the splash logo. Regenerate via scripts (see public/splash-logo.png).
+const LOGO_SRC = 'public/splash-logo.png';
 const BG = '#f2f1ec';                     // app cream (PWA theme/background color)
 const TEXT = 'Training Studio';
 const TEXT_COLOR = '#141413';             // ink-1
@@ -36,14 +41,10 @@ async function renderSplash(w, h) {
   const fontSize = Math.round(minDim * 0.052);
   const gap = Math.round(minDim * 0.05);
 
-  // Rounded logo: resize favicon to logoSize, clip with a rounded-rect mask so
-  // corners are clean (no halo) against the cream.
-  const logoResized = await sharp(LOGO_SRC).resize(logoSize, logoSize, { fit: 'cover' }).toBuffer();
-  const mask = Buffer.from(
-    `<svg width="${logoSize}" height="${logoSize}"><rect width="${logoSize}" height="${logoSize}" rx="${radius}" ry="${radius}" fill="#fff"/></svg>`
-  );
-  const logo = await sharp(logoResized)
-    .composite([{ input: mask, blend: 'dest-in' }])
+  // Logo is already rounded with transparent corners — just resize it
+  // (preserving alpha) so it drops cleanly onto the cream canvas.
+  const logo = await sharp(LOGO_SRC)
+    .resize(logoSize, logoSize, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
     .png()
     .toBuffer();
 

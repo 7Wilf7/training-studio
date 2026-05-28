@@ -47,14 +47,16 @@ function LoadingScreen() {
       display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
       gap: "5vmin", background: "var(--bg)",
     }}>
+      {/* Pre-rounded, transparent-corner logo (favicon center-cropped to drop
+          the dark frame) — identical asset to the native splash so the
+          native-splash → web-view handoff shows the same logo. */}
       <img
-        src="/favicon.jpg"
+        src="/splash-logo.png"
         alt="Training Studio"
         style={{
           width: "min(30vmin, 150px)",
           height: "min(30vmin, 150px)",
-          borderRadius: "22%",
-          objectFit: "cover",
+          objectFit: "contain",
         }}
       />
       <div style={{
