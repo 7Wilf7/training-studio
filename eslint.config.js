@@ -5,7 +5,13 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  // dist          — Vite build output
+  // android        — Capacitor copies the built web bundle into
+  //                  android/app/src/main/assets/public on `cap sync`; those
+  //                  minified files must never be linted (hundreds of false
+  //                  positives). The android/ tree is native, not our JS.
+  // .claude        — agent worktrees / scratch copies of the repo
+  globalIgnores(['dist', 'android', '.claude']),
   {
     files: ['**/*.{js,jsx}'],
     extends: [

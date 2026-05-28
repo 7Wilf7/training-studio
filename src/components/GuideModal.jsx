@@ -34,10 +34,77 @@ const CHAPTERS = [
   { file: "changelog.md",    title: "更新日志",          md: changelogMd },
 ];
 
+// ── Markdown table helpers (mobile) ──────────────────────────────────────
+// On phones a wide table can't be read by horizontal scroll (it fights the
+// vertical reading-pane scroll and snaps back). Mirror the AI Coach approach:
+// collapse wide tables (≥3 cols) into stacked "label: value" cards. Narrow
+// tables (≤2 cols) stay as real tables.
+function hastToText(node) {
+  if (!node) return "";
+  if (node.type === "text") return node.value || "";
+  if (node.tagName === "br") return "\n";
+  if (Array.isArray(node.children)) return node.children.map(hastToText).join("");
+  return "";
+}
+
+function extractTable(tableNode) {
+  if (!tableNode || !Array.isArray(tableNode.children)) return { headers: [], rows: [] };
+  const sections = tableNode.children.filter(c => c.type === "element");
+  const thead = sections.find(c => c.tagName === "thead");
+  const tbody = sections.find(c => c.tagName === "tbody");
+  const headers = [];
+  if (thead) {
+    const headerRow = (thead.children || []).find(c => c.type === "element" && c.tagName === "tr");
+    if (headerRow) {
+      for (const th of headerRow.children || []) {
+        if (th.type === "element" && th.tagName === "th") headers.push(hastToText(th).trim());
+      }
+    }
+  }
+  const rows = [];
+  const trSource = tbody || tableNode;
+  for (const tr of trSource.children || []) {
+    if (tr.type !== "element" || tr.tagName !== "tr") continue;
+    const cells = [];
+    for (const cell of tr.children || []) {
+      if (cell.type !== "element") continue;
+      if (cell.tagName === "td" || cell.tagName === "th") cells.push(hastToText(cell).trim());
+    }
+    if (cells.length) rows.push(cells);
+  }
+  return { headers, rows };
+}
+
+function MobileTableCards({ headers, rows }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, margin: "8px 0 14px" }}>
+      {rows.map((cells, ri) => (
+        <div key={ri} style={{ border: "1px solid var(--rule)", borderRadius: 6, padding: "9px 11px", background: "var(--bg-elevated)" }}>
+          {cells[0] !== undefined && (
+            <div style={{ fontWeight: 600, marginBottom: 6, fontSize: 13.5, color: "var(--ink-1)", whiteSpace: "pre-wrap" }}>
+              {headers[0] ? `${headers[0]} ` : ""}{cells[0]}
+            </div>
+          )}
+          {cells.slice(1).map((cell, ci) => {
+            const header = headers[ci + 1];
+            return (
+              <div key={ci} style={{ display: "flex", gap: 6, lineHeight: 1.6, marginBottom: 3, fontSize: 13 }}>
+                {header && <span style={{ fontWeight: 600, flexShrink: 0, color: "var(--ink-2)" }}>{header}:</span>}
+                <span style={{ whiteSpace: "pre-wrap", flex: 1, minWidth: 0, color: "var(--ink-1)" }}>{cell || "—"}</span>
+              </div>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // Reading-mode markdown renderers — document-scale typography (bigger than the
 // chat bubbles), tuned to the app's ink/moss palette. `onNavigate(file)` lets
-// internal .md links switch chapters instead of 404-ing.
-function makeGuideComponents(onNavigate) {
+// internal .md links switch chapters instead of 404-ing. On mobile, wide
+// tables render as stacked cards (see helpers above).
+function makeGuideComponents(onNavigate, isMobile) {
   const strip = ({ node, ...rest }) => rest; // eslint-disable-line no-unused-vars
   return {
     h1: (p) => <h1 {...strip(p)} style={{ fontSize: 22, fontWeight: 600, color: "var(--ink-1)", margin: "4px 0 14px", letterSpacing: "-0.01em", lineHeight: 1.25 }} />,
@@ -76,11 +143,18 @@ function makeGuideComponents(onNavigate) {
       return <a {...rest} href={href} target="_blank" rel="noreferrer"
         style={{ color: "var(--moss-deep)", textDecoration: "underline", wordBreak: "break-word" }} />;
     },
-    table: (p) => (
-      <div style={{ overflowX: "auto", maxWidth: "100%", margin: "8px 0 14px" }}>
-        <table {...strip(p)} style={{ borderCollapse: "collapse", fontSize: 12.5, minWidth: "max-content" }} />
-      </div>
-    ),
+    table: (p) => {
+      if (isMobile && p.node) {
+        const { headers, rows } = extractTable(p.node);
+        const colCount = Math.max(headers.length, ...rows.map(r => r.length), 0);
+        if (colCount >= 3) return <MobileTableCards headers={headers} rows={rows} />;
+      }
+      return (
+        <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", maxWidth: "100%", margin: "8px 0 14px" }}>
+          <table {...strip(p)} style={{ borderCollapse: "collapse", fontSize: 12.5, minWidth: "max-content" }} />
+        </div>
+      );
+    },
     th: (p) => <th {...strip(p)} style={{ border: "1px solid var(--rule)", padding: "6px 9px", textAlign: "left", fontWeight: 600, background: "var(--bg-sunken)", whiteSpace: "nowrap" }} />,
     td: (p) => <td {...strip(p)} style={{ border: "1px solid var(--rule)", padding: "6px 9px", verticalAlign: "top" }} />,
   };
@@ -101,7 +175,7 @@ export function GuideModal({ onClose }) {
     }
   }
 
-  const components = makeGuideComponents(navigateToFile);
+  const components = makeGuideComponents(navigateToFile, isMobile);
   const chapter = CHAPTERS[active];
 
   return (
