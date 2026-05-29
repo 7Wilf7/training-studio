@@ -585,18 +585,11 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
                     );
                   })()}
                   <div style={{ flex: 1 }} />
-                  {/* RPE — shown collapsed, just before the weather chip. */}
-                  {l.rpe > 0 && (
-                    <span style={{
-                      fontFamily: "var(--font-mono)", fontSize: 11,
-                      color: "var(--ink-3)", flexShrink: 0,
-                    }}>RPE{l.rpe}</span>
-                  )}
-                  {/* Weather chip at the END of row 1 — outdoor types only.
-                      Apparent ("feels like") temp is the headline because
-                      that's what actually drives pace + HR in heat. Full
-                      breakdown (raw temp + humidity + wind + AQI) is in
-                      the expanded view below. */}
+                  {/* Weather chip — outdoor types only; apparent ("feels like")
+                      temp headline (that's what drives pace + HR in heat). Full
+                      breakdown (raw temp + humidity + wind + AQI) is on its own
+                      line in the expanded view below. Sits before RPE so RPE is
+                      the last item on the header row. */}
                   {showWeather(l) && (
                     <span style={{
                       fontFamily: "var(--font-mono)", fontSize: 11,
@@ -604,6 +597,13 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
                     }}>
                       <MetricWeather w={l.weather} />
                     </span>
+                  )}
+                  {/* RPE — last item on the header row, just before delete. */}
+                  {l.rpe > 0 && (
+                    <span style={{
+                      fontFamily: "var(--font-mono)", fontSize: 11,
+                      color: "var(--ink-3)", flexShrink: 0,
+                    }}>RPE{l.rpe}</span>
                   )}
                   {!selectMode && (
                     <button onClick={(e) => { e.stopPropagation(); deleteLog(l.id); }}
@@ -707,16 +707,8 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
                     );
                   })}
                 </div>
-                {/* RPE — before the weather chip, mirrors mobile. */}
-                {l.rpe > 0 && (
-                  <span style={{
-                    fontFamily: "var(--font-mono)", fontSize: 12,
-                    color: "var(--ink-3)", flexShrink: 0,
-                  }}>RPE{l.rpe}</span>
-                )}
-                {/* Weather chip at the right end of the identifier block —
-                    apparent temp + icon, outdoor types only. Mirrors the
-                    mobile row-1 placement. */}
+                {/* Weather chip — apparent temp + icon, outdoor types only.
+                    Sits before RPE so RPE is the last item; mirrors mobile. */}
                 {showWeather(l) && (
                   <span style={{
                     fontFamily: "var(--font-mono)", fontSize: 12,
@@ -724,6 +716,13 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
                   }}>
                     <MetricWeather w={l.weather} />
                   </span>
+                )}
+                {/* RPE — last item in the identifier block, mirrors mobile. */}
+                {l.rpe > 0 && (
+                  <span style={{
+                    fontFamily: "var(--font-mono)", fontSize: 12,
+                    color: "var(--ink-3)", flexShrink: 0,
+                  }}>RPE{l.rpe}</span>
                 )}
                 {/* Delete button on narrow lives at the right end of the header line;
                     desktop puts it at the very end of the row (later in this JSX). */}
@@ -1042,33 +1041,44 @@ function ExpandedMetrics({ log: l }) {
   const isStrengthLike = l.type === "Strength" || l.type === "HIIT";
 
   return (
-    <div style={{
-      display: "flex", gap: 14, flexWrap: "wrap",
-      fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums",
-      fontSize: 12, color: "var(--ink-2)",
-    }}>
-      {/* Road Run extras */}
-      {isRoad && l.ascent > 0 && <MetricAscent m={l.ascent} />}
-      {isRoad && l.gap > 0 && <MetricGAP p={l.gap} />}
-      {isRoad && l.hr > 0 && <MetricHR hr={l.hr} maxHR={l.maxHR} />}
-      {isRoad && l.cadence > 0 && <MetricCadence spm={l.cadence} />}
-      {/* Trail / Hiking extras */}
-      {isTrailOrHike && l.pace > 0 && <MetricPace p={l.pace} />}
-      {isTrailOrHike && l.hr > 0 && <MetricHR hr={l.hr} maxHR={l.maxHR} />}
-      {isTrailOrHike && l.cadence > 0 && <MetricCadence spm={l.cadence} />}
-      {/* Floor Climbing extras — distance moves here since it's not in compact */}
-      {isFloor && l.distance > 0 && <MetricDistance km={l.distance} />}
-      {isFloor && l.pace > 0 && <MetricPace p={l.pace} />}
-      {isFloor && l.hr > 0 && <MetricHR hr={l.hr} maxHR={l.maxHR} />}
-      {/* Strength / HIIT extras */}
-      {isStrengthLike && l.distance > 0 && <MetricDistance km={l.distance} />}
-      {/* Universal: TE if present */}
-      {l.aerobicTE > 0 && <MetricTE te={l.aerobicTE} />}
-      {/* Full weather chip — raw air temp + humidity / wind / AQI. The
-          compact chip on row 1 shows only the apparent ("feels like")
-          temp; this gives the rest of the picture without duplicating
-          the headline number. Outdoor types only. */}
-      {showWeather(l) && <MetricWeather w={l.weather} full />}
-    </div>
+    <>
+      {/* Metric data — kept on its own row so weather (below) doesn't push a
+          number like TE onto a second line. Still wraps if the device is too
+          narrow for every metric, but weather no longer competes for the space. */}
+      <div style={{
+        display: "flex", gap: 14, flexWrap: "wrap",
+        fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums",
+        fontSize: 12, color: "var(--ink-2)",
+      }}>
+        {/* Road Run extras */}
+        {isRoad && l.ascent > 0 && <MetricAscent m={l.ascent} />}
+        {isRoad && l.gap > 0 && <MetricGAP p={l.gap} />}
+        {isRoad && l.hr > 0 && <MetricHR hr={l.hr} maxHR={l.maxHR} />}
+        {isRoad && l.cadence > 0 && <MetricCadence spm={l.cadence} />}
+        {/* Trail / Hiking extras */}
+        {isTrailOrHike && l.pace > 0 && <MetricPace p={l.pace} />}
+        {isTrailOrHike && l.hr > 0 && <MetricHR hr={l.hr} maxHR={l.maxHR} />}
+        {isTrailOrHike && l.cadence > 0 && <MetricCadence spm={l.cadence} />}
+        {/* Floor Climbing extras — distance moves here since it's not in compact */}
+        {isFloor && l.distance > 0 && <MetricDistance km={l.distance} />}
+        {isFloor && l.pace > 0 && <MetricPace p={l.pace} />}
+        {isFloor && l.hr > 0 && <MetricHR hr={l.hr} maxHR={l.maxHR} />}
+        {/* Strength / HIIT extras */}
+        {isStrengthLike && l.distance > 0 && <MetricDistance km={l.distance} />}
+        {/* Universal: TE if present */}
+        {l.aerobicTE > 0 && <MetricTE te={l.aerobicTE} />}
+      </div>
+      {/* Full weather chip on its OWN line — raw air temp + humidity / wind /
+          AQI. The compact chip in the header shows only the apparent ("feels
+          like") temp; this fills in the rest. Outdoor types only. */}
+      {showWeather(l) && (
+        <div style={{
+          display: "flex", fontFamily: "var(--font-mono)",
+          fontVariantNumeric: "tabular-nums", fontSize: 12, color: "var(--ink-2)",
+        }}>
+          <MetricWeather w={l.weather} full />
+        </div>
+      )}
+    </>
   );
 }

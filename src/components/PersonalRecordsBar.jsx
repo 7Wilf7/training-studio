@@ -167,19 +167,10 @@ function PRCell({ rec, itraPI, setItraPI, t, isMobile }) {
         borderLeft: "4px solid " + categoryColor,
         padding: "10px 12px 10px 14px",
       }}>
-        {isTrail && (
-          <ITRABadge
-            itraEditing={itraEditing} itraDraft={itraDraft} setItraDraft={setItraDraft}
-            inputRef={inputRef} commitItra={commitItra} cancelItra={cancelItra}
-            startItra={startItra} itraPI={itraPI} t={t}
-          />
-        )}
-
         {/* Row 1: category (left) + metric value (right) */}
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
           <div style={{
             display: "flex", alignItems: "baseline", gap: 6, minWidth: 0,
-            paddingRight: isTrail ? 60 : 0,
           }}>
             <span style={{ fontSize: 12, color: "var(--ink-2)", fontWeight: 500 }}>
               {t(`enum.race_cat.${rec.category}`)}
@@ -231,6 +222,14 @@ function PRCell({ rec, itraPI, setItraPI, t, isMobile }) {
           </div>
         )}
 
+        {isTrail && (
+          <ITRABadge
+            itraEditing={itraEditing} itraDraft={itraDraft} setItraDraft={setItraDraft}
+            inputRef={inputRef} commitItra={commitItra} cancelItra={cancelItra}
+            startItra={startItra} itraPI={itraPI} t={t}
+          />
+        )}
+
         {rec.all.length > 1 && (
           <details style={{ marginTop: 6 }}>
             <summary style={{ ...s.muted, cursor: "pointer", fontSize: 11 }}>
@@ -260,18 +259,9 @@ function PRCell({ rec, itraPI, setItraPI, t, isMobile }) {
       background: "var(--bg-elevated)",
       borderTop: "3px solid " + categoryColor,
     }}>
-      {isTrail && (
-        <ITRABadge
-          itraEditing={itraEditing} itraDraft={itraDraft} setItraDraft={setItraDraft}
-          inputRef={inputRef} commitItra={commitItra} cancelItra={cancelItra}
-          startItra={startItra} itraPI={itraPI} t={t}
-        />
-      )}
-
       <div style={{
         fontSize: 13, color: "var(--ink-2)", marginBottom: 6, fontWeight: 500,
         display: "flex", alignItems: "baseline", gap: 8,
-        paddingRight: isTrail ? 70 : 0,
       }}>
         <span>{t(`enum.race_cat.${rec.category}`)}</span>
         {(rec.metric === "distance" || rec.metric === "difficulty") && (
@@ -305,6 +295,13 @@ function PRCell({ rec, itraPI, setItraPI, t, isMobile }) {
       ) : (
         <div style={{ ...s.muted, marginTop: 4 }}>{t("pr.no_times", { n: rec.all.length })}</div>
       )}
+      {isTrail && (
+        <ITRABadge
+          itraEditing={itraEditing} itraDraft={itraDraft} setItraDraft={setItraDraft}
+          inputRef={inputRef} commitItra={commitItra} cancelItra={cancelItra}
+          startItra={startItra} itraPI={itraPI} t={t}
+        />
+      )}
       {rec.all.length > 1 && (
         <details style={{ marginTop: 10 }}>
           <summary style={{ ...s.muted, cursor: "pointer", fontSize: 12 }}>
@@ -334,7 +331,7 @@ function ITRABadge({
   itraPI, t,
 }) {
   return (
-    <div style={{ position: "absolute", top: 8, right: 10 }}>
+    <div style={{ marginTop: 8 }}>
       {itraEditing ? (
         <div style={{ display: "flex", gap: 4, alignItems: "center" }} onClick={e => e.stopPropagation()}>
           <input ref={inputRef} type="number" value={itraDraft}
