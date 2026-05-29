@@ -105,9 +105,11 @@ export const RUN_GROUP_TYPES = ["Road Run", "Trail Run", "Hiking", "Floor Climbi
 export const WEATHER_RELEVANT_TYPES = ["Road Run", "Trail Run", "Hiking", "HIIT"];
 
 // Day-level tags stored in daily_notes.tags[]. Surfaced on Calendar day
-// cells and toggled via the day modal. Currently a single value ("massage")
-// but kept as an array for future expansion without another schema change.
-export const DAILY_TAGS = ["massage"];
+// cells and toggled via the day modal. Recovery/context markers that don't
+// belong on a single workout — sick / travel especially matter for how the
+// coach plans around a disrupted week. Stored as text[], so adding values
+// here needs no schema change.
+export const DAILY_TAGS = ["massage", "stretching", "poor_sleep", "sick", "travel"];
 
 // Running sub-types — split into two groups:
 //   PACE: heart-rate-based classification (single-select per activity)
