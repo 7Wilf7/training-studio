@@ -34,6 +34,7 @@ import { useIsMobile, useIsNarrow } from "./hooks/useMediaQuery";
 import * as db from "./lib/db";
 import { getCurrentLocation, captureSnapshotForWorkout, useWeatherContext } from "./lib/weather";
 import { postJson } from "./lib/apiFetch";
+import { initPushNotifications } from "./lib/push";
 
 // Boot screen — deliberately mirrors the native Android splash (logo +
 // "Training Studio" on the cream background) so on the APK the native splash →
@@ -198,6 +199,14 @@ function AuthedApp({ user, signOut, changePassword }) {
       }
     })();
     return () => { cancelled = true; };
+  }, [user.id]);
+
+  // Register this device for push (Android APK only; no-op on web). Fires once
+  // the user is known so the FCM token is stored against their account. Guarded
+  // internally so re-mounts don't stack listeners.
+  useEffect(() => {
+    if (!user?.id) return;
+    void initPushNotifications();
   }, [user.id]);
 
   // One-time cleanup: remove the legacy localStorage blob now that every

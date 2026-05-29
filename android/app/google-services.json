@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "588161061395",
+    "project_id": "training-studio-dca47",
+    "storage_bucket": "training-studio-dca47.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:588161061395:android:429662167c22256c4c25e6",
+        "android_client_info": {
+          "package_name": "com.aitrainstudio.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAr_Tsl3Lve2cH2qaUcREOWnVmT70nw-Jo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
