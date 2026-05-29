@@ -222,30 +222,41 @@ function PRCell({ rec, itraPI, setItraPI, t, isMobile }) {
           </div>
         )}
 
-        {isTrail && (
-          <ITRABadge
-            itraEditing={itraEditing} itraDraft={itraDraft} setItraDraft={setItraDraft}
-            inputRef={inputRef} commitItra={commitItra} cancelItra={cancelItra}
-            startItra={startItra} itraPI={itraPI} t={t}
-          />
-        )}
-
-        {rec.all.length > 1 && (
-          <details style={{ marginTop: 6 }}>
-            <summary style={{ ...s.muted, cursor: "pointer", fontSize: 11 }}>
-              + {t("pr.other_finishes", { n: rec.all.length - 1, plural: rec.all.length > 2 ? "es" : "" })}
-            </summary>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6 }}>
-              {rec.all.slice(1).map(r => (
-                <div key={r.id} style={{ ...s.dataNum, fontSize: 11, color: "var(--ink-2)" }}>
-                  {rec.metric === "distance" ? (r.distance > 0 ? `${r.distance}km` : "—")
-                    : rec.metric === "difficulty" ? (r.subtype || "—")
-                    : formatHMS(resultSeconds(r))}
-                  {" · "}<span style={{ fontFamily: "var(--font-sans)" }}>{r.name}</span> · <span style={{ color: "var(--ink-3)" }}>{r.date}</span>
-                </div>
-              ))}
+        {/* Bottom row: "+N other finishes" on the left, ITRA pinned to the
+            bottom-right corner. align-items:flex-start keeps ITRA next to the
+            summary line when the details list is expanded. */}
+        {(rec.all.length > 1 || isTrail) && (
+          <div style={{
+            display: "flex", justifyContent: "space-between",
+            alignItems: "flex-start", gap: 10, marginTop: 6,
+          }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {rec.all.length > 1 && (
+                <details>
+                  <summary style={{ ...s.muted, cursor: "pointer", fontSize: 11 }}>
+                    + {t("pr.other_finishes", { n: rec.all.length - 1, plural: rec.all.length > 2 ? "es" : "" })}
+                  </summary>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6 }}>
+                    {rec.all.slice(1).map(r => (
+                      <div key={r.id} style={{ ...s.dataNum, fontSize: 11, color: "var(--ink-2)" }}>
+                        {rec.metric === "distance" ? (r.distance > 0 ? `${r.distance}km` : "—")
+                          : rec.metric === "difficulty" ? (r.subtype || "—")
+                          : formatHMS(resultSeconds(r))}
+                        {" · "}<span style={{ fontFamily: "var(--font-sans)" }}>{r.name}</span> · <span style={{ color: "var(--ink-3)" }}>{r.date}</span>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
             </div>
-          </details>
+            {isTrail && (
+              <ITRABadge
+                itraEditing={itraEditing} itraDraft={itraDraft} setItraDraft={setItraDraft}
+                inputRef={inputRef} commitItra={commitItra} cancelItra={cancelItra}
+                startItra={startItra} itraPI={itraPI} t={t}
+              />
+            )}
+          </div>
         )}
       </div>
     );
@@ -295,29 +306,40 @@ function PRCell({ rec, itraPI, setItraPI, t, isMobile }) {
       ) : (
         <div style={{ ...s.muted, marginTop: 4 }}>{t("pr.no_times", { n: rec.all.length })}</div>
       )}
-      {isTrail && (
-        <ITRABadge
-          itraEditing={itraEditing} itraDraft={itraDraft} setItraDraft={setItraDraft}
-          inputRef={inputRef} commitItra={commitItra} cancelItra={cancelItra}
-          startItra={startItra} itraPI={itraPI} t={t}
-        />
-      )}
-      {rec.all.length > 1 && (
-        <details style={{ marginTop: 10 }}>
-          <summary style={{ ...s.muted, cursor: "pointer", fontSize: 12 }}>
-            + {t("pr.other_finishes", { n: rec.all.length - 1, plural: rec.all.length > 2 ? "es" : "" })}
-          </summary>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 8 }}>
-            {rec.all.slice(1).map(r => (
-              <div key={r.id} style={{ ...s.dataNum, fontSize: 12, color: "var(--ink-2)" }}>
-                {rec.metric === "distance" ? (r.distance > 0 ? `${r.distance}km` : "—")
-                  : rec.metric === "difficulty" ? (r.subtype || "—")
-                  : formatHMS(resultSeconds(r))}
-                {" · "}<span style={{ fontFamily: "var(--font-sans)" }}>{r.name}</span> · <span style={{ color: "var(--ink-3)" }}>{r.date}</span>
-              </div>
-            ))}
+      {/* Bottom row: "+N other finishes" on the left, ITRA pinned to the
+          bottom-right corner. */}
+      {(rec.all.length > 1 || isTrail) && (
+        <div style={{
+          display: "flex", justifyContent: "space-between",
+          alignItems: "flex-start", gap: 12, marginTop: 10,
+        }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {rec.all.length > 1 && (
+              <details>
+                <summary style={{ ...s.muted, cursor: "pointer", fontSize: 12 }}>
+                  + {t("pr.other_finishes", { n: rec.all.length - 1, plural: rec.all.length > 2 ? "es" : "" })}
+                </summary>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 8 }}>
+                  {rec.all.slice(1).map(r => (
+                    <div key={r.id} style={{ ...s.dataNum, fontSize: 12, color: "var(--ink-2)" }}>
+                      {rec.metric === "distance" ? (r.distance > 0 ? `${r.distance}km` : "—")
+                        : rec.metric === "difficulty" ? (r.subtype || "—")
+                        : formatHMS(resultSeconds(r))}
+                      {" · "}<span style={{ fontFamily: "var(--font-sans)" }}>{r.name}</span> · <span style={{ color: "var(--ink-3)" }}>{r.date}</span>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
           </div>
-        </details>
+          {isTrail && (
+            <ITRABadge
+              itraEditing={itraEditing} itraDraft={itraDraft} setItraDraft={setItraDraft}
+              inputRef={inputRef} commitItra={commitItra} cancelItra={cancelItra}
+              startItra={startItra} itraPI={itraPI} t={t}
+            />
+          )}
+        </div>
       )}
     </div>
   );
@@ -331,7 +353,7 @@ function ITRABadge({
   itraPI, t,
 }) {
   return (
-    <div style={{ marginTop: 8 }}>
+    <div style={{ flexShrink: 0 }}>
       {itraEditing ? (
         <div style={{ display: "flex", gap: 4, alignItems: "center" }} onClick={e => e.stopPropagation()}>
           <input ref={inputRef} type="number" value={itraDraft}
