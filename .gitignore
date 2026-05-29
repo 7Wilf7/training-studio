@@ -58,3 +58,6 @@ android/.idea/
 # Signing config — references the keystore by path + holds passwords.
 # Generated locally; in CI the values come from GitHub Secrets via env vars.
 android/keystore.properties
+
+# Claude Code worktrees
+.claude/worktrees/

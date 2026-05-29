@@ -633,12 +633,14 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, colI
           </div>
         )}
 
-        {/* Day-level tags — mobile shows just the emoji icon(s) in the corner
-            (no room for text); multiple tags stack as multiple icons. */}
+        {/* Day-level tags — mobile shows just the emoji icon(s), centered along
+            the bottom of the cell (no room for text); multiple tags sit in a
+            centered row. */}
         {dayTags.length > 0 && (
           <span style={{
-            position: "absolute", top: 1, right: 2,
-            display: "inline-flex", gap: 1, fontSize: 10, lineHeight: 1,
+            position: "absolute", bottom: 2, left: 0, right: 0,
+            display: "flex", justifyContent: "center", gap: 2,
+            fontSize: 10, lineHeight: 1,
           }} title={dayTags.map(tag => t(`calendar.tag.${tag}`)).join(", ")}>
             {dayTags.map(tag => (
               <span key={tag} aria-hidden="true">{DAILY_TAG_ICONS[tag] || "•"}</span>

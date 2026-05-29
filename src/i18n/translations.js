@@ -61,9 +61,6 @@ const dict = {
   "settings.email_actions":     { en: "Tap email to manage password / sign out", zh: "点击邮箱管理密码 / 退出登录" },
 
   // ===== Inbox (received coach pushes) =====
-  "settings.inbox":             { en: "Inbox",                zh: "收件箱" },
-  "settings.inbox_desc":        { en: "Coach check-ins pushed to your phone", zh: "推送到手机的教练打卡" },
-  "settings.inbox_unread":      { en: "{n} unread",           zh: "{n} 条未读" },
   "inbox.title":                { en: "Inbox",                zh: "收件箱" },
   "inbox.empty":                { en: "No messages yet. Daily coach check-ins will show up here.", zh: "还没有消息。每天的教练打卡会出现在这里。" },
   "inbox.mark_all_read":        { en: "Mark all read",        zh: "全部已读" },

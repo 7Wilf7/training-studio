@@ -1133,6 +1133,9 @@ Rules:
           /* "need location" weather pill now routes to the profile editor,
              where location (address + coords) lives. */
           onOpenLocationSettings={() => setProfileEditorMode("edit")}
+          /* Inbox entry — top-right of the AI Coach header. */
+          onOpenInbox={() => setShowInbox(true)}
+          inboxUnread={inboxUnread}
         />
       )}
     </>
@@ -1236,8 +1239,6 @@ Rules:
         onOpenPushSettings={() => setShowPushSettings(true)}
         pushEnabled={pushEnabled}
         pushHours={pushHours}
-        onOpenInbox={() => setShowInbox(true)}
-        inboxUnread={inboxUnread}
         onOpenGuide={() => setShowGuide(true)}
         onToggleLang={toggleLang}
         onChangePassword={() => setShowChangePassword(true)}

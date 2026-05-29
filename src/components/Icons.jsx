@@ -240,3 +240,12 @@ export function CloudIcon({ size = 13 }) {
     </svg>
   );
 }
+
+export function MailIcon({ size = 13 }) {
+  return (
+    <svg {...baseProps(size)}>
+      <rect x="2" y="3" width="10" height="8" rx="1" />
+      <path d="M2.5 4 L7 7.5 L11.5 4" />
+    </svg>
+  );
+}

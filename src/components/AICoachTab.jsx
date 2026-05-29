@@ -13,7 +13,7 @@ import { buildDataBlock } from "../utils/coachPrompt";
 import { postJson } from "../lib/apiFetch";
 import { ModalRoot } from "./ModalRoot";
 import { Spinner } from "./Spinner";
-import { CalendarIcon, CoachIcon, SettingsIcon } from "./Icons";
+import { CalendarIcon, CoachIcon, SettingsIcon, MailIcon } from "./Icons";
 
 // Custom renderers for the markdown nodes that actually show up in coach
 // replies. Keys to know:
@@ -212,6 +212,10 @@ export function AICoachTab({
   // error, refetch }. Drives the Weather status pill below + the prompt
   // preview's [Current Weather] / [Upcoming Forecast] sections.
   weatherCtx, onOpenLocationSettings,
+  // Inbox (delivered coach pushes) — entry lives top-right of this tab's
+  // header. Opens the InboxModal owned by AppShell; inboxUnread drives the
+  // badge.
+  onOpenInbox, inboxUnread = 0,
 }) {
   // Provider-aware endpoint + key for the memory-proposal call, which still
   // lives in this tab (only triggered from the Memory modal opened inside it).
@@ -717,6 +721,31 @@ Output the memory text only, nothing else.`;
             <span style={{ fontWeight: 600 }}>{weatherLabel}</span>
           </button>
         ) : statusPill(<span>☁</span>, "Weather", weatherLabel, weatherActive)}
+
+        {/* Inbox — pinned to the right edge of the header. Opens the inbox of
+            delivered coach pushes; badge shows unread count. */}
+        {onOpenInbox && (
+          <button onClick={onOpenInbox} title={t("inbox.title")} aria-label={t("inbox.title")}
+            style={{
+              marginLeft: "auto", position: "relative",
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              minHeight: 26, width: 34, padding: 0,
+              border: "1px solid var(--rule)", borderRadius: 2,
+              background: "var(--bg-elevated)", color: "var(--ink-2)",
+              cursor: "pointer", WebkitTapHighlightColor: "transparent",
+            }}>
+            <MailIcon size={15} />
+            {inboxUnread > 0 && (
+              <span style={{
+                position: "absolute", top: -6, right: -6,
+                minWidth: 16, height: 16, padding: "0 4px", boxSizing: "border-box",
+                borderRadius: 8, background: "var(--warn)", color: "#fff",
+                fontSize: 9, fontWeight: 700, lineHeight: "16px", textAlign: "center",
+                fontFamily: "var(--font-mono)",
+              }}>{inboxUnread > 99 ? "99+" : inboxUnread}</span>
+            )}
+          </button>
+        )}
       </div>
       {/* Soft hint once chat history grows past the threshold. Two states:
           • EXPANDED (default) — full banner with the "consider distilling
