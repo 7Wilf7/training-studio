@@ -18,6 +18,7 @@ import { ConfirmDeleteModal } from "./components/ConfirmDeleteModal";
 import { ProfileEditor } from "./components/ProfileEditor";
 import { ApiSettingsModal } from "./components/ApiSettingsModal";
 import { WeatherApiSettingsModal } from "./components/WeatherApiSettingsModal";
+import { PushSettingsModal } from "./components/PushSettingsModal";
 import { ChangePasswordModal } from "./components/ChangePasswordModal";
 import { CoachPlanImportModal } from "./components/CoachPlanImportModal";
 import { GuideModal } from "./components/GuideModal";
@@ -124,6 +125,9 @@ function AuthedApp({ user, signOut, changePassword }) {
   // user across devices (whereas the AI provider's claudeEndpointId stays
   // local because the right mirror is per-network not per-user).
   const [caiyunApiKey, setCaiyunApiKeyState] = useState("");
+  const [pushEnabled, setPushEnabledState] = useState(false);
+  const [pushHour, setPushHourState] = useState(null);
+  const [pushTimezone, setPushTimezoneState] = useState("");
   const [dataLoading, setDataLoading] = useState(true);
 
   // Fetch profile + user_settings + workouts once the auth'd user is known.
@@ -174,6 +178,9 @@ function AuthedApp({ user, signOut, changePassword }) {
             name: settingsData.defaultLocationName || "",
           });
           setCaiyunApiKeyState(settingsData.caiyunApiKey || "");
+          setPushEnabledState(settingsData.pushEnabled === true);
+          setPushHourState(Number.isFinite(settingsData.pushHour) ? settingsData.pushHour : null);
+          setPushTimezoneState(settingsData.pushTimezone || "");
         }
 
         // Workouts — list already sorted date desc, created_at desc by the DAL.
@@ -245,6 +252,9 @@ function AuthedApp({ user, signOut, changePassword }) {
     if ("coachMemory" in patch) setCoachMemoryState(patch.coachMemory);
     if ("lang" in patch) setLangState(patch.lang);
     if ("caiyunApiKey" in patch) setCaiyunApiKeyState(patch.caiyunApiKey || "");
+    if ("pushEnabled" in patch) setPushEnabledState(patch.pushEnabled === true);
+    if ("pushHour" in patch) setPushHourState(Number.isFinite(patch.pushHour) ? patch.pushHour : null);
+    if ("pushTimezone" in patch) setPushTimezoneState(patch.pushTimezone || "");
     try {
       await db.userSettings.updateMySettings(patch);
     } catch (err) {
@@ -265,6 +275,7 @@ function AuthedApp({ user, signOut, changePassword }) {
   const setCoachMemory = (v) => updateSettings({ coachMemory: v });
   const setLang = (v) => updateSettings({ lang: v });
   const setCaiyunApiKey = (v) => updateSettings({ caiyunApiKey: v });
+  const setPushSettings = (patch) => updateSettings(patch);
   // Patch the local state immediately AND persist to Supabase. updateSettings()
   // doesn't refresh local state, so we do it eagerly here so the Settings page
   // and any new addLog calls see the latest values without waiting for a
@@ -636,6 +647,7 @@ function AuthedApp({ user, signOut, changePassword }) {
         lang={lang} setLang={setLang}
         defaultLocation={defaultLocation} setDefaultLocation={setDefaultLocation}
         caiyunApiKey={caiyunApiKey} setCaiyunApiKey={setCaiyunApiKey}
+        pushEnabled={pushEnabled} pushHour={pushHour} pushTimezone={pushTimezone} setPushSettings={setPushSettings}
       />
     </LanguageProvider>
   );
@@ -657,6 +669,7 @@ function AppShell({
   lang, setLang,
   defaultLocation, setDefaultLocation,
   caiyunApiKey, setCaiyunApiKey,
+  pushEnabled, pushHour, pushTimezone, setPushSettings,
 }) {
   const t = useT();
   const isMobile = useIsMobile();
@@ -680,6 +693,7 @@ function AppShell({
   const [profileEditorMode, setProfileEditorMode] = useState(null);
   const [showApiSettings, setShowApiSettings] = useState(false);
   const [showWeatherApiSettings, setShowWeatherApiSettings] = useState(false);
+  const [showPushSettings, setShowPushSettings] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
 
@@ -1163,6 +1177,16 @@ Rules:
         />
       )}
 
+      {showPushSettings && (
+        <PushSettingsModal
+          pushEnabled={pushEnabled}
+          pushHour={pushHour}
+          pushTimezone={pushTimezone}
+          setPushSettings={setPushSettings}
+          onClose={() => setShowPushSettings(false)}
+        />
+      )}
+
       {showGuide && <GuideModal onClose={() => setShowGuide(false)} />}
 
       {/* Plan-import review modal — rendered at AppShell level (not inside
@@ -1191,6 +1215,9 @@ Rules:
         onOpenProfile={() => setProfileEditorMode("edit")}
         onOpenApiSettings={() => setShowApiSettings(true)}
         onOpenWeatherApiSettings={() => setShowWeatherApiSettings(true)}
+        onOpenPushSettings={() => setShowPushSettings(true)}
+        pushEnabled={pushEnabled}
+        pushHour={pushHour}
         onOpenGuide={() => setShowGuide(true)}
         onToggleLang={toggleLang}
         onChangePassword={() => setShowChangePassword(true)}

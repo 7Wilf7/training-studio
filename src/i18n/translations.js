@@ -44,6 +44,18 @@ const dict = {
   "settings.weather_api_desc":  { en: "Caiyun Weather token — paste your own to use your daily quota.", zh: "彩云天气 token —— 填了走你自己的配额，不填走默认。" },
   "settings.weather_api_set":   { en: "Token configured",     zh: "已填写" },
   "settings.weather_api_default": { en: "Using shared quota", zh: "使用共享配额" },
+  "settings.daily_push":        { en: "Daily coach push",     zh: "每日教练推送" },
+  "settings.daily_push_on":     { en: "On · {time}",          zh: "开 · 每天 {time}" },
+  "settings.daily_push_off":    { en: "Off",                  zh: "关闭" },
+  "push.title":                 { en: "Daily coach push",     zh: "每日教练推送" },
+  "push.hint":                  { en: "Get a short coach check-in pushed to your phone once a day, based on your recent training.", zh: "每天给手机推一条简短的教练打卡，基于你最近的训练情况生成。" },
+  "push.enabled_on":            { en: "Daily push on",        zh: "已开启" },
+  "push.enabled_off":           { en: "Daily push off",       zh: "已关闭" },
+  "push.time_label":            { en: "Push time (your local time)", zh: "推送时间（你的本地时间）" },
+  "push.tz_note":               { en: "Anchored to your timezone: {tz}", zh: "按你的时区计算：{tz}" },
+  "push.apk_note":              { en: "Notifications are delivered on the Android app only. On the web this preference is saved but no notification is sent.", zh: "通知只在安卓 App 上送达；网页版能保存设置，但不会真正弹通知。" },
+  "push.saved":                 { en: "Saved",                zh: "已保存" },
+  "push.save_failed":           { en: "✕ Save failed: {msg}", zh: "✕ 保存失败：{msg}" },
   "settings.email_actions":     { en: "Tap email to manage password / sign out", zh: "点击邮箱管理密码 / 退出登录" },
 
   // ===== Weather API settings =====

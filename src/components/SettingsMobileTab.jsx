@@ -24,6 +24,9 @@ export function SettingsMobileTab({
   onOpenProfile,
   onOpenApiSettings,
   onOpenWeatherApiSettings,
+  onOpenPushSettings,
+  pushEnabled,
+  pushHour,
   onOpenGuide,
   onToggleLang,
   onChangePassword,
@@ -95,6 +98,13 @@ export function SettingsMobileTab({
 
       {/* ── 其他 ──────────────────────────────────────────────────────────── */}
       <SectionHeader label={t("settings.section_other")} />
+      <Cell
+        primary={t("settings.daily_push")}
+        secondary={pushEnabled
+          ? t("settings.daily_push_on", { time: `${String(Number.isFinite(pushHour) ? pushHour : 8).padStart(2, "0")}:00` })
+          : t("settings.daily_push_off")}
+        onClick={onOpenPushSettings}
+      />
       <Cell
         primary={t("settings.language")}
         rightValue={lang === "en" ? "English" : "中文"}
