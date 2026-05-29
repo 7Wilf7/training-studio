@@ -166,7 +166,7 @@ Deno.serve(async (req) => {
     // Everyone with push enabled; we filter by local hour in JS.
     const { data: settings, error: sErr } = await supabase
       .from("user_settings")
-      .select("user_id, push_hour, push_timezone, api_provider, api_key, claude_api_key, coach_memory, lang")
+      .select("user_id, push_hours, push_timezone, api_provider, api_key, claude_api_key, coach_memory, lang")
       .eq("push_enabled", true);
     if (sErr) return json({ error: sErr.message }, 500);
 
@@ -176,17 +176,19 @@ Deno.serve(async (req) => {
     for (const u of settings || []) {
       const tz = u.push_timezone || "UTC";
       const { hour, date } = localParts(tz);
-      if (u.push_hour == null || hour !== u.push_hour) continue;
+      // Due if the current local hour is one of the user's chosen push hours.
+      if (!Array.isArray(u.push_hours) || !u.push_hours.includes(hour)) continue;
 
-      // Dedup: skip if already sent today (their local date).
+      // Dedup per (user, local date, hour): each chosen time fires once a day,
+      // even though the cron polls every few minutes.
       const { data: logged } = await supabase
-        .from("push_log").select("id").eq("user_id", u.user_id).eq("sent_on", date).maybeSingle();
+        .from("push_log").select("id").eq("user_id", u.user_id).eq("sent_on", date).eq("hour", hour).maybeSingle();
       if (logged) continue;
 
-      // Claim the slot first (unique constraint stops a double-fire from the
-      // next 30-min tick). If insert conflicts, another run already took it.
+      // Claim the slot first (the UNIQUE(user_id, sent_on, hour) constraint
+      // stops a double-fire from the next poll tick). Conflict → someone took it.
       const { error: claimErr } = await supabase
-        .from("push_log").insert({ user_id: u.user_id, sent_on: date });
+        .from("push_log").insert({ user_id: u.user_id, sent_on: date, hour });
       if (claimErr) { summary.push({ user: u.user_id, skipped: "already-claimed" }); continue; }
 
       const provider = u.api_provider === "claude" ? "claude" : "deepseek";

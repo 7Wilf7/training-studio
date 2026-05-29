@@ -26,7 +26,7 @@ export function SettingsMobileTab({
   onOpenWeatherApiSettings,
   onOpenPushSettings,
   pushEnabled,
-  pushHour,
+  pushHours,
   onOpenGuide,
   onToggleLang,
   onChangePassword,
@@ -100,8 +100,10 @@ export function SettingsMobileTab({
       <SectionHeader label={t("settings.section_other")} />
       <Cell
         primary={t("settings.daily_push")}
-        secondary={pushEnabled
-          ? t("settings.daily_push_on", { time: `${String(Number.isFinite(pushHour) ? pushHour : 8).padStart(2, "0")}:00` })
+        secondary={(pushEnabled && Array.isArray(pushHours) && pushHours.length > 0)
+          ? t("settings.daily_push_on", {
+              time: [...pushHours].sort((a, b) => a - b).map(h => `${String(h).padStart(2, "0")}:00`).join(" · "),
+            })
           : t("settings.daily_push_off")}
         onClick={onOpenPushSettings}
       />

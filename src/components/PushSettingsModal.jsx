@@ -3,34 +3,59 @@ import { s } from "../styles";
 import { useT } from "../i18n/LanguageContext";
 import { ModalRoot } from "./ModalRoot";
 
-// Daily coach push settings. The toggle + hour are persisted to user_settings
-// (push_enabled / push_hour / push_timezone); the server-side dispatch reads
-// them to decide who to push and when. Timezone is auto-detected on save — the
-// user picks a wall-clock hour, the server maps it to UTC via the IANA name.
+const MAX_TIMES = 3;
+
+// Daily coach push settings. Persists to user_settings (push_enabled /
+// push_hours / push_timezone); the server-side dispatch reads them to decide
+// who to push and at which local hours. Up to 3 times a day (for runners who
+// train more than once). Timezone is auto-detected on save — the user picks
+// wall-clock hours, the server maps them to UTC via the IANA name.
 //
 // Push only fires on the Android APK (FCM). On web this screen still saves the
-// preference, but no notification is delivered until the user is on the app.
-export function PushSettingsModal({ pushEnabled, pushHour, pushTimezone, setPushSettings, onClose }) {
+// preference, but no notification is delivered.
+export function PushSettingsModal({ pushEnabled, pushHours, pushTimezone, setPushSettings, onClose }) {
   const t = useT();
   const [enabled, setEnabled] = useState(pushEnabled === true);
-  const [hour, setHour] = useState(Number.isFinite(pushHour) ? pushHour : 8);
+  // Local working copy: sorted, de-duped hours. Default to a single 08:00 slot
+  // so a freshly-enabled user has something sensible to save.
+  const initial = Array.isArray(pushHours) && pushHours.length
+    ? [...new Set(pushHours)].sort((a, b) => a - b)
+    : [8];
+  const [hours, setHours] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
 
-  // Detected on save so the server always has a fresh IANA tz even if the user
-  // travels; shown read-only so they understand what "8:00" is anchored to.
   const detectedTz = (() => {
     try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ""; }
     catch { return ""; }
   })();
 
+  function setHourAt(idx, value) {
+    setHours(prev => prev.map((h, i) => (i === idx ? value : h)));
+  }
+  function removeAt(idx) {
+    setHours(prev => prev.filter((_, i) => i !== idx));
+  }
+  function addTime() {
+    setHours(prev => {
+      if (prev.length >= MAX_TIMES) return prev;
+      // Pick the first hour not already chosen, so the new row isn't a dup.
+      const used = new Set(prev);
+      let h = 8;
+      for (let cand = 0; cand < 24; cand++) { if (!used.has(cand)) { h = cand; break; } }
+      return [...prev, h];
+    });
+  }
+
   async function save() {
     setBusy(true);
     setMsg("");
     try {
+      // De-dupe + sort on the way out; if enabling with no slots, keep [8].
+      const clean = [...new Set(hours)].sort((a, b) => a - b);
       await setPushSettings({
         pushEnabled: enabled,
-        pushHour: hour,
+        pushHours: enabled ? (clean.length ? clean : [8]) : clean,
         pushTimezone: detectedTz || pushTimezone || "",
       });
       setMsg(t("push.saved"));
@@ -91,16 +116,35 @@ export function PushSettingsModal({ pushEnabled, pushHour, pushTimezone, setPush
             </span>
           </div>
 
-          {/* Hour picker — only meaningful when enabled */}
+          {/* Times — up to 3. Only meaningful when enabled. */}
           <div style={{ opacity: enabled ? 1 : 0.45, pointerEvents: enabled ? "auto" : "none", marginBottom: 14 }}>
-            <div style={{ ...s.label, marginBottom: 6 }}>{t("push.time_label")}</div>
-            <select value={hour} onChange={e => setHour(parseInt(e.target.value, 10))}
-              style={{ ...s.input, maxWidth: 140 }}>
-              {Array.from({ length: 24 }, (_, h) => (
-                <option key={h} value={h}>{String(h).padStart(2, "0")}:00</option>
+            <div style={{ ...s.label, marginBottom: 8 }}>{t("push.times_label")}</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {hours.map((h, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <select value={h} onChange={e => setHourAt(i, parseInt(e.target.value, 10))}
+                    style={{ ...s.input, maxWidth: 140 }}>
+                    {Array.from({ length: 24 }, (_, hr) => (
+                      <option key={hr} value={hr}>{String(hr).padStart(2, "0")}:00</option>
+                    ))}
+                  </select>
+                  {hours.length > 1 && (
+                    <button onClick={() => removeAt(i)} aria-label={t("push.remove_time")}
+                      style={{
+                        border: "none", background: "none", color: "var(--ink-3)",
+                        cursor: "pointer", fontSize: 16, padding: "0 6px", lineHeight: 1,
+                      }}>×</button>
+                  )}
+                </div>
               ))}
-            </select>
-            <div style={{ ...s.muted, fontSize: 11, marginTop: 8, lineHeight: 1.5 }}>
+            </div>
+            {hours.length < MAX_TIMES && (
+              <button onClick={addTime}
+                style={{ ...s.btnGhost, fontSize: 12, padding: "6px 12px", marginTop: 10 }}>
+                {t("push.add_time")}
+              </button>
+            )}
+            <div style={{ ...s.muted, fontSize: 11, marginTop: 10, lineHeight: 1.5 }}>
               {t("push.tz_note", { tz: detectedTz || pushTimezone || "—" })}
             </div>
           </div>

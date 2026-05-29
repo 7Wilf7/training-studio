@@ -18,10 +18,11 @@ const FIELD_MAP = {
   // server-side token. Requires column `caiyun_api_key TEXT` on user_settings.
   caiyunApiKey:  'caiyun_api_key',
   // Daily coach push (Android APK). The server-side dispatch reads these to
-  // decide who to push to and when. pushHour is a 0–23 LOCAL hour; pushTimezone
-  // is an IANA name (auto-detected on save) so the server can map it to UTC.
+  // decide who to push to and when. pushHours is up to 3 LOCAL hours (0–23)
+  // for multi-session days; pushTimezone is an IANA name (auto-detected on
+  // save) so the server can map those hours to UTC.
   pushEnabled:   'push_enabled',
-  pushHour:      'push_hour',
+  pushHours:     'push_hours',     // int[] — e.g. [8, 13, 19]
   pushTimezone:  'push_timezone',
 };
 
@@ -33,9 +34,12 @@ function fromRow(row) {
     if (camel === 'coachConfig') {
       // jsonb arrives as a parsed object; null when unset.
       out[camel] = (v && typeof v === 'object') ? v : null;
-    } else if (camel === 'defaultLng' || camel === 'defaultLat' || camel === 'pushHour') {
+    } else if (camel === 'defaultLng' || camel === 'defaultLat') {
       // numeric → keep as number, null when unset (caller checks isFinite).
       out[camel] = (v === null || v === undefined) ? null : Number(v);
+    } else if (camel === 'pushHours') {
+      // int[] → always an array; coerce members to numbers.
+      out[camel] = Array.isArray(v) ? v.map(Number).filter(Number.isFinite) : [];
     } else if (camel === 'pushEnabled') {
       // boolean → null defends as false.
       out[camel] = v === true;
