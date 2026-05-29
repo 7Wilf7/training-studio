@@ -17,16 +17,31 @@ function stripV(tag) {
   return tag.replace(/^v/i, "").trim();
 }
 
-// Naive semver compare: 0.2.1 > 0.2.0 → 1, equal → 0, older → -1
+// semver-ish compare: 0.2.1 > 0.2.0 → 1, equal → 0, older → -1.
+// Handles prerelease suffixes ("0.4.0-beta.4"): per semver, a prerelease ranks
+// BELOW the matching release (0.4.0-beta.4 < 0.4.0). The old naive split-on-dot
+// got this backwards — it parsed "0.4.0-beta.4" as [0,4,0,4] and so judged the
+// installed beta NEWER than the released 0.4.0, reporting "you're up to date".
+function parseVersion(v) {
+  const [core, pre = ""] = String(v).split("-");
+  return { nums: core.split(".").map((n) => parseInt(n, 10) || 0), pre };
+}
 function compareVersions(a, b) {
-  const pa = a.split(".").map((n) => parseInt(n, 10) || 0);
-  const pb = b.split(".").map((n) => parseInt(n, 10) || 0);
-  const len = Math.max(pa.length, pb.length);
+  const pa = parseVersion(a);
+  const pb = parseVersion(b);
+  const len = Math.max(pa.nums.length, pb.nums.length);
   for (let i = 0; i < len; i++) {
-    const x = pa[i] || 0;
-    const y = pb[i] || 0;
+    const x = pa.nums[i] || 0;
+    const y = pb.nums[i] || 0;
     if (x > y) return 1;
     if (x < y) return -1;
+  }
+  // Core versions equal — a release (no prerelease) outranks a prerelease.
+  if (!pa.pre && pb.pre) return 1;
+  if (pa.pre && !pb.pre) return -1;
+  if (pa.pre && pb.pre) {
+    // Both prerelease, e.g. "beta.4" vs "beta.5" — numeric-aware compare.
+    return Math.sign(pa.pre.localeCompare(pb.pre, undefined, { numeric: true }));
   }
   return 0;
 }
