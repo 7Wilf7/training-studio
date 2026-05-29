@@ -585,6 +585,13 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
                     );
                   })()}
                   <div style={{ flex: 1 }} />
+                  {/* RPE — shown collapsed, just before the weather chip. */}
+                  {l.rpe > 0 && (
+                    <span style={{
+                      fontFamily: "var(--font-mono)", fontSize: 11,
+                      color: "var(--ink-3)", flexShrink: 0,
+                    }}>RPE{l.rpe}</span>
+                  )}
                   {/* Weather chip at the END of row 1 — outdoor types only.
                       Apparent ("feels like") temp is the headline because
                       that's what actually drives pace + HR in heat. Full
@@ -700,6 +707,13 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
                     );
                   })}
                 </div>
+                {/* RPE — before the weather chip, mirrors mobile. */}
+                {l.rpe > 0 && (
+                  <span style={{
+                    fontFamily: "var(--font-mono)", fontSize: 12,
+                    color: "var(--ink-3)", flexShrink: 0,
+                  }}>RPE{l.rpe}</span>
+                )}
                 {/* Weather chip at the right end of the identifier block —
                     apparent temp + icon, outdoor types only. Mirrors the
                     mobile row-1 placement. */}
@@ -932,7 +946,7 @@ function MetricWeather({ w, full = false }) {
     }}>
       {meta && <span aria-hidden="true">{meta.icon}</span>}
       {Number.isFinite(headline) && (
-        <span>{headline}<span style={{ color: "var(--ink-3)", fontSize: 10, marginLeft: 1 }}>°C</span></span>
+        <span>{Math.round(headline)}<span style={{ color: "var(--ink-3)", fontSize: 10, marginLeft: 1 }}>°C</span></span>
       )}
       {full && Number.isFinite(w.humidity) && (
         <span style={{ color: "var(--ink-3)", fontSize: 11 }}>

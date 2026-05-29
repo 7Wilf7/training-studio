@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { s } from "../styles";
-import { ACTIVITY_TYPES, DAILY_TAGS, RUN_GROUP_TYPES, TYPE_COLOR } from "../constants";
+import { ACTIVITY_TYPES, DAILY_TAGS, DAILY_TAG_ICONS, RUN_GROUP_TYPES, TYPE_COLOR } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { formatDuration } from "../utils/format";
@@ -235,7 +235,7 @@ export function CalendarDayModal({
                 <button key={tag}
                   onClick={() => toggleDayTag(tag)}
                   style={s.chip(currentTags.includes(tag))}>
-                  {t(`calendar.tag.${tag}`)}
+                  {DAILY_TAG_ICONS[tag] ? `${DAILY_TAG_ICONS[tag]} ` : ""}{t(`calendar.tag.${tag}`)}
                 </button>
               ))}
             </div>

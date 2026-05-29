@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { s } from "../styles";
-import { RUN_GROUP_TYPES, TYPE_COLOR } from "../constants";
+import { RUN_GROUP_TYPES, TYPE_COLOR, DAILY_TAG_ICONS } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { CalendarDayModal } from "./CalendarDayModal";
@@ -633,14 +633,17 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, colI
           </div>
         )}
 
-        {/* Day-level tag indicator — small moss dot in the corner instead of
-            the desktop chip. Visually distinct from activity dots above. */}
+        {/* Day-level tags — mobile shows just the emoji icon(s) in the corner
+            (no room for text); multiple tags stack as multiple icons. */}
         {dayTags.length > 0 && (
           <span style={{
-            position: "absolute", top: 2, right: 2,
-            width: 4, height: 4, borderRadius: "50%",
-            background: "var(--moss-deep)",
-          }} title={dayTags.map(tag => t(`calendar.tag.${tag}`)).join(", ")} />
+            position: "absolute", top: 1, right: 2,
+            display: "inline-flex", gap: 1, fontSize: 10, lineHeight: 1,
+          }} title={dayTags.map(tag => t(`calendar.tag.${tag}`)).join(", ")}>
+            {dayTags.map(tag => (
+              <span key={tag} aria-hidden="true">{DAILY_TAG_ICONS[tag] || "•"}</span>
+            ))}
+          </span>
         )}
       </div>
     );
@@ -719,7 +722,7 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, colI
               background: "var(--moss-bg)", color: "var(--moss-deep)",
               border: "1px solid var(--moss)", lineHeight: 1.3,
             }} title={t(`calendar.tag.${tag}`)}>
-              {t(`calendar.tag.${tag}`)}
+              {DAILY_TAG_ICONS[tag] ? `${DAILY_TAG_ICONS[tag]} ` : ""}{t(`calendar.tag.${tag}`)}
             </span>
           ))}
         </div>

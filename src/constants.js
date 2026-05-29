@@ -111,6 +111,16 @@ export const WEATHER_RELEVANT_TYPES = ["Road Run", "Trail Run", "Hiking", "HIIT"
 // here needs no schema change.
 export const DAILY_TAGS = ["massage", "stretching", "poor_sleep", "sick", "travel"];
 
+// Emoji glyph per day tag. Mobile calendar cells show just these icons (no
+// room for text); desktop chips + the day modal show icon + label.
+export const DAILY_TAG_ICONS = {
+  massage:    "💆",
+  stretching: "🤸",
+  poor_sleep: "😴",
+  sick:       "🤒",
+  travel:     "✈️",
+};
+
 // Running sub-types — split into two groups:
 //   PACE: heart-rate-based classification (single-select per activity)
 //   FLAG: independent flags that can co-exist with a pace type (e.g. Race)
