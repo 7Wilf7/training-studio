@@ -1,15 +1,17 @@
 /* ============================================================
    Wilf's Training Studio — Instrument Aesthetic
    Brutalist-minimal monochrome + low-sat moss accent + topographic language.
-   Industrial sans (Geist) for UI/display, JetBrains Mono for data readouts.
+   Industrial condensed grotesque (Saira) for UI/display, Saira Condensed for
+   data readouts — a sport-watch (COROS-ish) condensed-numeral feel. Chinese
+   glyphs fall through to the system CJK face (Microsoft YaHei / PingFang).
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Saira:wght@300;400;500;600;700&family=Saira+Condensed:wght@400;500;600;700&display=swap');
 
 :root {
   /* ---- Type ---- */
-  --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-sans: "Saira", -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+  --font-mono: "Saira Condensed", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
   /* ---- Surface ---- */
   --bg:           #f2f1ec;   /* slightly warm off-white (parchment-ish) */
@@ -53,7 +55,6 @@
   font-family: var(--font-sans);
   font-size: 15px;
   line-height: 1.55;
-  font-feature-settings: "ss01", "ss02", "cv11";  /* Geist stylistic alternates */
 
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -123,6 +124,13 @@ summary::-webkit-details-marker { display: none; }
    still working even after they leave the chat tab. */
 @keyframes ts-spin {
   to { transform: rotate(360deg); }
+}
+
+/* Indeterminate progress bar — used by the in-app APK update download when
+   the server gives no Content-Length, so we can't show a real percentage. */
+@keyframes ts-indeterminate {
+  0%   { margin-left: -40%; }
+  100% { margin-left: 100%; }
 }
 .ts-spinner {
   display: inline-block;

@@ -45,6 +45,9 @@ export function UpdateChecker() {
   // Native in-app download/install progress: idle | downloading | installing
   const [installState, setInstallState] = useState("idle");
   const [installMsg, setInstallMsg] = useState("");
+  // Download progress 0–100, or null when the server gives no Content-Length
+  // (then we show an indeterminate bar instead of a percentage).
+  const [downloadPct, setDownloadPct] = useState(null);
 
   async function check() {
     setStatus("checking");
@@ -80,12 +83,23 @@ export function UpdateChecker() {
       return;
     }
     setInstallMsg("");
+    setDownloadPct(null);
+    let progressHandle = null;
     try {
       setInstallState("downloading");
+      // Live byte-progress from the native download. contentLength is 0 when
+      // the server omits Content-Length — keep pct null so the UI falls back
+      // to an indeterminate bar rather than a stuck "0%".
+      progressHandle = await Filesystem.addListener("progress", (p) => {
+        if (p.contentLength > 0) {
+          setDownloadPct(Math.min(100, Math.round((p.bytes / p.contentLength) * 100)));
+        }
+      });
       const res = await Filesystem.downloadFile({
         url: apkUrl,
         path: "ts-update.apk",
         directory: Directory.Cache,
+        progress: true,
       });
       const path = res?.path;
       if (!path) throw new Error("download returned no path");
@@ -98,6 +112,9 @@ export function UpdateChecker() {
       setInstallState("idle");
       setInstallMsg(t("settings.update_install_failed"));
       window.open(apkUrl, "_blank", "noreferrer");
+    } finally {
+      progressHandle?.remove?.();
+      setDownloadPct(null);
     }
   }
 
@@ -142,7 +159,7 @@ export function UpdateChecker() {
                   disabled={installState !== "idle"}
                   style={{ ...downloadBtnStyle, border: "none", cursor: installState !== "idle" ? "default" : "pointer", opacity: installState !== "idle" ? 0.7 : 1 }}>
                   {installState === "downloading"
-                    ? t("settings.update_downloading")
+                    ? `${t("settings.update_downloading")}${downloadPct != null ? ` ${downloadPct}%` : ""}`
                     : installState === "installing"
                       ? t("settings.update_installing")
                       : `↓ ${t("settings.update_install")}`}
@@ -158,6 +175,20 @@ export function UpdateChecker() {
               ↗ {t("settings.update_view")}
             </a>
           </div>
+          {installState === "downloading" && (
+            <div style={progressTrackStyle}>
+              <div
+                style={{
+                  ...progressFillStyle,
+                  // Determinate when we know the size; otherwise a slim
+                  // looping bar so the user still sees motion.
+                  ...(downloadPct != null
+                    ? { width: `${downloadPct}%` }
+                    : { width: "40%", animation: "ts-indeterminate 1.1s ease-in-out infinite" }),
+                }}
+              />
+            </div>
+          )}
           {installMsg && (
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--warn)", lineHeight: 1.5 }}>
               {installMsg}
@@ -249,6 +280,20 @@ const downloadBtnStyle = {
   fontSize: 12,
   textDecoration: "none",
   fontWeight: 600,
+};
+
+const progressTrackStyle = {
+  height: 6,
+  borderRadius: 3,
+  background: "var(--bg-sunken)",
+  overflow: "hidden",
+};
+
+const progressFillStyle = {
+  height: "100%",
+  background: "var(--moss)",
+  borderRadius: 3,
+  transition: "width 0.2s ease",
 };
 
 const viewBtnStyle = {
