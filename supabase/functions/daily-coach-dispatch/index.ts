@@ -230,6 +230,14 @@ Deno.serve(async (req) => {
         const r = await sendPush(sa.project_id, fcmAccessToken, s.fcm_token, "Training Studio", message);
         if (r.ok) sent++;
       }
+
+      // Persist the message to the in-app inbox so the user can re-read it
+      // after the system notification is dismissed. Best-effort: a failed
+      // insert shouldn't fail the dispatch (the push already went out).
+      const { error: inboxErr } = await supabase
+        .from("push_inbox").insert({ user_id: u.user_id, body: message });
+      if (inboxErr) summary.push({ user: u.user_id, warn: `inbox insert: ${inboxErr.message}` });
+
       summary.push({ user: u.user_id, sent, devices: subs.length, message });
     }
 

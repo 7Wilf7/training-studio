@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 import { popBackHandler, hasBackHandler } from "./lib/backStack";
@@ -19,6 +19,7 @@ import { ProfileEditor } from "./components/ProfileEditor";
 import { ApiSettingsModal } from "./components/ApiSettingsModal";
 import { WeatherApiSettingsModal } from "./components/WeatherApiSettingsModal";
 import { PushSettingsModal } from "./components/PushSettingsModal";
+import { InboxModal } from "./components/InboxModal";
 import { ChangePasswordModal } from "./components/ChangePasswordModal";
 import { CoachPlanImportModal } from "./components/CoachPlanImportModal";
 import { GuideModal } from "./components/GuideModal";
@@ -694,8 +695,18 @@ function AppShell({
   const [showApiSettings, setShowApiSettings] = useState(false);
   const [showWeatherApiSettings, setShowWeatherApiSettings] = useState(false);
   const [showPushSettings, setShowPushSettings] = useState(false);
+  const [showInbox, setShowInbox] = useState(false);
+  const [inboxUnread, setInboxUnread] = useState(0);
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
+
+  // Unread-inbox badge count. Loaded once on mount and refreshed whenever the
+  // inbox modal reports a change (read/delete/clear). Best-effort — the DAL
+  // swallows errors and returns 0, so a hiccup just hides the badge.
+  const refreshInboxUnread = useCallback(() => {
+    db.pushInbox.unreadCount().then(setInboxUnread).catch(() => {});
+  }, []);
+  useEffect(() => { refreshInboxUnread(); }, [refreshInboxUnread]);
 
   // ── AI Coach in-flight state, lifted from AICoachTab so it SURVIVES tab
   //    switches. Previously the fetch and chatLoading both lived in
@@ -1187,6 +1198,13 @@ Rules:
         />
       )}
 
+      {showInbox && (
+        <InboxModal
+          onClose={() => setShowInbox(false)}
+          onChanged={refreshInboxUnread}
+        />
+      )}
+
       {showGuide && <GuideModal onClose={() => setShowGuide(false)} />}
 
       {/* Plan-import review modal — rendered at AppShell level (not inside
@@ -1218,6 +1236,8 @@ Rules:
         onOpenPushSettings={() => setShowPushSettings(true)}
         pushEnabled={pushEnabled}
         pushHours={pushHours}
+        onOpenInbox={() => setShowInbox(true)}
+        inboxUnread={inboxUnread}
         onOpenGuide={() => setShowGuide(true)}
         onToggleLang={toggleLang}
         onChangePassword={() => setShowChangePassword(true)}

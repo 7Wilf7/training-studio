@@ -60,6 +60,18 @@ const dict = {
   "push.save_failed":           { en: "✕ Save failed: {msg}", zh: "✕ 保存失败：{msg}" },
   "settings.email_actions":     { en: "Tap email to manage password / sign out", zh: "点击邮箱管理密码 / 退出登录" },
 
+  // ===== Inbox (received coach pushes) =====
+  "settings.inbox":             { en: "Inbox",                zh: "收件箱" },
+  "settings.inbox_desc":        { en: "Coach check-ins pushed to your phone", zh: "推送到手机的教练打卡" },
+  "settings.inbox_unread":      { en: "{n} unread",           zh: "{n} 条未读" },
+  "inbox.title":                { en: "Inbox",                zh: "收件箱" },
+  "inbox.empty":                { en: "No messages yet. Daily coach check-ins will show up here.", zh: "还没有消息。每天的教练打卡会出现在这里。" },
+  "inbox.mark_all_read":        { en: "Mark all read",        zh: "全部已读" },
+  "inbox.clear_all":            { en: "Clear all",            zh: "清空" },
+  "inbox.clear_confirm":        { en: "Delete all messages? This can't be undone.", zh: "删除所有消息？此操作无法撤销。" },
+  "inbox.delete":               { en: "Delete",               zh: "删除" },
+  "inbox.load_failed":          { en: "Failed to load inbox.", zh: "加载收件箱失败。" },
+
   // ===== Weather API settings =====
   "weather_api.title":          { en: "Caiyun Weather API",   zh: "彩云天气 API" },
   "weather_api.hint":           { en: "Paste your Caiyun token to use your own daily quota. Leave empty to share the app's default token (rate-limited).", zh: "粘贴你自己的彩云 token 即可使用你的每日配额。留空则共享应用默认 token（配额有限，可能限流）。" },

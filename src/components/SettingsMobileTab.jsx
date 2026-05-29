@@ -27,6 +27,8 @@ export function SettingsMobileTab({
   onOpenPushSettings,
   pushEnabled,
   pushHours,
+  onOpenInbox,
+  inboxUnread = 0,
   onOpenGuide,
   onToggleLang,
   onChangePassword,
@@ -106,6 +108,12 @@ export function SettingsMobileTab({
             })
           : t("settings.daily_push_off")}
         onClick={onOpenPushSettings}
+      />
+      <Cell
+        primary={t("settings.inbox")}
+        secondary={inboxUnread > 0 ? t("settings.inbox_unread", { n: inboxUnread }) : t("settings.inbox_desc")}
+        secondaryWarn={inboxUnread > 0}
+        onClick={onOpenInbox}
       />
       <Cell
         primary={t("settings.language")}

@@ -5,3 +5,4 @@ export * as coachMessages from './coachMessages';
 export * as userSettings from './userSettings';
 export * as dailyNotes from './dailyNotes';
 export * as pushSubscriptions from './pushSubscriptions';
+export * as pushInbox from './pushInbox';
