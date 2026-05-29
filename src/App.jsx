@@ -34,7 +34,7 @@ import {
 import { useAuth } from "./hooks/useAuth";
 import { useIsMobile, useIsNarrow } from "./hooks/useMediaQuery";
 import * as db from "./lib/db";
-import { getCurrentLocation, captureSnapshotForWorkout, useWeatherContext } from "./lib/weather";
+import { getCurrentLocation, captureSnapshotForWorkout, useWeatherContext, fetchRaceDayWeather } from "./lib/weather";
 import { postJson } from "./lib/apiFetch";
 import { initPushNotifications } from "./lib/push";
 
@@ -778,11 +778,32 @@ function AppShell({
       currentWeather ? `currentTemp=${currentWeather.tempC}°C apparent=${currentWeather.apparentC}°C` : 'no realtime',
       forecastByDate ? `${forecastByDate.size}-day forecast` : 'no forecast');
 
+    // Race-day weather for the NEXT upcoming target race that has a location
+    // (outdoor only — Hyrox is indoor, skipped). Forecast when within ~2 weeks,
+    // else a climate normal. Only the nearest race is included so the coach
+    // doesn't ramble about races months out. Best-effort — never blocks the send.
+    let raceDayWeather = null;
+    try {
+      const nowMs = Date.now();
+      const nextRace = races
+        .filter(r => r.isTarget && r.category !== "Hyrox" && r.date
+          && Number.isFinite(r.locationLat) && Number.isFinite(r.locationLng)
+          && new Date(`${r.date}T00:00:00`).getTime() >= nowMs - 86400000)
+        .sort((a, b) => a.date.localeCompare(b.date))[0];
+      if (nextRace) {
+        const w = await fetchRaceDayWeather({
+          lat: nextRace.locationLat, lng: nextRace.locationLng,
+          date: nextRace.date, caiyunToken: caiyunApiKey,
+        });
+        if (w) raceDayWeather = { name: nextRace.name, date: nextRace.date, ...w };
+      }
+    } catch { /* best-effort — skip race weather on any failure */ }
+
     const systemPrompt = buildSystemPrompt({
       profile, coachConfig, coachMemory,
       dataBlock: buildDataBlock({
         logs: freshLogs, races, now, lang: "en",
-        currentWeather, forecastByDate, dailyNotes,
+        currentWeather, forecastByDate, dailyNotes, raceDayWeather,
       }),
       lang: "en",
     });

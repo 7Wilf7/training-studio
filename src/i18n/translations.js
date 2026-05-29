@@ -562,6 +562,15 @@ const dict = {
   "races.countdown_days":     { en: "in {n}d",              zh: "还有 {n} 天" },
   "races.countdown_weeks":    { en: "in {n}w",              zh: "还有 {n} 周" },
   "races.countdown_weeks_days": { en: "in {w}w {d}d",       zh: "还有 {w} 周 {d} 天" },
+  "races.location_label":     { en: "Race location",        zh: "比赛地点" },
+  "races.location_placeholder": { en: "Type a city, e.g. Guangzhou", zh: "输入城市，如 广州" },
+  "races.location_hint":      { en: "Type a place name, then pick a match to set it (city-level is fine).", zh: "输入地名后从下拉里选一个（精确到城市即可）。" },
+  "races.location_set":       { en: "Location set — race-day weather will show when it's close.", zh: "地点已设 —— 临近比赛会显示当天天气。" },
+  "races.location_clear":     { en: "Clear",                zh: "清除" },
+  "races.weather_forecast":   { en: "Race-day forecast",     zh: "比赛日预报" },
+  "races.weather_climate":    { en: "Typical for the date",  zh: "往年同期" },
+  "races.weather_feels":      { en: "feels ",               zh: "体感" },
+  "races.weather_rain":       { en: "rain ",                zh: "降水" },
 
   // ===== Personal Records tab =====
   "pr.title":                 { en: "Personal Records",     zh: "个人最佳成绩" },

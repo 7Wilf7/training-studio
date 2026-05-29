@@ -474,6 +474,113 @@ export async function reverseGeocode({ lng, lat, lang = 'zh' }) {
   }
 }
 
+// ── Forward geocode: place NAME → coords. For race locations the user isn't
+// physically at (an away race), so device GPS / reverseGeocode can't help.
+// Open-Meteo's geocoding endpoint is free, keyless, CORS-enabled. Returns an
+// array of candidates (the user picks when ambiguous), or [] on failure.
+export async function forwardGeocode(name, lang = 'zh') {
+  const q = (name || '').trim();
+  if (!q) return [];
+  const url = `https://geocoding-api.open-meteo.com/v1/search`
+    + `?name=${encodeURIComponent(q)}&count=6&language=${lang === 'en' ? 'en' : 'zh'}&format=json`;
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) return [];
+    const d = await resp.json();
+    return (d.results || []).map(r => ({
+      name: r.name,
+      lat: r.latitude,
+      lng: r.longitude,
+      admin1: r.admin1 || '',
+      country: r.country || '',
+      // Disambiguation label, e.g. "广州市, 广东省, 中国" — dedupe repeats.
+      label: [r.name, r.admin1, r.country].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(', '),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+// Day-of-year helpers for the climate-normal window (year-agnostic).
+const _DOY_CUM = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
+function _dayOfYear(month, day) { return _DOY_CUM[month] + day; }
+function _monthDayDistance(m1, d1, m2, d2) {
+  const raw = Math.abs(_dayOfYear(m1, d1) - _dayOfYear(m2, d2));
+  return Math.min(raw, 365 - raw);
+}
+function _pushNum(arr, v) { const n = Number(v); if (Number.isFinite(n)) arr.push(n); }
+
+// ── Climate normal: TYPICAL weather for a date at a location, averaged from
+// the past ~5 years of ERA5 reanalysis (Open-Meteo archive — free, keyless).
+// For races too far out for any real forecast (> ~2 weeks). Averages the target
+// month-day ± 4 days across the sampled years. Apparent ("feels like") temp is
+// included because that's what matters for heat planning. Returns a
+// forecast-shaped object (source:'climate') so existing formatters work, or null.
+export async function fetchClimateNormal({ lat, lng, date }) {
+  if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng)) || !date) return null;
+  const target = new Date(`${date}T00:00:00`);
+  if (isNaN(target.getTime())) return null;
+  const tMonth = target.getMonth();
+  const tDay = target.getDate();
+  const end = new Date(Date.now() - 7 * 86400000); // archive lags ~5 days
+  const start = `${end.getFullYear() - 5}-01-01`;
+  const url = `https://archive-api.open-meteo.com/v1/archive`
+    + `?latitude=${roundCoord(lat)}&longitude=${roundCoord(lng)}`
+    + `&start_date=${start}&end_date=${end.toISOString().slice(0, 10)}`
+    + `&daily=temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_mean,precipitation_sum`
+    + `&timezone=auto`;
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) return null;
+    const dd = (await resp.json()).daily;
+    if (!dd || !Array.isArray(dd.time)) return null;
+    const maxs = [], mins = [], appMax = [], appMean = [], precs = [];
+    for (let i = 0; i < dd.time.length; i++) {
+      const day = new Date(`${dd.time[i]}T00:00:00`);
+      if (_monthDayDistance(day.getMonth(), day.getDate(), tMonth, tDay) > 4) continue;
+      _pushNum(maxs, dd.temperature_2m_max?.[i]);
+      _pushNum(mins, dd.temperature_2m_min?.[i]);
+      _pushNum(appMax, dd.apparent_temperature_max?.[i]);
+      _pushNum(appMean, dd.apparent_temperature_mean?.[i]);
+      _pushNum(precs, dd.precipitation_sum?.[i]);
+    }
+    if (!maxs.length || !mins.length) return null;
+    const avg = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
+    const r1 = x => x == null ? null : Math.round(x * 10) / 10;
+    const tMax = r1(avg(maxs)), tMin = r1(avg(mins));
+    return {
+      tempMaxC: tMax,
+      tempMinC: tMin,
+      tempAvgC: (tMax != null && tMin != null) ? r1((tMax + tMin) / 2) : null,
+      apparentMaxC: r1(avg(appMax)),
+      apparentAvgC: r1(avg(appMean)),
+      precipMm: r1(avg(precs)),
+      source: 'climate',
+      sampleDays: maxs.length,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ── Race-day weather resolver: a real daily forecast when the race is inside
+// Caiyun's ~15-day window, otherwise a climate normal. Returns
+// { kind: 'forecast' | 'climate', ...forecastLike } or null.
+export async function fetchRaceDayWeather({ lat, lng, date, caiyunToken }) {
+  if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng)) || !date) return null;
+  const daysOut = Math.round((new Date(`${date}T00:00:00`).getTime() - Date.now()) / 86400000);
+  if (!Number.isFinite(daysOut)) return null;
+  if (daysOut >= -1 && daysOut <= 14) {
+    try {
+      const forecasts = await fetchDailyForecasts({ lng, lat, caiyunToken });
+      const hit = forecasts.find(f => f.date === date);
+      if (hit) return { kind: 'forecast', ...hit };
+    } catch { /* fall through to climate normal */ }
+  }
+  const normal = await fetchClimateNormal({ lat, lng, date });
+  return normal ? { kind: 'climate', ...normal } : null;
+}
+
 // One-line summary string used inside the AI Coach prompt + activity rows.
 // "28°C 体感30°C 湿度65% 多云 风2m/s AQI50". Skips missing fields silently.
 export function formatWeatherShort(w, lang = 'zh') {

@@ -12,6 +12,11 @@ const FIELD_MAP = {
   ascent:        'ascent',
   itraScore:     'itra_score',
   resultSeconds: 'result_seconds',
+  // Race location (optional) — used to fetch race-day weather. Name is the
+  // free-typed place label; lat/lng are forward-geocoded coords (WGS84).
+  locationName:  'location_name',
+  locationLat:   'location_lat',
+  locationLng:   'location_lng',
   createdAt:     'created_at',
   updatedAt:     'updated_at',
 };
@@ -51,6 +56,9 @@ function fromRow(row) {
     subtype:   row.subtype ?? '',           // text; '' when unused
     ascent:    row.ascent ?? null,          // int, kept as number
     itraScore: row.itra_score ?? null,      // int, kept as number
+    locationName: row.location_name ?? '',
+    locationLat:  row.location_lat == null ? null : Number(row.location_lat),
+    locationLng:  row.location_lng == null ? null : Number(row.location_lng),
     resultSeconds,
     resultH, resultM, resultS,
     createdAt: row.created_at ?? null,
@@ -62,9 +70,17 @@ function toRow(patch) {
   const out = {};
 
   // Plain passthrough fields. Bool / text / date — Supabase handles the types.
-  for (const camel of ['isTarget', 'name', 'date', 'category', 'subtype']) {
+  for (const camel of ['isTarget', 'name', 'date', 'category', 'subtype', 'locationName']) {
     if (camel in patch && patch[camel] !== undefined) {
       out[FIELD_MAP[camel]] = patch[camel];
+    }
+  }
+
+  // location lat/lng — numeric, null when cleared.
+  for (const camel of ['locationLat', 'locationLng']) {
+    if (camel in patch && patch[camel] !== undefined) {
+      const v = patch[camel];
+      out[FIELD_MAP[camel]] = (v === null || v === '') ? null : Number(v);
     }
   }
 

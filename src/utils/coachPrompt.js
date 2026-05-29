@@ -14,6 +14,7 @@ export const DATA_LABELS = {
     currentDate: "[Current Date]",
     currentWeather: "[Current Weather]",
     weeklyForecast: "[7-Day Weather Forecast — use this when planning ANY upcoming session]",
+    raceWeather: "[Next Race — Race-Day Weather. 'forecast' = a real ≤2-week forecast; 'typical' = a multi-year climate normal for that date/place. Tailor race-day pacing, hydration and kit to this; flag heat/humidity risk early.]",
     targets: "[Target Races]",
     history: "[Race History]",
     weeklyTrend: "[Weekly Training Load — last 8 weeks of run-group volume (distance + ascent + session count). Watch week-over-week jumps as an injury-risk signal.]",
@@ -27,6 +28,7 @@ export const DATA_LABELS = {
     currentDate: "[当前时间]",
     currentWeather: "[当前天气]",
     weeklyForecast: "[未来 7 天天气预报 —— 排任何未来训练时都参考这里]",
+    raceWeather: "[下一场比赛 —— 比赛日天气。'forecast' = 两周内的真实预报；'typical' = 该地点该日期的多年气候常态。据此给比赛日配速 / 补水 / 装备建议，提前提示高温高湿风险。]",
     targets: "[目标比赛]",
     history: "[比赛历史]",
     weeklyTrend: "[周训练量 —— 最近 8 周跑步类训练量（距离 + 爬升 + 次数）。关注周环比突增带来的伤病风险。]",
@@ -260,7 +262,7 @@ export function buildWeeklyTrend(logs, now, weeks = 8) {
 // `currentWeather` is the realtime snapshot (or null when unavailable).
 // `forecastByDate` is a Map<YYYY-MM-DD, dailyForecast> covering the next 7
 // days; used to attach daily weather to planned sessions in that window.
-export function buildDataBlock({ logs, races, now, lang = "en", currentWeather = null, forecastByDate = null, dailyNotes = [] }) {
+export function buildDataBlock({ logs, races, now, lang = "en", currentWeather = null, forecastByDate = null, dailyNotes = [], raceDayWeather = null }) {
   const D = DATA_LABELS[lang] || DATA_LABELS.en;
   // Strip future-planned entries — the LLM should only see what actually
   // happened. Planned rows would otherwise be misread as "recent activity"
@@ -356,6 +358,14 @@ export function buildDataBlock({ logs, races, now, lang = "en", currentWeather =
   if (cwStr) sections.push(`${D.currentWeather}\n${cwStr}`);
   if (weeklyForecastBlock) sections.push(`${D.weeklyForecast}\n${weeklyForecastBlock}`);
   sections.push(`${D.targets}\n${targetRaces}`);
+  if (raceDayWeather) {
+    const kind = raceDayWeather.kind === "forecast" ? "forecast" : "typical";
+    const wStr = formatDailyForecast(raceDayWeather);
+    if (wStr) {
+      const when = raceDayWeather.date ? ` on ${raceDayWeather.date}` : "";
+      sections.push(`${D.raceWeather}\n${raceDayWeather.name}${when} (${kind}): ${wStr}`);
+    }
+  }
   sections.push(`${D.history}\n${historyRaces}`);
   const weeklyTrend = buildWeeklyTrend(logs, now, 8);
   if (weeklyTrend) sections.push(`${D.weeklyTrend}\n${weeklyTrend}`);

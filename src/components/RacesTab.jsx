@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { s } from "../styles";
 import { RACE_PRIORITY, RACE_CATEGORIES, RACE_CATEGORY_COLOR, SPARTAN_SUBTYPES, SPARTAN_TIER_COLOR } from "../constants";
-import { useT } from "../i18n/LanguageContext";
+import { useT, useLanguage } from "../i18n/LanguageContext";
+import { forwardGeocode, fetchRaceDayWeather, skyconMeta } from "../lib/weather";
 import { parseDistanceKm, inferRaceCategory } from "../utils/format";
 import { useClickOutside } from "../utils/useClickOutside";
 import { useIsNarrow, useIsMobile } from "../hooks/useMediaQuery";
@@ -22,6 +23,7 @@ const EMPTY_RACE = (isTarget) => ({
   isTarget, priority: "A", name: "", date: "",
   distance: "", category: "", subtype: "", ascent: "", resultH: "", resultM: "", resultS: "",
   itraScore: "",
+  locationName: "", locationLat: null, locationLng: null,
 });
 
 // Decompose a stored race into the editable form shape. Inverse of how `commitRace` builds the race object.
@@ -42,6 +44,9 @@ function raceToForm(race) {
     resultM: race.resultM || "",
     resultS: race.resultS || "",
     itraScore: race.itraScore || "",
+    locationName: race.locationName || "",
+    locationLat: race.locationLat ?? null,
+    locationLng: race.locationLng ?? null,
   };
 }
 
@@ -63,8 +68,61 @@ export function RacesTab({
   mobileTopTab, setMobileTopTab, mobileSubTab, setMobileSubTab,
 }) {
   const t = useT();
+  const { lang } = useLanguage();
   const isNarrow = useIsNarrow();
   const isMobile = useIsMobile();
+
+  // Race-day weather for upcoming TARGET races that have a location (outdoor
+  // only — Hyrox is indoor, skipped). Within ~2 weeks → real forecast; further
+  // out → climate normal. Fetched lazily, keyed by race id. Re-runs when the
+  // race list changes (new/edited location or date).
+  const [raceWeather, setRaceWeather] = useState({});
+  useEffect(() => {
+    const targets = races.filter(r => r.isTarget && r.category !== "Hyrox"
+      && Number.isFinite(r.locationLat) && Number.isFinite(r.locationLng) && r.date);
+    let cancelled = false;
+    (async () => {
+      for (const r of targets) {
+        const w = await fetchRaceDayWeather({ lat: r.locationLat, lng: r.locationLng, date: r.date });
+        if (cancelled) return;
+        if (w) setRaceWeather(prev => ({ ...prev, [r.id]: w }));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [races]);
+
+  // Compact race-day weather line for a target card. Forecast → skycon icon +
+  // range + feels-like; climate → range + feels-like + typical rain. Returns
+  // null when no weather was resolved for this race.
+  function renderRaceWeather(r) {
+    const w = raceWeather[r.id];
+    if (!w) return null;
+    const parts = [];
+    if (w.kind === "forecast" && w.skycon) {
+      const meta = skyconMeta(w.skycon, lang);
+      if (meta?.icon) parts.push(meta.icon);
+    }
+    if (Number.isFinite(w.tempMinC) && Number.isFinite(w.tempMaxC)) parts.push(`${w.tempMinC}–${w.tempMaxC}°C`);
+    else if (Number.isFinite(w.tempAvgC)) parts.push(`${w.tempAvgC}°C`);
+    const app = Number.isFinite(w.apparentAvgC) ? w.apparentAvgC : w.apparentMaxC;
+    if (Number.isFinite(app)) parts.push(`${t("races.weather_feels")}${Math.round(app)}°C`);
+    if (w.kind === "climate" && Number.isFinite(w.precipMm) && w.precipMm >= 0.5) {
+      parts.push(`${t("races.weather_rain")}${w.precipMm}mm`);
+    }
+    if (!parts.length) return null;
+    return (
+      <div style={{
+        display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap",
+        fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-2)",
+      }}>
+        <span style={{ color: "var(--ink-3)" }}>
+          {w.kind === "forecast" ? t("races.weather_forecast") : t("races.weather_climate")}
+        </span>
+        <span>{parts.join(" ")}</span>
+      </div>
+    );
+  }
+
   // addingMode: null = no add form; "target" or "history" = the new race kind being added.
   // No more target/history TAB switching — both lists render on the same page.
   const [addingMode, setAddingMode] = useState(null);
@@ -642,6 +700,7 @@ export function RacesTab({
             </select>
           )}
           {r.itraScore && <span style={{ ...s.subTag, fontSize: 10, alignSelf: "flex-start" }}>ITRA {r.itraScore}</span>}
+          {renderRaceWeather(r)}
         </div>
       );
     }
@@ -952,6 +1011,22 @@ export function RacesTab({
           </div>
         )}
 
+        {/* Race location — drives race-day weather. Outdoor races only;
+            Hyrox is indoor so weather is irrelevant there. */}
+        {newRace.category !== "Hyrox" && (
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ ...s.label, marginBottom: 6 }}>{t("races.location_label")}</div>
+            <RaceLocationField
+              name={newRace.locationName}
+              lat={newRace.locationLat}
+              lng={newRace.locationLng}
+              onPick={(hit) => setNewRace(prev => ({ ...prev, locationName: hit.label, locationLat: hit.lat, locationLng: hit.lng }))}
+              onText={(text) => setNewRace(prev => ({ ...prev, locationName: text, locationLat: null, locationLng: null }))}
+              onClear={() => setNewRace(prev => ({ ...prev, locationName: "", locationLat: null, locationLng: null }))}
+            />
+          </div>
+        )}
+
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={tryAddRace} style={s.btn}>{isEdit ? t("common.save_changes") : t("common.save")}</button>
           <button onClick={() => {
@@ -962,4 +1037,77 @@ export function RacesTab({
       </div>
     );
   }
+}
+
+// Free-text race location with forward geocoding. The user types a place name;
+// after a short debounce we query Open-Meteo's geocoder and show matches. Picking
+// one stores name + coords (coords are what weather needs). Editing the text
+// after a pick clears the coords (they'd be stale) — re-pick to set them again.
+function RaceLocationField({ name, lat, lng, onPick, onText, onClear }) {
+  const t = useT();
+  const { lang } = useLanguage();
+  const [results, setResults] = useState([]);
+  const [open, setOpen] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const hasCoords = Number.isFinite(lat) && Number.isFinite(lng);
+
+  // Debounced forward-geocode keyed off the parent's `name` (no duplicate local
+  // text state — the input is controlled by the prop). Skips when coords are
+  // already set so we don't re-search the picked label. All state writes happen
+  // inside the timeout callback (not synchronously in the effect body).
+  useEffect(() => {
+    const q = (name || "").trim();
+    const skip = !q || hasCoords;
+    let cancelled = false;
+    const id = setTimeout(async () => {
+      if (skip) { if (!cancelled) { setResults([]); setOpen(false); } return; }
+      setSearching(true);
+      const hits = await forwardGeocode(q, lang);
+      if (!cancelled) { setResults(hits); setOpen(hits.length > 0); setSearching(false); }
+    }, skip ? 0 : 450);
+    return () => { cancelled = true; clearTimeout(id); };
+  }, [name, hasCoords, lang]);
+
+  return (
+    <div style={{ position: "relative" }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <input
+          value={name || ""}
+          placeholder={t("races.location_placeholder")}
+          onChange={e => onText(e.target.value)}
+          style={{ ...s.input, flex: 1 }}
+        />
+        {hasCoords && (
+          <button type="button" onClick={() => { onClear(); setResults([]); setOpen(false); }}
+            style={{ ...s.btnGhost, fontSize: 12, padding: "6px 10px", flexShrink: 0 }}>
+            {t("races.location_clear")}
+          </button>
+        )}
+      </div>
+      <div style={{ ...s.muted, fontSize: 11, marginTop: 4 }}>
+        {hasCoords ? `✓ ${t("races.location_set")}` : (searching ? "…" : t("races.location_hint"))}
+      </div>
+      {open && results.length > 0 && (
+        <div style={{
+          position: "absolute", top: 38, left: 0, right: 0, zIndex: 30,
+          background: "var(--bg-elevated)", border: "1px solid var(--rule)",
+          borderRadius: 4, marginTop: 2, maxHeight: 200, overflowY: "auto",
+          boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
+        }}>
+          {results.map((r, i) => (
+            <button key={i} type="button"
+              onClick={() => { onPick(r); setResults([]); setOpen(false); }}
+              style={{
+                display: "block", width: "100%", textAlign: "left",
+                background: "transparent", border: "none",
+                borderBottom: i < results.length - 1 ? "1px solid var(--rule-soft)" : "none",
+                padding: "9px 12px", fontSize: 13, color: "var(--ink-1)", cursor: "pointer",
+              }}>
+              {r.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
