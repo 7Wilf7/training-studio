@@ -75,15 +75,19 @@ async function sendPush(projectId: string, accessToken: string, token: string, t
   return { ok: resp.ok, status: resp.status, body: respBody };
 }
 
-// ── Wall-clock hour + date in a given IANA timezone ──
-function localParts(tz: string): { hour: number; date: string } {
+// ── Wall-clock hour + minute + date in a given IANA timezone ──
+function localParts(tz: string): { hour: number; minute: number; date: string } {
   const fmt = new Intl.DateTimeFormat("en-CA", {
     timeZone: tz, hour12: false,
-    year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit",
+    year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
   });
   const parts = fmt.formatToParts(new Date());
   const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
-  return { hour: parseInt(get("hour"), 10) % 24, date: `${get("year")}-${get("month")}-${get("day")}` };
+  return {
+    hour: parseInt(get("hour"), 10) % 24,
+    minute: parseInt(get("minute"), 10) || 0,
+    date: `${get("year")}-${get("month")}-${get("day")}`,
+  };
 }
 
 // ── Compact daily-checkin prompt ──
@@ -178,10 +182,10 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-    // Everyone with push enabled; we filter by local hour in JS.
+    // Everyone with push enabled; we filter by local half-hour slot in JS.
     const { data: settings, error: sErr } = await supabase
       .from("user_settings")
-      .select("user_id, push_hours, push_timezone, api_provider, api_key, claude_api_key, coach_memory, lang")
+      .select("user_id, push_hours, push_times, push_timezone, api_provider, api_key, claude_api_key, coach_memory, lang")
       .eq("push_enabled", true);
     if (sErr) return json({ error: sErr.message }, 500);
 
@@ -190,20 +194,30 @@ Deno.serve(async (req) => {
 
     for (const u of settings || []) {
       const tz = u.push_timezone || "UTC";
-      const { hour, date } = localParts(tz);
-      // Due if the current local hour is one of the user's chosen push hours.
-      if (!Array.isArray(u.push_hours) || !u.push_hours.includes(hour)) continue;
+      const { hour, minute, date } = localParts(tz);
+      // Floor the wall clock to the half-hour slot this cron tick belongs to.
+      const slotMin = minute < 30 ? 0 : 30;
+      const slotStr = `${String(hour).padStart(2, "0")}:${slotMin === 0 ? "00" : "30"}`;
+      const slotIdx = hour * 2 + (slotMin === 30 ? 1 : 0); // 0..47, stored in push_log.hour
+      // Due if the user's chosen times include this slot. Prefer the new
+      // push_times ("HH:MM"); fall back to the legacy whole-hour push_hours.
+      const times: string[] = Array.isArray(u.push_times) && u.push_times.length
+        ? u.push_times
+        : (Array.isArray(u.push_hours) ? u.push_hours.map((h: number) => `${String(h).padStart(2, "0")}:00`) : []);
+      if (!times.includes(slotStr)) continue;
 
-      // Dedup per (user, local date, hour): each chosen time fires once a day,
-      // even though the cron polls every few minutes.
+      // Dedup per (user, local date, slot): each chosen half-hour fires once a
+      // day even though the cron polls every 5 min. We reuse push_log.hour to
+      // store the slot index 0..47 (hour*2 + half) so no schema change is
+      // needed — old rows held 0..23 but they're scoped to past sent_on dates.
       const { data: logged } = await supabase
-        .from("push_log").select("id").eq("user_id", u.user_id).eq("sent_on", date).eq("hour", hour).maybeSingle();
+        .from("push_log").select("id").eq("user_id", u.user_id).eq("sent_on", date).eq("hour", slotIdx).maybeSingle();
       if (logged) continue;
 
-      // Claim the slot first (the UNIQUE(user_id, sent_on, hour) constraint
-      // stops a double-fire from the next poll tick). Conflict → someone took it.
+      // Claim the slot first (UNIQUE(user_id, sent_on, hour) stops a double-fire
+      // from the next poll tick). Conflict → someone took it.
       const { error: claimErr } = await supabase
-        .from("push_log").insert({ user_id: u.user_id, sent_on: date, hour });
+        .from("push_log").insert({ user_id: u.user_id, sent_on: date, hour: slotIdx });
       if (claimErr) { summary.push({ user: u.user_id, skipped: "already-claimed" }); continue; }
 
       const provider = u.api_provider === "claude" ? "claude" : "deepseek";

@@ -27,6 +27,7 @@ export function SettingsMobileTab({
   onOpenPushSettings,
   pushEnabled,
   pushHours,
+  pushTimes,
   pushFlash,
   onOpenGuide,
   onToggleLang,
@@ -102,11 +103,15 @@ export function SettingsMobileTab({
       <Cell
         flash={pushFlash}
         primary={t("settings.daily_push")}
-        secondary={(pushEnabled && Array.isArray(pushHours) && pushHours.length > 0)
-          ? t("settings.daily_push_on", {
-              time: [...pushHours].sort((a, b) => a - b).map(h => `${String(h).padStart(2, "0")}:00`).join(" · "),
-            })
-          : t("settings.daily_push_off")}
+        secondary={(() => {
+          // Prefer the new "HH:MM" times; fall back to legacy whole-hours.
+          const slots = (Array.isArray(pushTimes) && pushTimes.length)
+            ? [...pushTimes].sort()
+            : (Array.isArray(pushHours) ? [...pushHours].sort((a, b) => a - b).map(h => `${String(h).padStart(2, "0")}:00`) : []);
+          return (pushEnabled && slots.length > 0)
+            ? t("settings.daily_push_on", { time: slots.join(" · ") })
+            : t("settings.daily_push_off");
+        })()}
         onClick={onOpenPushSettings}
       />
       <Cell

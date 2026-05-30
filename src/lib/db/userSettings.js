@@ -23,7 +23,8 @@ const FIELD_MAP = {
   // for multi-session days; pushTimezone is an IANA name (auto-detected on
   // save) so the server can map those hours to UTC.
   pushEnabled:   'push_enabled',
-  pushHours:     'push_hours',     // int[] — e.g. [8, 13, 19]
+  pushHours:     'push_hours',     // int[] — LEGACY whole-hour list, kept for back-compat
+  pushTimes:     'push_times',     // text[] — "HH:MM" half-hour slots, e.g. ["08:00","13:30"]
   pushTimezone:  'push_timezone',
 };
 
@@ -41,6 +42,9 @@ function fromRow(row) {
     } else if (camel === 'pushHours') {
       // int[] → always an array; coerce members to numbers.
       out[camel] = Array.isArray(v) ? v.map(Number).filter(Number.isFinite) : [];
+    } else if (camel === 'pushTimes') {
+      // text[] of "HH:MM" → always an array of strings.
+      out[camel] = Array.isArray(v) ? v.map(String).filter(Boolean) : [];
     } else if (camel === 'pushEnabled') {
       // boolean → null defends as false.
       out[camel] = v === true;

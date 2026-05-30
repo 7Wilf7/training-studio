@@ -13,15 +13,21 @@ const MAX_TIMES = 3;
 //
 // Push only fires on the Android APK (FCM). On web this screen still saves the
 // preference, but no notification is delivered.
-export function PushSettingsModal({ pushEnabled, pushHours, pushTimezone, setPushSettings, onClose }) {
+// All 48 half-hour slots: "00:00", "00:30", … "23:30".
+const HALF_HOUR_SLOTS = Array.from({ length: 48 }, (_, i) =>
+  `${String(Math.floor(i / 2)).padStart(2, "0")}:${i % 2 === 0 ? "00" : "30"}`);
+
+export function PushSettingsModal({ pushEnabled, pushHours, pushTimes, pushTimezone, setPushSettings, onClose }) {
   const t = useT();
   const [enabled, setEnabled] = useState(pushEnabled === true);
-  // Local working copy: sorted, de-duped hours. Default to a single 08:00 slot
-  // so a freshly-enabled user has something sensible to save.
-  const initial = Array.isArray(pushHours) && pushHours.length
-    ? [...new Set(pushHours)].sort((a, b) => a - b)
-    : [8];
-  const [hours, setHours] = useState(initial);
+  // Working copy of "HH:MM" half-hour slots. Prefer the new push_times; fall
+  // back to the legacy whole-hour list (8 → "08:00"); default to one 08:00 slot.
+  const initial = (Array.isArray(pushTimes) && pushTimes.length)
+    ? [...new Set(pushTimes)].sort()
+    : (Array.isArray(pushHours) && pushHours.length)
+      ? [...new Set(pushHours.map(h => `${String(h).padStart(2, "0")}:00`))].sort()
+      : ["08:00"];
+  const [times, setTimes] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
 
@@ -30,20 +36,18 @@ export function PushSettingsModal({ pushEnabled, pushHours, pushTimezone, setPus
     catch { return ""; }
   })();
 
-  function setHourAt(idx, value) {
-    setHours(prev => prev.map((h, i) => (i === idx ? value : h)));
+  function setTimeAt(idx, value) {
+    setTimes(prev => prev.map((tm, i) => (i === idx ? value : tm)));
   }
   function removeAt(idx) {
-    setHours(prev => prev.filter((_, i) => i !== idx));
+    setTimes(prev => prev.filter((_, i) => i !== idx));
   }
   function addTime() {
-    setHours(prev => {
+    setTimes(prev => {
       if (prev.length >= MAX_TIMES) return prev;
-      // Pick the first hour not already chosen, so the new row isn't a dup.
       const used = new Set(prev);
-      let h = 8;
-      for (let cand = 0; cand < 24; cand++) { if (!used.has(cand)) { h = cand; break; } }
-      return [...prev, h];
+      const next = HALF_HOUR_SLOTS.find(s => !used.has(s)) || "08:00";
+      return [...prev, next];
     });
   }
 
@@ -51,11 +55,11 @@ export function PushSettingsModal({ pushEnabled, pushHours, pushTimezone, setPus
     setBusy(true);
     setMsg("");
     try {
-      // De-dupe + sort on the way out; if enabling with no slots, keep [8].
-      const clean = [...new Set(hours)].sort((a, b) => a - b);
+      // De-dupe + sort on the way out; if enabling with no slots, keep ["08:00"].
+      const clean = [...new Set(times)].sort();
       await setPushSettings({
         pushEnabled: enabled,
-        pushHours: enabled ? (clean.length ? clean : [8]) : clean,
+        pushTimes: enabled ? (clean.length ? clean : ["08:00"]) : clean,
         pushTimezone: detectedTz || pushTimezone || "",
       });
       setMsg(t("push.saved"));
@@ -120,15 +124,15 @@ export function PushSettingsModal({ pushEnabled, pushHours, pushTimezone, setPus
           <div style={{ opacity: enabled ? 1 : 0.45, pointerEvents: enabled ? "auto" : "none", marginBottom: 14 }}>
             <div style={{ ...s.label, marginBottom: 8 }}>{t("push.times_label")}</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {hours.map((h, i) => (
+              {times.map((tm, i) => (
                 <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <select value={h} onChange={e => setHourAt(i, parseInt(e.target.value, 10))}
+                  <select value={tm} onChange={e => setTimeAt(i, e.target.value)}
                     style={{ ...s.input, maxWidth: 140 }}>
-                    {Array.from({ length: 24 }, (_, hr) => (
-                      <option key={hr} value={hr}>{String(hr).padStart(2, "0")}:00</option>
+                    {HALF_HOUR_SLOTS.map(slot => (
+                      <option key={slot} value={slot}>{slot}</option>
                     ))}
                   </select>
-                  {hours.length > 1 && (
+                  {times.length > 1 && (
                     <button onClick={() => removeAt(i)} aria-label={t("push.remove_time")}
                       style={{
                         border: "none", background: "none", color: "var(--ink-3)",
@@ -138,7 +142,7 @@ export function PushSettingsModal({ pushEnabled, pushHours, pushTimezone, setPus
                 </div>
               ))}
             </div>
-            {hours.length < MAX_TIMES && (
+            {times.length < MAX_TIMES && (
               <button onClick={addTime}
                 style={{ ...s.btnGhost, fontSize: 12, padding: "6px 12px", marginTop: 10 }}>
                 {t("push.add_time")}

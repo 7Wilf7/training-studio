@@ -129,6 +129,7 @@ function AuthedApp({ user, signOut, changePassword }) {
   const [caiyunApiKey, setCaiyunApiKeyState] = useState("");
   const [pushEnabled, setPushEnabledState] = useState(false);
   const [pushHours, setPushHoursState] = useState([]);
+  const [pushTimes, setPushTimesState] = useState([]);
   const [pushTimezone, setPushTimezoneState] = useState("");
   const [dataLoading, setDataLoading] = useState(true);
 
@@ -183,6 +184,7 @@ function AuthedApp({ user, signOut, changePassword }) {
           setCaiyunApiKeyState(settingsData.caiyunApiKey || "");
           setPushEnabledState(settingsData.pushEnabled === true);
           setPushHoursState(Array.isArray(settingsData.pushHours) ? settingsData.pushHours : []);
+          setPushTimesState(Array.isArray(settingsData.pushTimes) ? settingsData.pushTimes : []);
           setPushTimezoneState(settingsData.pushTimezone || "");
         }
 
@@ -258,6 +260,7 @@ function AuthedApp({ user, signOut, changePassword }) {
     if ("caiyunApiKey" in patch) setCaiyunApiKeyState(patch.caiyunApiKey || "");
     if ("pushEnabled" in patch) setPushEnabledState(patch.pushEnabled === true);
     if ("pushHours" in patch) setPushHoursState(Array.isArray(patch.pushHours) ? patch.pushHours : []);
+    if ("pushTimes" in patch) setPushTimesState(Array.isArray(patch.pushTimes) ? patch.pushTimes : []);
     if ("pushTimezone" in patch) setPushTimezoneState(patch.pushTimezone || "");
     try {
       await db.userSettings.updateMySettings(patch);
@@ -659,7 +662,7 @@ function AuthedApp({ user, signOut, changePassword }) {
         lang={lang} setLang={setLang}
         defaultLocation={defaultLocation} setDefaultLocation={setDefaultLocation}
         caiyunApiKey={caiyunApiKey} setCaiyunApiKey={setCaiyunApiKey}
-        pushEnabled={pushEnabled} pushHours={pushHours} pushTimezone={pushTimezone} setPushSettings={setPushSettings}
+        pushEnabled={pushEnabled} pushHours={pushHours} pushTimes={pushTimes} pushTimezone={pushTimezone} setPushSettings={setPushSettings}
       />
     </LanguageProvider>
   );
@@ -682,7 +685,7 @@ function AppShell({
   lang, setLang,
   defaultLocation, setDefaultLocation,
   caiyunApiKey, setCaiyunApiKey,
-  pushEnabled, pushHours, pushTimezone, setPushSettings,
+  pushEnabled, pushHours, pushTimes, pushTimezone, setPushSettings,
 }) {
   const t = useT();
   const isMobile = useIsMobile();
@@ -1248,6 +1251,7 @@ Rules:
         <PushSettingsModal
           pushEnabled={pushEnabled}
           pushHours={pushHours}
+          pushTimes={pushTimes}
           pushTimezone={pushTimezone}
           setPushSettings={setPushSettings}
           onClose={() => setShowPushSettings(false)}
@@ -1294,6 +1298,7 @@ Rules:
         onOpenPushSettings={() => setShowPushSettings(true)}
         pushEnabled={pushEnabled}
         pushHours={pushHours}
+        pushTimes={pushTimes}
         pushFlash={pushFlash}
         onOpenGuide={() => setShowGuide(true)}
         onToggleLang={toggleLang}
