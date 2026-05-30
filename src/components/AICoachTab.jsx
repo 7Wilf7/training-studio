@@ -1017,9 +1017,9 @@ Output the memory text only, nothing else.`;
           </button>
         );
         const groupHeader = (label, hint) => (
-          <div style={{ padding: "14px 16px 6px" }}>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</div>
-            {hint && <div style={{ fontSize: 11.5, color: "var(--ink-3)", marginTop: 3 }}>{hint}</div>}
+          <div style={{ padding: "14px 16px 6px", display: "flex", alignItems: "baseline", gap: 6, flexWrap: "wrap" }}>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</span>
+            {hint && <span style={{ fontSize: 11, color: "var(--ink-3)" }}>({hint})</span>}
           </div>
         );
         return (
@@ -1051,7 +1051,7 @@ Output the memory text only, nothing else.`;
                   display: "flex", alignItems: "center", width: "100%", textAlign: "left",
                   background: "transparent", border: "none",
                   borderTop: "1px solid var(--rule-soft)",
-                  padding: "13px 16px", minHeight: 50,
+                  padding: "13px 16px 13px 28px", minHeight: 50,
                   fontFamily: "var(--font-sans)", fontSize: 15, fontWeight: 600, color: "var(--ink-1)",
                   cursor: "pointer", borderRadius: 0, WebkitTapHighlightColor: "transparent",
                 }}>

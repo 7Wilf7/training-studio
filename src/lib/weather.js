@@ -614,22 +614,56 @@ export async function fetchClimateNormal({ lat, lng, date }) {
   }
 }
 
+// localStorage cache for race-day weather so switching to the Races tab is
+// instant and we don't re-hit the API every time. Climate normals are
+// effectively constant → cache 7 days (also forces a re-eval within a week, so
+// a race entering the forecast window flips from climate → forecast). Real
+// forecasts refresh daily → cache until next local midnight.
+function _raceWxKey(lat, lng, date) {
+  return `ts_race_wx:${roundCoord(lat)}:${roundCoord(lng)}:${date}`;
+}
+function _readRaceWx(lat, lng, date) {
+  try {
+    const c = JSON.parse(localStorage.getItem(_raceWxKey(lat, lng, date)) || "null");
+    if (c && typeof c.expires === "number" && Date.now() < c.expires) return c.value;
+  } catch { /* ignore */ }
+  return null;
+}
+function _writeRaceWx(lat, lng, date, value) {
+  try {
+    let expires;
+    if (value.kind === "climate") {
+      expires = Date.now() + 7 * 24 * 60 * 60 * 1000;
+    } else {
+      const m = new Date(); m.setHours(24, 0, 0, 0); expires = m.getTime();
+    }
+    localStorage.setItem(_raceWxKey(lat, lng, date), JSON.stringify({ value, expires }));
+  } catch { /* private mode / quota */ }
+}
+
 // ── Race-day weather resolver: a real daily forecast when the race is inside
-// Caiyun's ~15-day window, otherwise a climate normal. Returns
+// Caiyun's ~15-day window, otherwise a climate normal. Cached (see above) so
+// repeated Races-tab visits don't refetch. Returns
 // { kind: 'forecast' | 'climate', ...forecastLike } or null.
 export async function fetchRaceDayWeather({ lat, lng, date, caiyunToken }) {
   if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng)) || !date) return null;
+  const cached = _readRaceWx(lat, lng, date);
+  if (cached) return cached;
+
   const daysOut = Math.round((new Date(`${date}T00:00:00`).getTime() - Date.now()) / 86400000);
   if (!Number.isFinite(daysOut)) return null;
   if (daysOut >= -1 && daysOut <= 14) {
     try {
       const forecasts = await fetchDailyForecasts({ lng, lat, caiyunToken });
       const hit = forecasts.find(f => f.date === date);
-      if (hit) return { kind: 'forecast', ...hit };
+      if (hit) { const v = { kind: 'forecast', ...hit }; _writeRaceWx(lat, lng, date, v); return v; }
     } catch { /* fall through to climate normal */ }
   }
   const normal = await fetchClimateNormal({ lat, lng, date });
-  return normal ? { kind: 'climate', ...normal } : null;
+  if (!normal) return null;
+  const v = { kind: 'climate', ...normal };
+  _writeRaceWx(lat, lng, date, v);
+  return v;
 }
 
 // One-line summary string used inside the AI Coach prompt + activity rows.
