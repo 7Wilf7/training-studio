@@ -116,6 +116,7 @@ function AuthedApp({ user, signOut, changePassword }) {
   }
   const [coachConfig, setCoachConfigState] = useState(DEFAULT_COACH_CONFIG);
   const [coachMemory, setCoachMemoryState] = useState("");
+  const [coachMemoryZh, setCoachMemoryZhState] = useState("");
   const [lang, setLangState] = useState(DEFAULT_LANG);
   // Default location for weather fetch — used when navigator.geolocation /
   // Capacitor Geolocation are unavailable or denied. lng/lat are WGS84 numbers
@@ -172,6 +173,7 @@ function AuthedApp({ user, signOut, changePassword }) {
             ...(settingsData.coachConfig || {}),
           });
           setCoachMemoryState(settingsData.coachMemory ?? "");
+          setCoachMemoryZhState(settingsData.coachMemoryZh ?? "");
           setLangState(settingsData.lang || DEFAULT_LANG);
           setDefaultLocationState({
             lng: Number.isFinite(settingsData.defaultLng) ? settingsData.defaultLng : null,
@@ -251,6 +253,7 @@ function AuthedApp({ user, signOut, changePassword }) {
     if ("apiModel" in patch) setApiModelState(patch.apiModel);
     if ("coachConfig" in patch) setCoachConfigState(patch.coachConfig);
     if ("coachMemory" in patch) setCoachMemoryState(patch.coachMemory);
+    if ("coachMemoryZh" in patch) setCoachMemoryZhState(patch.coachMemoryZh);
     if ("lang" in patch) setLangState(patch.lang);
     if ("caiyunApiKey" in patch) setCaiyunApiKeyState(patch.caiyunApiKey || "");
     if ("pushEnabled" in patch) setPushEnabledState(patch.pushEnabled === true);
@@ -274,6 +277,10 @@ function AuthedApp({ user, signOut, changePassword }) {
   const setApiModel = (v) => updateSettings({ apiModel: v });
   const setCoachConfig = (v) => updateSettings({ coachConfig: v });
   const setCoachMemory = (v) => updateSettings({ coachMemory: v });
+  const setCoachMemoryZh = (v) => updateSettings({ coachMemoryZh: v });
+  // Save both language versions in one write (used when accepting a bilingual
+  // memory proposal so EN + 中 stay in sync).
+  const setCoachMemoryBoth = (en, zh) => updateSettings({ coachMemory: en, coachMemoryZh: zh });
   const setLang = (v) => updateSettings({ lang: v });
   const setCaiyunApiKey = (v) => updateSettings({ caiyunApiKey: v });
   const setPushSettings = (patch) => updateSettings(patch);
@@ -648,6 +655,7 @@ function AuthedApp({ user, signOut, changePassword }) {
         profile={profile} setProfile={setProfile}
         coachConfig={coachConfig} setCoachConfig={setCoachConfig}
         coachMemory={coachMemory} setCoachMemory={setCoachMemory}
+        coachMemoryZh={coachMemoryZh} setCoachMemoryZh={setCoachMemoryZh} setCoachMemoryBoth={setCoachMemoryBoth}
         lang={lang} setLang={setLang}
         defaultLocation={defaultLocation} setDefaultLocation={setDefaultLocation}
         caiyunApiKey={caiyunApiKey} setCaiyunApiKey={setCaiyunApiKey}
@@ -670,6 +678,7 @@ function AppShell({
   apiModel, setApiModel,
   itraPI, setItraPI, profile, setProfile, coachConfig, setCoachConfig,
   coachMemory, setCoachMemory,
+  coachMemoryZh, setCoachMemoryZh, setCoachMemoryBoth,
   lang, setLang,
   defaultLocation, setDefaultLocation,
   caiyunApiKey, setCaiyunApiKey,
@@ -1153,6 +1162,9 @@ Rules:
           setCoachConfig={setCoachConfig}
           coachMemory={coachMemory}
           setCoachMemory={setCoachMemory}
+          coachMemoryZh={coachMemoryZh}
+          setCoachMemoryZh={setCoachMemoryZh}
+          setCoachMemoryBoth={setCoachMemoryBoth}
           chatMessages={chatMessages}
           appendLocalChatMessage={appendLocalChatMessage}
           now={now}

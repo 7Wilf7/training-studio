@@ -7,7 +7,8 @@ const FIELD_MAP = {
   apiProvider:   'api_provider',      // 'deepseek' | 'claude'
   claudeApiKey:  'claude_api_key',    // Anthropic Claude API key
   coachConfig:   'coach_config',      // jsonb — pass plain object, do NOT JSON.stringify
-  coachMemory:   'coach_memory',
+  coachMemory:   'coach_memory',      // canonical (English), sent to the LLM
+  coachMemoryZh: 'coach_memory_zh',    // Chinese mirror, display-only (EN/中 toggle)
   lang:          'lang',
   // Default coordinates for weather fetch when device geolocation is unavailable
   // (denied, offline, or APK without permission). WGS84, same as Caiyun expects.

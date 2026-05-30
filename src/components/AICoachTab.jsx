@@ -200,6 +200,7 @@ const LONG_CHAT_HINT_THRESHOLD = 20;
 export function AICoachTab({
   coachConfig, setCoachConfig,
   coachMemory, setCoachMemory,
+  coachMemoryZh, setCoachMemoryZh, setCoachMemoryBoth,
   chatMessages,
   setConfirmDelete,
   apiProvider, apiKey, claudeApiKey, claudeEndpointId, apiModel, onEditProfile,
@@ -237,10 +238,13 @@ export function AICoachTab({
   // but the user can flip it to read the prompt in the other language.
   const [previewLang, setPreviewLang] = useState(lang);
   const [showMemory, setShowMemory] = useState(false);
+  const [memoryLang, setMemoryLang] = useState(lang); // EN/中 toggle for the memory view
   const [memoryDraft, setMemoryDraft] = useState(coachMemory);
   const [memoryEditing, setMemoryEditing] = useState(false);
   const [memoryUpdating, setMemoryUpdating] = useState(false);
-  const [memoryProposal, setMemoryProposal] = useState(null); // { text } when LLM has proposed an update
+  const [memoryProposal, setMemoryProposal] = useState(null); // { en, zh } when LLM has proposed an update
+  // The memory text shown/edited for the currently-selected language.
+  const shownMemory = memoryLang === "zh" ? coachMemoryZh : coachMemory;
   // Empty by default — the daily template is shown as a placeholder so it
   // disappears the moment the user starts typing, instead of being pre-filled
   // content the user has to delete.
@@ -292,15 +296,17 @@ export function AICoachTab({
   }
 
   function startEditMemory() {
-    setMemoryDraft(coachMemory);
+    setMemoryDraft(shownMemory);
     setMemoryEditing(true);
   }
   function saveMemory() {
-    setCoachMemory(memoryDraft);
+    // Manual edit writes only the currently-shown language's box.
+    if (memoryLang === "zh") setCoachMemoryZh(memoryDraft);
+    else setCoachMemory(memoryDraft);
     setMemoryEditing(false);
   }
   function cancelEditMemory() {
-    setMemoryDraft(coachMemory);
+    setMemoryDraft(shownMemory);
     setMemoryEditing(false);
   }
 
@@ -317,29 +323,27 @@ export function AICoachTab({
     }
     setMemoryUpdating(true);
     const chatTranscript = chatMessages.map(m => `[${m.role}]\n${m.content}`).join("\n\n");
-    // Output language = current UI language. Chinese users get Chinese memory,
-    // English users get English memory. This is regardless of the prompt language.
-    const outputLangHint = lang === "zh"
-      ? "Write the memory in Chinese (简体中文)."
-      : "Write the memory in English.";
     const memoryPrompt = `You are updating a long-term memory file about a runner. The memory captures DURABLE, repeatedly-useful facts about the user — training patterns, preferences, injuries, recurring concerns, coaching style preferences.
 
-Current memory:
+Current memory (English):
 ${coachMemory || "(empty)"}
 
 Recent conversation:
 ${chatTranscript}
 
-Return ONLY the updated memory text. Guidelines:
-- Plain text, no markdown headings. Short labeled lines or paragraphs.
+Guidelines:
+- One short fact per line. No markdown headings.
 - Keep durable facts (preferences, goals, injuries, training style, recurring concerns).
 - DROP session-specific things (today's specific question, one-off advice).
 - Don't repeat what's already in the user's profile (age, location, basic stats).
 - Maximum ~500 words. Trim older entries if needed.
 - If nothing meaningful to add or update, return the existing memory unchanged.
-- ${outputLangHint}
 
-Output the memory text only, nothing else.`;
+Output the updated memory in BOTH English and Simplified Chinese — the SAME facts, SAME order, line-by-line correspondence — using EXACTLY this format and nothing else:
+===EN===
+<english memory, one fact per line>
+===ZH===
+<中文记忆，每行一条，与英文逐行一一对应>`;
 
     try {
       // postJson → CapacitorHttp on the APK, so backgrounding the app mid-call
@@ -374,7 +378,7 @@ Output the memory text only, nothing else.`;
         setMemoryUpdating(false);
         return;
       }
-      setMemoryProposal({ text: text.trim() });
+      setMemoryProposal(parseBilingualMemory(text));
     } catch (err) {
       console.error("[AI Coach] Memory update error:", err);
       alert(t("coach.network_error", { msg: err.message, url: apiEndpoint }));
@@ -382,12 +386,12 @@ Output the memory text only, nothing else.`;
     setMemoryUpdating(false);
   }
 
-  // Accepts the kept-points text from the per-point review (falls back to the
-  // full proposal if called without an argument).
-  function acceptMemoryProposal(keptText) {
-    const finalText = (typeof keptText === "string" ? keptText : memoryProposal.text).trim();
-    setCoachMemory(finalText);
-    setMemoryDraft(finalText);
+  // Accepts the kept points from the per-point review — both language versions,
+  // kept in sync, saved in one write.
+  function acceptMemoryProposal(en, zh) {
+    const e = (en || "").trim(), z = (zh || "").trim();
+    setCoachMemoryBoth(e, z);
+    setMemoryDraft(memoryLang === "zh" ? z : e);
     setMemoryProposal(null);
   }
   function rejectMemoryProposal() {
@@ -594,7 +598,7 @@ Output the memory text only, nothing else.`;
               <div style={{ ...s.muted, marginBottom: 14, lineHeight: 1.5 }}>{t("coach.memory_hint")}</div>
 
               {!memoryEditing && !memoryProposal && (
-                <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+                <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
                   <button onClick={proposeMemoryUpdate}
                     disabled={memoryUpdating || chatMessages.length === 0}
                     style={{ ...s.btnGhost, fontSize: 12, padding: "6px 12px", opacity: (memoryUpdating || chatMessages.length === 0) ? 0.5 : 1 }}>
@@ -604,13 +608,16 @@ Output the memory text only, nothing else.`;
                     style={{ ...s.btnGhost, fontSize: 12, padding: "6px 12px" }}>
                     {t("coach.memory_edit")}
                   </button>
+                  <MemoryLangToggle memoryLang={memoryLang} setMemoryLang={setMemoryLang} />
                 </div>
               )}
 
               {memoryProposal ? (
                 <MemoryProposalReview
-                  proposalText={memoryProposal.text}
-                  oldMemory={coachMemory}
+                  proposal={memoryProposal}
+                  displayLang={memoryLang}
+                  oldEn={coachMemory}
+                  oldZh={coachMemoryZh}
                   onAccept={acceptMemoryProposal}
                   onReject={rejectMemoryProposal}
                   t={t}
@@ -630,9 +637,9 @@ Output the memory text only, nothing else.`;
                 <pre style={{
                   ...s.input, fontFamily: "var(--font-mono)", fontSize: 12,
                   whiteSpace: "pre-wrap", lineHeight: 1.55, maxHeight: 420, overflowY: "auto",
-                  color: coachMemory ? "var(--ink-1)" : "var(--ink-3)", background: "var(--bg-elevated)",
+                  color: shownMemory ? "var(--ink-1)" : "var(--ink-3)", background: "var(--bg-elevated)",
                   minHeight: 80,
-                }}>{coachMemory || t("coach.memory_empty")}</pre>
+                }}>{shownMemory || t("coach.memory_empty")}</pre>
               )}
             </div>
           </div>
@@ -1223,7 +1230,7 @@ Output the memory text only, nothing else.`;
                     <div>
                       <div style={{ ...s.muted, marginBottom: 14, lineHeight: 1.5 }}>{t("coach.memory_hint")}</div>
                       {!memoryEditing && !memoryProposal && (
-                        <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+                        <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
                           <button onClick={proposeMemoryUpdate}
                             disabled={memoryUpdating || chatMessages.length === 0}
                             style={{ ...s.btnGhost, fontSize: 12, padding: "6px 12px", opacity: (memoryUpdating || chatMessages.length === 0) ? 0.5 : 1 }}>
@@ -1232,12 +1239,15 @@ Output the memory text only, nothing else.`;
                           <button onClick={startEditMemory} style={{ ...s.btnGhost, fontSize: 12, padding: "6px 12px" }}>
                             {t("coach.memory_edit")}
                           </button>
+                          <MemoryLangToggle memoryLang={memoryLang} setMemoryLang={setMemoryLang} />
                         </div>
                       )}
                       {memoryProposal ? (
                         <MemoryProposalReview
-                          proposalText={memoryProposal.text}
-                          oldMemory={coachMemory}
+                          proposal={memoryProposal}
+                          displayLang={memoryLang}
+                          oldEn={coachMemory}
+                          oldZh={coachMemoryZh}
                           onAccept={acceptMemoryProposal}
                           onReject={rejectMemoryProposal}
                           t={t}
@@ -1257,9 +1267,9 @@ Output the memory text only, nothing else.`;
                         <pre style={{
                           ...s.input, fontFamily: "var(--font-mono)", fontSize: 12,
                           whiteSpace: "pre-wrap", lineHeight: 1.55, maxHeight: 420, overflowY: "auto",
-                          color: coachMemory ? "var(--ink-1)" : "var(--ink-3)", background: "var(--bg-elevated)",
+                          color: shownMemory ? "var(--ink-1)" : "var(--ink-3)", background: "var(--bg-elevated)",
                           minHeight: 80,
-                        }}>{coachMemory || t("coach.memory_empty")}</pre>
+                        }}>{shownMemory || t("coach.memory_empty")}</pre>
                       )}
                     </div>
                   )}
@@ -1315,21 +1325,45 @@ Output the memory text only, nothing else.`;
   );
 }
 
-// Per-point review of a proposed memory update. Splits the proposal into lines
-// (the memory prompt asks for "short labeled lines"), each with a checkbox so
-// the user keeps/drops points individually instead of accepting the whole blob.
-// Points not already present in the old memory are tagged NEW so the user can
-// see what changed. onAccept receives the kept points joined back into text.
-function MemoryProposalReview({ proposalText, oldMemory, onAccept, onReject, t }) {
-  const lines = proposalText.split("\n").map(l => l.replace(/\s+$/, "")).filter(l => l.trim());
-  const [kept, setKept] = useState(() => new Set(lines.map((_, i) => i)));
-  const oldLower = (oldMemory || "").toLowerCase();
+// Split an LLM memory reply into aligned English + Chinese halves using the
+// ===EN=== / ===ZH=== markers. Falls back to using the whole text for both
+// languages if the model didn't emit the markers.
+function parseBilingualMemory(text) {
+  const parts = (text || "").split(/===\s*ZH\s*===/i);
+  if (parts.length >= 2) {
+    const en = parts[0].replace(/===\s*EN\s*===/i, "").trim();
+    const zh = parts.slice(1).join("").replace(/===\s*EN\s*===/i, "").trim();
+    if (en || zh) return { en: en || zh, zh: zh || en };
+  }
+  const plain = (text || "").replace(/===\s*(EN|ZH)\s*===/ig, "").trim();
+  return { en: plain, zh: plain };
+}
+
+// Per-point review of a proposed (bilingual) memory update. Shows the points in
+// the current display language, each with a checkbox; points not already in the
+// old memory are tagged NEW. On accept, keeps the chosen points in BOTH
+// languages (index-aligned when the two line counts match; otherwise the shown
+// language is filtered and the other language is kept whole so nothing is lost).
+function MemoryProposalReview({ proposal, displayLang, oldEn, oldZh, onAccept, onReject, t }) {
+  const splitLines = (str) => (str || "").split("\n").map(l => l.replace(/\s+$/, "")).filter(l => l.trim());
+  const enLines = splitLines(proposal.en);
+  const zhLines = splitLines(proposal.zh);
+  const aligned = enLines.length === zhLines.length && enLines.length > 0;
+  const displayLines = displayLang === "zh" ? (zhLines.length ? zhLines : enLines) : (enLines.length ? enLines : zhLines);
+  const oldLower = ((displayLang === "zh" ? oldZh : oldEn) || "").toLowerCase();
+  const [kept, setKept] = useState(() => new Set(displayLines.map((_, i) => i)));
   const isNew = (line) => {
     const probe = line.trim().toLowerCase();
     return probe.length > 0 && !oldLower.includes(probe.slice(0, Math.min(probe.length, 30)));
   };
   function toggle(i) {
     setKept(prev => { const n = new Set(prev); if (n.has(i)) n.delete(i); else n.add(i); return n; });
+  }
+  function accept() {
+    const keep = (lines) => lines.filter((_, i) => kept.has(i)).join("\n");
+    if (aligned) { onAccept(keep(enLines), keep(zhLines)); return; }
+    if (displayLang === "zh") onAccept(proposal.en, keep(zhLines));
+    else onAccept(keep(enLines), proposal.zh);
   }
   return (
     <>
@@ -1339,7 +1373,7 @@ function MemoryProposalReview({ proposalText, oldMemory, onAccept, onReject, t }
         display: "flex", flexDirection: "column", gap: 2, maxHeight: 320, overflowY: "auto",
         border: "1px solid var(--moss)", background: "var(--moss-bg)", borderRadius: 4, padding: "8px 10px",
       }}>
-        {lines.map((line, i) => (
+        {displayLines.map((line, i) => (
           <label key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", cursor: "pointer", padding: "4px 0" }}>
             <input type="checkbox" checked={kept.has(i)} onChange={() => toggle(i)} style={{ marginTop: 4, flexShrink: 0 }} />
             <span style={{
@@ -1359,11 +1393,31 @@ function MemoryProposalReview({ proposalText, oldMemory, onAccept, onReject, t }
         ))}
       </div>
       <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-        <button onClick={() => onAccept(lines.filter((_, i) => kept.has(i)).join("\n"))}
+        <button onClick={accept}
           disabled={kept.size === 0}
           style={{ ...s.btn, opacity: kept.size === 0 ? 0.5 : 1 }}>{t("coach.memory_accept")}</button>
         <button onClick={onReject} style={s.btnGhost}>{t("coach.memory_reject")}</button>
       </div>
     </>
+  );
+}
+
+// EN / 中 segmented toggle for the memory view (mirrors the prompt-preview
+// toggle). Picks which stored language version (coach_memory / coach_memory_zh)
+// the memory pane shows + edits.
+function MemoryLangToggle({ memoryLang, setMemoryLang }) {
+  return (
+    <div style={{ marginLeft: "auto", display: "flex", border: "1px solid var(--rule)", borderRadius: 4, overflow: "hidden" }}>
+      {["en", "zh"].map((lg) => (
+        <button key={lg} type="button" onClick={() => setMemoryLang(lg)}
+          style={{
+            padding: "4px 10px", fontSize: 11, border: "none", cursor: "pointer", minHeight: 0,
+            background: memoryLang === lg ? "var(--ink-1)" : "transparent",
+            color: memoryLang === lg ? "var(--ink-inv)" : "var(--ink-2)",
+          }}>
+          {lg === "en" ? "EN" : "中"}
+        </button>
+      ))}
+    </div>
   );
 }
