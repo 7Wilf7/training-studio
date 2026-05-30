@@ -133,6 +133,16 @@ summary::-webkit-details-marker { display: none; }
   0%   { margin-left: -40%; }
   100% { margin-left: 100%; }
 }
+
+/* Attention flash — pulses a settings cell's background a few times when the
+   user is sent there from elsewhere (e.g. the inbox → daily-push shortcut). */
+@keyframes ts-flash-bg {
+  0%, 100% { background: var(--bg-elevated); }
+  25%, 75% { background: var(--moss-bg); }
+}
+.ts-flash {
+  animation: ts-flash-bg 0.6s ease-in-out 3;
+}
 .ts-spinner {
   display: inline-block;
   vertical-align: middle;

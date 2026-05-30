@@ -167,6 +167,16 @@ export function RacesTab({
     setNewRace(raceToForm(race));
   }
 
+  // "Enter result" for a target race that's reached race day: open the edit
+  // form pre-flipped to HISTORY (isTarget:false) so the finish-time fields
+  // appear. Saving runs commitRace(false), which moves it to the history list.
+  function startEnterResult(race, e) {
+    e?.stopPropagation();
+    setAddingMode(null);
+    setEditingRaceId(race.id);
+    setNewRace({ ...raceToForm(race), isTarget: false });
+  }
+
   function cancelEdit() {
     setEditingRaceId(null);
     setNewRace(EMPTY_RACE(true));
@@ -706,6 +716,14 @@ export function RacesTab({
           )}
           {r.itraScore && <span style={{ ...s.subTag, fontSize: 10, alignSelf: "flex-start" }}>ITRA {r.itraScore}</span>}
           {renderRaceWeather(r)}
+          {/* Race day reached → let the user enter a finish time, which moves
+              this race from Target to History. */}
+          {r.isTarget && daysUntilRace(r.date, now) !== null && daysUntilRace(r.date, now) <= 0 && (
+            <button onClick={(e) => startEnterResult(r, e)}
+              style={{ ...s.btn, alignSelf: "flex-start", fontSize: 12, padding: "6px 14px", minHeight: 0, marginTop: 2 }}>
+              {t("races.enter_result")}
+            </button>
+          )}
         </div>
       );
     }

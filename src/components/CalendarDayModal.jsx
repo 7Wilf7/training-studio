@@ -230,11 +230,19 @@ export function CalendarDayModal({
             <div style={{ ...s.label, marginBottom: 8 }}>
               {t("calendar.day_tags_title")}
             </div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {/* 3-column grid → the 5 tags lay out in exactly 2 rows (3 + 2)
+                instead of wrapping to 3. Cells stretch to equal height; the
+                long "Poor sleep (last night)" wraps inside its own cell. */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
               {DAILY_TAGS.map(tag => (
                 <button key={tag}
                   onClick={() => toggleDayTag(tag)}
-                  style={s.chip(currentTags.includes(tag))}>
+                  style={{
+                    ...s.chip(currentTags.includes(tag)),
+                    width: "100%", minHeight: 0, padding: "8px 6px",
+                    fontSize: 12, lineHeight: 1.25, textAlign: "center",
+                    whiteSpace: "normal",
+                  }}>
                   {DAILY_TAG_ICONS[tag] ? `${DAILY_TAG_ICONS[tag]} ` : ""}{t(`calendar.tag.${tag}`)}
                 </button>
               ))}

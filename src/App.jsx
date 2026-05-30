@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 import { popBackHandler, hasBackHandler } from "./lib/backStack";
@@ -696,17 +696,34 @@ function AppShell({
   const [showWeatherApiSettings, setShowWeatherApiSettings] = useState(false);
   const [showPushSettings, setShowPushSettings] = useState(false);
   const [showInbox, setShowInbox] = useState(false);
-  const [inboxUnread, setInboxUnread] = useState(0);
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
+  // Flash the "Daily coach push" settings cell after the user taps the inbox's
+  // "set up daily push" button — draws the eye to where the setting lives.
+  const [pushFlash, setPushFlash] = useState(false);
 
-  // Unread-inbox badge count. Loaded once on mount and refreshed whenever the
-  // inbox modal reports a change (read/delete/clear). Best-effort — the DAL
-  // swallows errors and returns 0, so a hiccup just hides the badge.
-  const refreshInboxUnread = useCallback(() => {
-    db.pushInbox.unreadCount().then(setInboxUnread).catch(() => {});
+  // Inbox messages, loaded ONCE at startup so opening the inbox is instant (no
+  // per-open fetch) and the unread badge derives from this list — marking read
+  // updates the badge immediately, no DB round-trip / race. The modal does a
+  // silent background refresh on open to pick up any newly-pushed messages.
+  const [inboxItems, setInboxItems] = useState([]);
+  useEffect(() => {
+    db.pushInbox.listMine().then(setInboxItems).catch(() => {});
   }, []);
-  useEffect(() => { refreshInboxUnread(); }, [refreshInboxUnread]);
+  const inboxUnread = inboxItems.filter(i => !i.read).length;
+
+  // Jump from the inbox to the daily-push setting. On mobile that's the
+  // Settings tab (flash the cell); on desktop just open the modal directly.
+  function goToPushSettings() {
+    setShowInbox(false);
+    if (isMobile) {
+      setTab(4);
+      setPushFlash(true);
+      setTimeout(() => setPushFlash(false), 2200);
+    } else {
+      setShowPushSettings(true);
+    }
+  }
 
   // ── AI Coach in-flight state, lifted from AICoachTab so it SURVIVES tab
   //    switches. Previously the fetch and chatLoading both lived in
@@ -1224,8 +1241,10 @@ Rules:
 
       {showInbox && (
         <InboxModal
+          items={inboxItems}
+          setItems={setInboxItems}
           onClose={() => setShowInbox(false)}
-          onChanged={refreshInboxUnread}
+          onGoToPushSettings={goToPushSettings}
         />
       )}
 
@@ -1260,6 +1279,7 @@ Rules:
         onOpenPushSettings={() => setShowPushSettings(true)}
         pushEnabled={pushEnabled}
         pushHours={pushHours}
+        pushFlash={pushFlash}
         onOpenGuide={() => setShowGuide(true)}
         onToggleLang={toggleLang}
         onChangePassword={() => setShowChangePassword(true)}

@@ -27,6 +27,7 @@ export function SettingsMobileTab({
   onOpenPushSettings,
   pushEnabled,
   pushHours,
+  pushFlash,
   onOpenGuide,
   onToggleLang,
   onChangePassword,
@@ -99,6 +100,7 @@ export function SettingsMobileTab({
       {/* ── 其他 ──────────────────────────────────────────────────────────── */}
       <SectionHeader label={t("settings.section_other")} />
       <Cell
+        flash={pushFlash}
         primary={t("settings.daily_push")}
         secondary={(pushEnabled && Array.isArray(pushHours) && pushHours.length > 0)
           ? t("settings.daily_push_on", {
@@ -139,7 +141,7 @@ function SectionHeader({ label }) {
 }
 
 // Top-level cells — full-width with the rule above + below, iOS-Settings look.
-function Cell({ primary, secondary, secondaryWarn, rightValue, onClick, href, external, danger, ariaLabel }) {
+function Cell({ primary, secondary, secondaryWarn, rightValue, onClick, href, external, danger, ariaLabel, flash }) {
   const inner = (
     <>
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -215,7 +217,8 @@ function Cell({ primary, secondary, secondaryWarn, rightValue, onClick, href, ex
     );
   }
   return (
-    <button onClick={onClick} style={baseStyle} aria-label={ariaLabel}>
+    <button onClick={onClick} style={baseStyle} aria-label={ariaLabel}
+      className={flash ? "ts-flash" : undefined}>
       {inner}
     </button>
   );

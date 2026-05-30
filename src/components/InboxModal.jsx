@@ -1,31 +1,21 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { s } from "../styles";
 import { useT } from "../i18n/LanguageContext";
 import { ModalRoot } from "./ModalRoot";
 import * as db from "../lib/db";
 
 // In-app inbox of delivered coach pushes. Rows are written server-side by the
-// daily-coach-dispatch Edge Function; here the user can re-read, mark-read,
-// delete one, or clear all. `onChanged` lets the parent refresh its unread
-// badge after any mutation.
-export function InboxModal({ onClose, onChanged }) {
+// daily-coach-dispatch Edge Function. `items` / `setItems` are lifted to
+// AppShell (loaded once at startup) so this opens instantly and the unread
+// badge derives from the same list — marking read updates the badge with no
+// DB round-trip (that round-trip used to race the write and leave the badge
+// stuck). On open we do a silent background refresh to pick up new pushes.
+export function InboxModal({ items, setItems, onClose, onGoToPushSettings }) {
   const t = useT();
-  const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState("");
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      try {
-        const rows = await db.pushInbox.listMine();
-        if (!cancelled) setItems(rows);
-      } catch {
-        if (!cancelled) setErr(t("inbox.load_failed"));
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
+    db.pushInbox.listMine().then(rows => { if (!cancelled) setItems(rows); }).catch(() => {});
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -37,16 +27,15 @@ export function InboxModal({ onClose, onChanged }) {
     return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
   }
 
+  // All handlers update the lifted list optimistically (badge recomputes from
+  // it instantly) and persist in the background, rolling back on failure.
   async function handleTap(item) {
     if (item.read) return;
-    // Optimistic: flip read locally, then persist. Roll back on failure.
     setItems(prev => prev.map(i => (i.id === item.id ? { ...i, read: true } : i)));
-    onChanged?.();
     try {
       await db.pushInbox.markRead(item.id);
     } catch {
       setItems(prev => prev.map(i => (i.id === item.id ? { ...i, read: false } : i)));
-      onChanged?.();
     }
   }
 
@@ -54,12 +43,10 @@ export function InboxModal({ onClose, onChanged }) {
     e.stopPropagation();
     const snapshot = items;
     setItems(prev => prev.filter(i => i.id !== item.id));
-    onChanged?.();
     try {
       await db.pushInbox.deleteOne(item.id);
     } catch {
       setItems(snapshot); // restore on failure
-      onChanged?.();
     }
   }
 
@@ -67,12 +54,10 @@ export function InboxModal({ onClose, onChanged }) {
     if (!items.some(i => !i.read)) return;
     const snapshot = items;
     setItems(prev => prev.map(i => ({ ...i, read: true })));
-    onChanged?.();
     try {
       await db.pushInbox.markAllRead();
     } catch {
       setItems(snapshot);
-      onChanged?.();
     }
   }
 
@@ -81,12 +66,10 @@ export function InboxModal({ onClose, onChanged }) {
     if (!window.confirm(t("inbox.clear_confirm"))) return;
     const snapshot = items;
     setItems([]);
-    onChanged?.();
     try {
       await db.pushInbox.clearAll();
     } catch {
       setItems(snapshot);
-      onChanged?.();
     }
   }
 
@@ -129,11 +112,7 @@ export function InboxModal({ onClose, onChanged }) {
           )}
 
           <div style={{ overflowY: "auto", flex: 1, margin: "0 -4px", padding: "0 4px" }}>
-            {loading ? (
-              <div style={{ ...s.muted, fontSize: 13, padding: "20px 0", textAlign: "center" }}>…</div>
-            ) : err ? (
-              <div style={{ color: "var(--danger)", fontSize: 13, padding: "16px 0" }}>{err}</div>
-            ) : items.length === 0 ? (
+            {items.length === 0 ? (
               <div style={{ ...s.muted, fontSize: 13, padding: "24px 4px", lineHeight: 1.6 }}>
                 {t("inbox.empty")}
               </div>
@@ -176,6 +155,18 @@ export function InboxModal({ onClose, onChanged }) {
               </div>
             )}
           </div>
+
+          {/* Shortcut to the daily-push setting — on mobile this jumps to the
+              Settings tab and flashes the cell so the user learns where it is. */}
+          {onGoToPushSettings && (
+            <button onClick={onGoToPushSettings}
+              style={{
+                ...s.btnGhost, marginTop: 14, width: "100%",
+                fontSize: 12, padding: "8px 12px",
+              }}>
+              {t("inbox.go_push_settings")}
+            </button>
+          )}
         </div>
       </div>
     </ModalRoot>

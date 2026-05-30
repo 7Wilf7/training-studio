@@ -68,6 +68,7 @@ const dict = {
   "inbox.clear_confirm":        { en: "Delete all messages? This can't be undone.", zh: "删除所有消息？此操作无法撤销。" },
   "inbox.delete":               { en: "Delete",               zh: "删除" },
   "inbox.load_failed":          { en: "Failed to load inbox.", zh: "加载收件箱失败。" },
+  "inbox.go_push_settings":     { en: "⚙ Set up daily coach push", zh: "⚙ 去设置每日教练推送" },
 
   // ===== Weather API settings =====
   "weather_api.title":          { en: "Caiyun Weather API",   zh: "彩云天气 API" },
@@ -564,6 +565,7 @@ const dict = {
   "races.countdown_weeks_days": { en: "in {w}w {d}d",       zh: "还有 {w} 周 {d} 天" },
   "races.countdown_months":   { en: "in {n}mo",             zh: "还有 {n} 个月" },
   "races.countdown_months_days": { en: "in {m}mo {d}d",     zh: "还有 {m} 个月 {d} 天" },
+  "races.enter_result":       { en: "✓ Enter result → History", zh: "✓ 录入成绩 → 转历史" },
   "races.location_label":     { en: "Race location",        zh: "比赛地点" },
   "races.location_placeholder": { en: "Type a city, e.g. Guangzhou", zh: "输入城市，如 广州" },
   "races.location_hint":      { en: "Type a place name, then pick a match to set it (city-level is fine).", zh: "输入地名后从下拉里选一个（精确到城市即可）。" },
