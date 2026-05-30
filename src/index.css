@@ -88,6 +88,22 @@ button, input, select, textarea {
 
 button { cursor: pointer; }
 
+/* Native-app feel: no long-press text selection or the Android WebView
+   "Copy / Select all" callout menu (it was hijacking the long-press on
+   cards — selecting the action sheet's "Cancel" text). Re-enable selection
+   only where it's genuinely useful: form controls + data/code blocks
+   (release notes, prompt preview, memory) + anything marked .selectable. */
+html {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+input, textarea, select, [contenteditable="true"], pre, .selectable {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+
 /* Numbers everywhere should be tabular so columns align. */
 .num, .mono {
   font-family: var(--font-mono);
