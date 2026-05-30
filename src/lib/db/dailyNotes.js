@@ -20,6 +20,9 @@ function fromRow(row) {
     id: row.id,
     date: row.date,
     tags: Array.isArray(row.tags) ? row.tags : [],
+    // Free-text destination for a day tagged "travel" (where the user is
+    // going) — feeds local running tips to the coach + push.
+    travelDest: row.travel_dest ?? '',
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -40,9 +43,11 @@ export async function listMyDailyNotes() {
 // Upsert by (user_id, date). If tags=[] we delete the row instead — there's
 // no point storing empty notes, and it keeps the table tidy. Returns the
 // resulting row (or null if deleted).
-export async function setDailyTags(date, tags) {
+export async function setDailyTags(date, tags, travelDest = '') {
   if (!date) throw new Error('setDailyTags: date is required');
   const cleanTags = Array.isArray(tags) ? tags.filter(Boolean) : [];
+  // Destination only makes sense alongside the "travel" tag; drop it otherwise.
+  const dest = cleanTags.includes('travel') ? (travelDest || '').trim() : '';
 
   if (cleanTags.length === 0) {
     // Delete-by-date instead of upsert-with-empty. RLS already scopes to the
@@ -64,7 +69,7 @@ export async function setDailyTags(date, tags) {
   const { data, error } = await supabase
     .from('daily_notes')
     .upsert(
-      { user_id: userId, date, tags: cleanTags },
+      { user_id: userId, date, tags: cleanTags, travel_dest: dest || null },
       { onConflict: 'user_id,date' }
     )
     .select('*')

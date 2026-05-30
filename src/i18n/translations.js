@@ -366,6 +366,7 @@ const dict = {
   "calendar.tag.poor_sleep":   { en: "Poor sleep (last night)", zh: "睡眠差（昨晚）" },
   "calendar.tag.sick":         { en: "Sick",                 zh: "生病" },
   "calendar.tag.travel":       { en: "Travel",               zh: "出差" },
+  "calendar.travel_dest_placeholder": { en: "Where to? e.g. Chengdu — for local running tips", zh: "去哪？如 成都 —— 用于当地跑步建议" },
   "calendar.weather_strip_title": { en: "7-day weather",      zh: "未来 7 天天气" },
   "calendar.weather_strip_empty": { en: "No weather data — set a default location to enable forecasts.", zh: "暂无天气数据 —— 在设置里填写默认位置后会自动获取预报。" },
   "calendar.weather_today_tag":   { en: "Today",              zh: "今天" },

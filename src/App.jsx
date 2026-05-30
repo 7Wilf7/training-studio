@@ -572,8 +572,9 @@ function AuthedApp({ user, signOut, changePassword }) {
   // Optimistic: patch local state from `tags` (we don't have a server row
   // yet, but the shape is straightforward) and replace with the canonical
   // row on success / roll back on failure.
-  function setDailyTags(date, tags) {
+  function setDailyTags(date, tags, travelDest = "") {
     let snapshot = null;
+    const dest = (Array.isArray(tags) && tags.includes("travel")) ? travelDest : "";
     setDailyNotes(prev => {
       snapshot = prev.find(n => n.date === date) || null;
       const without = prev.filter(n => n.date !== date);
@@ -582,6 +583,7 @@ function AuthedApp({ user, signOut, changePassword }) {
         ...(snapshot || {}),
         date,
         tags,
+        travelDest: dest,
         // Mark so renderers can render a subtle "saving…" hint if they want.
         isOptimistic: true,
       };
@@ -590,7 +592,7 @@ function AuthedApp({ user, signOut, changePassword }) {
 
     (async () => {
       try {
-        const updated = await db.dailyNotes.setDailyTags(date, tags);
+        const updated = await db.dailyNotes.setDailyTags(date, tags, dest);
         setDailyNotes(prev => {
           const without = prev.filter(n => n.date !== date);
           return updated ? [updated, ...without] : without;

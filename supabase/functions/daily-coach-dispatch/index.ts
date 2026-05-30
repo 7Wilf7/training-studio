@@ -93,6 +93,7 @@ function fmtDuration(sec: number): string {
 function buildPrompt(opts: {
   lang: string; name: string; today: string;
   workouts: any[]; targetRace: any | null; memory: string;
+  travel?: { date: string; dest: string } | null;
 }): { system: string; user: string } {
   const langName = opts.lang === "zh" ? "Chinese (简体中文)" : "English";
   const lines = (opts.workouts || []).slice(0, 8).map((w) => {
@@ -113,11 +114,16 @@ function buildPrompt(opts: {
     `You are this runner's coach. Write ONE short daily check-in to push as a phone notification. ` +
     `Hard rules: write in ${langName}; at most 2 sentences; no greeting, no sign-off, no markdown, no emoji; ` +
     `be specific and actionable using the data (e.g. if yesterday was hard, suggest easy today; mind the race countdown). ` +
+    `If the runner is travelling, you may wish them a good trip and suggest a local running spot or local food to try. ` +
     `If there's no recent training, give a brief encouraging nudge. Output ONLY the message text.`;
+  const travelLine = opts.travel
+    ? `[Travel] ${opts.travel.date === opts.today ? "today" : "soon"} going to ${opts.travel.dest}\n`
+    : "";
   const user =
     `[Today] ${opts.today}\n` +
     `[Recent training (newest first)]\n${lines.length ? lines.join("\n") : "none"}\n` +
     `[Target race] ${race}\n` +
+    travelLine +
     (opts.memory ? `[Notes about this runner] ${opts.memory.slice(0, 600)}\n` : "");
   return { system, user };
 }
@@ -206,9 +212,25 @@ Deno.serve(async (req) => {
         .order("date", { ascending: true });
       const targetRace = (races || []).find((r) => r.date) || (races || [])[0] || null;
 
+      // Travel today/tomorrow → let the push reference the trip (local running,
+      // local food). tomorrow = the user's local date + 1.
+      const tomorrow = new Date(`${date}T00:00:00Z`);
+      tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+      const tomorrowStr = tomorrow.toISOString().slice(0, 10);
+      const { data: travelNotes } = await supabase
+        .from("daily_notes")
+        .select("date, travel_dest")
+        .eq("user_id", u.user_id)
+        .in("date", [date, tomorrowStr])
+        .contains("tags", ["travel"])
+        .not("travel_dest", "is", null)
+        .order("date", { ascending: true });
+      const travelHit = (travelNotes || []).find((n) => n.travel_dest);
+      const travel = travelHit ? { date: travelHit.date, dest: travelHit.travel_dest } : null;
+
       const { system, user } = buildPrompt({
         lang: u.lang || "en", name: "", today: date,
-        workouts: workouts || [], targetRace, memory: u.coach_memory || "",
+        workouts: workouts || [], targetRace, memory: u.coach_memory || "", travel,
       });
 
       let message = "";

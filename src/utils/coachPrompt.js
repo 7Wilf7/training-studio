@@ -299,7 +299,13 @@ export function buildDataBlock({ logs, races, now, lang = "en", currentWeather =
         return ms >= todayMs - windowMs && ms <= todayMs + 12 * 60 * 60 * 1000;
       })
       .sort((a, b) => (a.date || "").localeCompare(b.date || ""))
-      .map(n => `${n.date}: ${n.tags.map(tg => String(tg).replace(/_/g, " ")).join(", ")}`)
+      .map(n => {
+        const tagStr = n.tags.map(tg => String(tg).replace(/_/g, " ")).join(", ");
+        // Travel destination → so the coach can suggest local running and
+        // factor the trip in (different climate, jet lag, terrain).
+        const dest = (n.tags.includes("travel") && n.travelDest) ? ` (travel to ${n.travelDest})` : "";
+        return `${n.date}: ${tagStr}${dest}`;
+      })
       .join("\n");
   })();
 
