@@ -392,6 +392,52 @@ export function buildDataBlock({ logs, races, now, lang = "en", currentWeather =
   return sections.join("\n\n");
 }
 
+// Redacted, read-only skeleton for the in-app "Preview assembled prompt".
+// The real prompt (the proprietary coaching instructions + the user's actual
+// data) is NOT exposed — the preview only shows the ARCHITECTURE: which fixed
+// instructions exist (hidden) and which categories of the user's data get
+// attached on every message (as placeholders, no real values). This protects
+// the prompt as product IP while still letting the user understand what's sent.
+// `sendChat` still sends the full, unredacted prompt.
+export function buildPromptSkeleton(lang = "en") {
+  if (lang === "zh") {
+    return [
+      "【教练指令】—— 本产品的核心提示词（专有，预览中隐藏）",
+      "",
+      "【你的资料】姓名 / 训练经验 / 伤病史 / 默认位置",
+      "【教练设置】你选择的风格 / 输出长度 / 干预程度",
+      "【长期记忆】教练长期记住的关于你的要点",
+      "",
+      "—— 以下是每次发消息实时带上的你的数据（仅列结构，不展示具体内容）——",
+      "【当前时间】",
+      "【当前天气 + 未来 7 天预报】",
+      "【目标赛事 + 最近一场的比赛日天气】",
+      "【比赛历史】（按类别精选）",
+      "【最近 8 周周训练量】",
+      "【最近 10 条训练】含 RPE / 备注 / 当时天气",
+      "【最近当日标记】恢复 / 生病 / 出差 / 旅行等",
+      "【未来 7 天计划训练 + 当天预报】",
+    ].join("\n");
+  }
+  return [
+    "[Coach instructions] — this product's core prompt (proprietary, hidden in preview)",
+    "",
+    "[Your Profile] name / training experience / injuries / default location",
+    "[Coach Settings] your chosen style / output length / intervention level",
+    "[Long-term Memory] durable facts the coach remembers about you",
+    "",
+    "— Below: your data, attached live on every message (structure only, values hidden) —",
+    "[Current Date]",
+    "[Current Weather + 7-day forecast]",
+    "[Target Races + next race's race-day weather]",
+    "[Race History] (curated per category)",
+    "[Weekly Training Load — last 8 weeks]",
+    "[Recent Activities (last 10)] with RPE / notes / weather",
+    "[Recent Day Notes] recovery / sick / travel",
+    "[Upcoming Planned Sessions — next 7 days + forecast]",
+  ].join("\n");
+}
+
 // Tolerant JSON-array extraction from a coach reply. The LLM may wrap its
 // output in markdown fences, prefix it with commentary, or even return a
 // plain object — we try a few peelings before giving up.

@@ -615,6 +615,8 @@ const dict = {
   "coach.memory_need_chat":   { en: "Chat with the coach first — there's nothing to summarize yet.", zh: "请先和教练聊几句，再使用自动更新。" },
   "coach.memory_empty_response":{ en: "The model returned an empty memory. Try again or edit manually.", zh: "模型返回空内容。请重试或手动编辑。" },
   "coach.memory_proposal_title":{ en: "Proposed update — review before accepting:", zh: "更新建议 —— 接受前请审核：" },
+  "coach.memory_proposal_hint": { en: "Untick any point you don't want to keep.", zh: "取消勾选不想保留的条目。" },
+  "coach.memory_new":         { en: "NEW",                  zh: "新增" },
   "coach.memory_accept":      { en: "Accept",               zh: "接受" },
   "coach.memory_reject":      { en: "Discard",              zh: "放弃" },
   "coach.memory_placeholder": { en: "e.g.\n- Prefers morning runs in fasted state\n- Right achilles is sensitive on consecutive trail days; avoid B2B trail\n- Training for 2026 UTMB CCC, A-race in late August", zh: "例如：\n- 偏好早晨空腹跑\n- 右脚跟腱在连日越野后敏感，避免连两天越野\n- 备战 2026 UTMB CCC，8 月底 A 级比赛" },

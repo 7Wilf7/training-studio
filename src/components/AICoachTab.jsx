@@ -8,8 +8,7 @@ import {
 } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
-import { buildSystemPrompt } from "../utils/profile";
-import { buildDataBlock } from "../utils/coachPrompt";
+import { buildPromptSkeleton } from "../utils/coachPrompt";
 import { postJson } from "../lib/apiFetch";
 import { ModalRoot } from "./ModalRoot";
 import { Spinner } from "./Spinner";
@@ -199,10 +198,10 @@ function makeMdComponents(isMobile) {
 const LONG_CHAT_HINT_THRESHOLD = 20;
 
 export function AICoachTab({
-  logs, races, profile, coachConfig, setCoachConfig,
+  coachConfig, setCoachConfig,
   coachMemory, setCoachMemory,
   chatMessages,
-  now, setConfirmDelete, dailyNotes,
+  setConfirmDelete,
   apiProvider, apiKey, claudeApiKey, claudeEndpointId, apiModel, onEditProfile,
   // Lifted from AppShell so they survive tab switches — the user can send
   // a message, tab away, and the spinner badge on the AI Coach tab still
@@ -383,9 +382,12 @@ Output the memory text only, nothing else.`;
     setMemoryUpdating(false);
   }
 
-  function acceptMemoryProposal() {
-    setCoachMemory(memoryProposal.text);
-    setMemoryDraft(memoryProposal.text);
+  // Accepts the kept-points text from the per-point review (falls back to the
+  // full proposal if called without an argument).
+  function acceptMemoryProposal(keptText) {
+    const finalText = (typeof keptText === "string" ? keptText : memoryProposal.text).trim();
+    setCoachMemory(finalText);
+    setMemoryDraft(finalText);
     setMemoryProposal(null);
   }
   function rejectMemoryProposal() {
@@ -412,16 +414,10 @@ Output the memory text only, nothing else.`;
   // weatherCtx. This makes "why doesn't the coach know the weather?"
   // diagnosable from the preview alone — if it's missing here, it's
   // missing from the real send too.
-  const previewPrompt = buildSystemPrompt({
-    profile, coachConfig, coachMemory,
-    dataBlock: buildDataBlock({
-      logs, races, now, lang: previewLang,
-      currentWeather: weatherCtx?.currentWeather,
-      forecastByDate: weatherCtx?.forecastByDate,
-      dailyNotes,
-    }),
-    lang: previewLang,
-  });
+  // Redacted skeleton only — the real prompt (proprietary instructions + the
+  // user's actual data) is never shown here, just its architecture. sendChat
+  // still sends the full prompt. See buildPromptSkeleton.
+  const previewPrompt = buildPromptSkeleton(previewLang);
 
   // Wrapper around the lifted sendChat — clears the input box on the way
   // through. Guards against empty input + already-loading at this layer so
@@ -612,19 +608,13 @@ Output the memory text only, nothing else.`;
               )}
 
               {memoryProposal ? (
-                <>
-                  <div style={{ ...s.label, marginBottom: 6, color: "var(--moss-deep)" }}>{t("coach.memory_proposal_title")}</div>
-                  <pre style={{
-                    ...s.input, fontFamily: "var(--font-mono)", fontSize: 12,
-                    whiteSpace: "pre-wrap", lineHeight: 1.55, maxHeight: 360, overflowY: "auto",
-                    color: "var(--ink-1)", background: "var(--moss-bg)",
-                    borderColor: "var(--moss)",
-                  }}>{memoryProposal.text}</pre>
-                  <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                    <button onClick={acceptMemoryProposal} style={s.btn}>{t("coach.memory_accept")}</button>
-                    <button onClick={rejectMemoryProposal} style={s.btnGhost}>{t("coach.memory_reject")}</button>
-                  </div>
-                </>
+                <MemoryProposalReview
+                  proposalText={memoryProposal.text}
+                  oldMemory={coachMemory}
+                  onAccept={acceptMemoryProposal}
+                  onReject={rejectMemoryProposal}
+                  t={t}
+                />
               ) : memoryEditing ? (
                 <>
                   <textarea rows={10} value={memoryDraft}
@@ -1245,18 +1235,13 @@ Output the memory text only, nothing else.`;
                         </div>
                       )}
                       {memoryProposal ? (
-                        <>
-                          <div style={{ ...s.label, marginBottom: 6, color: "var(--moss-deep)" }}>{t("coach.memory_proposal_title")}</div>
-                          <pre style={{
-                            ...s.input, fontFamily: "var(--font-mono)", fontSize: 12,
-                            whiteSpace: "pre-wrap", lineHeight: 1.55, maxHeight: 360, overflowY: "auto",
-                            color: "var(--ink-1)", background: "var(--moss-bg)", borderColor: "var(--moss)",
-                          }}>{memoryProposal.text}</pre>
-                          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                            <button onClick={acceptMemoryProposal} style={s.btn}>{t("coach.memory_accept")}</button>
-                            <button onClick={rejectMemoryProposal} style={s.btnGhost}>{t("coach.memory_reject")}</button>
-                          </div>
-                        </>
+                        <MemoryProposalReview
+                          proposalText={memoryProposal.text}
+                          oldMemory={coachMemory}
+                          onAccept={acceptMemoryProposal}
+                          onReject={rejectMemoryProposal}
+                          t={t}
+                        />
                       ) : memoryEditing ? (
                         <>
                           <textarea rows={12} value={memoryDraft}
@@ -1327,5 +1312,58 @@ Output the memory text only, nothing else.`;
           even if the user walked away from this tab while extraction was
           running). See <CoachPlanImportModal> in App.jsx. */}
     </div>
+  );
+}
+
+// Per-point review of a proposed memory update. Splits the proposal into lines
+// (the memory prompt asks for "short labeled lines"), each with a checkbox so
+// the user keeps/drops points individually instead of accepting the whole blob.
+// Points not already present in the old memory are tagged NEW so the user can
+// see what changed. onAccept receives the kept points joined back into text.
+function MemoryProposalReview({ proposalText, oldMemory, onAccept, onReject, t }) {
+  const lines = proposalText.split("\n").map(l => l.replace(/\s+$/, "")).filter(l => l.trim());
+  const [kept, setKept] = useState(() => new Set(lines.map((_, i) => i)));
+  const oldLower = (oldMemory || "").toLowerCase();
+  const isNew = (line) => {
+    const probe = line.trim().toLowerCase();
+    return probe.length > 0 && !oldLower.includes(probe.slice(0, Math.min(probe.length, 30)));
+  };
+  function toggle(i) {
+    setKept(prev => { const n = new Set(prev); if (n.has(i)) n.delete(i); else n.add(i); return n; });
+  }
+  return (
+    <>
+      <div style={{ ...s.label, marginBottom: 4, color: "var(--moss-deep)" }}>{t("coach.memory_proposal_title")}</div>
+      <div style={{ ...s.muted, fontSize: 11, marginBottom: 8, lineHeight: 1.5 }}>{t("coach.memory_proposal_hint")}</div>
+      <div style={{
+        display: "flex", flexDirection: "column", gap: 2, maxHeight: 320, overflowY: "auto",
+        border: "1px solid var(--moss)", background: "var(--moss-bg)", borderRadius: 4, padding: "8px 10px",
+      }}>
+        {lines.map((line, i) => (
+          <label key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", cursor: "pointer", padding: "4px 0" }}>
+            <input type="checkbox" checked={kept.has(i)} onChange={() => toggle(i)} style={{ marginTop: 4, flexShrink: 0 }} />
+            <span style={{
+              flex: 1, fontSize: 13, lineHeight: 1.5,
+              color: kept.has(i) ? "var(--ink-1)" : "var(--ink-3)",
+              textDecoration: kept.has(i) ? "none" : "line-through",
+            }}>
+              {line}
+              {isNew(line) && (
+                <span style={{
+                  marginLeft: 6, fontSize: 9, fontFamily: "var(--font-mono)", color: "var(--moss)",
+                  border: "1px solid var(--moss)", borderRadius: 3, padding: "0 4px", verticalAlign: "middle",
+                }}>{t("coach.memory_new")}</span>
+              )}
+            </span>
+          </label>
+        ))}
+      </div>
+      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+        <button onClick={() => onAccept(lines.filter((_, i) => kept.has(i)).join("\n"))}
+          disabled={kept.size === 0}
+          style={{ ...s.btn, opacity: kept.size === 0 ? 0.5 : 1 }}>{t("coach.memory_accept")}</button>
+        <button onClick={onReject} style={s.btnGhost}>{t("coach.memory_reject")}</button>
+      </div>
+    </>
   );
 }
