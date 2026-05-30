@@ -9,6 +9,8 @@ import {
 } from "../utils/format";
 import { computeHRZones } from "../utils/profile";
 import { ActivityForm } from "./ActivityForm";
+import { ItemActionModal } from "./ItemActionModal";
+import { ModalRoot } from "./ModalRoot";
 import {
   ClockIcon, HeartIcon, PeakIcon, FootIcon, BoltIcon, GaugeIcon, RouteIcon, RunnerIcon,
   PlusIcon, UploadIcon, CheckSquareIcon, SortIcon,
@@ -49,7 +51,8 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
   const isMobile = useIsMobile();
   const [sortBy, setSortBy] = useState("date_desc");
   const [showAdd, setShowAdd] = useState(false);
-  const [editingId, setEditingId] = useState(null); // log.id currently being edited inline
+  const [editingId, setEditingId] = useState(null); // log.id currently being edited (in a modal)
+  const [actionTarget, setActionTarget] = useState(null); // log shown in the long-press Edit/Delete modal
   const [expandedId, setExpandedId] = useState(null); // mobile only — tap to expand a card
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
@@ -90,6 +93,20 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
     if (l.isOptimistic) return;
     setEditingId(l.id);
     setShowAdd(false);
+  }
+
+  // Long-press (press-and-hold ~450ms) → open the Edit/Delete action modal.
+  // A single timer ref is enough (one touch at a time). longPressFired
+  // suppresses the click that follows so a hold doesn't also expand the card.
+  const pressTimer = useRef(null);
+  const longPressFired = useRef(false);
+  function startPress(l) {
+    if (selectMode || l.isOptimistic) return;
+    longPressFired.current = false;
+    pressTimer.current = setTimeout(() => { longPressFired.current = true; setActionTarget(l); }, 450);
+  }
+  function endPress() {
+    if (pressTimer.current) { clearTimeout(pressTimer.current); pressTimer.current = null; }
   }
 
   function bulkDeleteSelected() {
@@ -501,20 +518,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
           </div>
         )}
         {displayedLogs.map(l => {
-          const isEditing = editingId === l.id;
           const isSelected = selectedIds.has(l.id);
-          if (isEditing) {
-            return (
-              <ActivityForm
-                key={l.id}
-                mode="edit"
-                initial={l}
-                onSave={(data) => handleEditSubmit(l.id, data)}
-                onCancel={() => setEditingId(null)}
-                hrZones={hrZones}
-              />
-            );
-          }
 
           // Mobile compact card — fixed-height two-row layout. Tap expands to
           // reveal all metrics + an Edit button. Tap again to collapse.
@@ -532,7 +536,9 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
             // the shorthand/longhand interaction entirely.
             return (
               <div key={l.id}
-                onClick={onMobileCardClick}
+                onClick={() => { if (longPressFired.current) { longPressFired.current = false; return; } onMobileCardClick(); }}
+                onTouchStart={() => startPress(l)} onTouchEnd={endPress} onTouchMove={endPress} onTouchCancel={endPress}
+                onMouseDown={() => startPress(l)} onMouseUp={endPress} onMouseLeave={endPress}
                 style={{
                   background: isSelected ? "#eef5ff" : "var(--bg-elevated)",
                   borderTop:    "1px solid " + (isSelected ? "#7aa8e0" : "var(--rule)"),
@@ -600,21 +606,13 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
                       <MetricWeather w={l.weather} />
                     </span>
                   )}
-                  {/* RPE — last item on the header row, just before delete. */}
+                  {/* RPE — last item on the header row. Delete moved to the
+                      long-press action modal (no inline ✕ anymore). */}
                   {l.rpe > 0 && (
                     <span style={{
                       fontFamily: "var(--font-mono)", fontSize: 11,
                       color: "var(--ink-3)", flexShrink: 0,
                     }}>RPE{l.rpe}</span>
-                  )}
-                  {!selectMode && (
-                    <button onClick={(e) => { e.stopPropagation(); deleteLog(l.id); }}
-                      aria-label="Delete"
-                      style={{
-                        border: "none", background: "none", color: "var(--ink-3)",
-                        cursor: "pointer", fontSize: 13, padding: "0 4px",
-                        minHeight: 28, flexShrink: 0,
-                      }}>✕</button>
                   )}
                 </div>
 
@@ -841,6 +839,42 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
           );
         })}
       </div>
+
+      {/* Long-press actions — Edit / Delete (replaces the inline ✕ on cards). */}
+      {actionTarget && (
+        <ItemActionModal
+          title={`${formatDateShort(actionTarget.date)} · ${t(`enum.activity.${actionTarget.type}`)}`}
+          onEdit={() => { const tgt = actionTarget; setActionTarget(null); startEdit(tgt); }}
+          onDelete={() => { const id = actionTarget.id; setActionTarget(null); deleteLog(id); }}
+          onClose={() => setActionTarget(null)}
+        />
+      )}
+
+      {/* Edit form — opens as a blurred modal (was an inline card swap). */}
+      {editingId && (() => {
+        const editLog = displayedLogs.find(l => l.id === editingId);
+        if (!editLog) return null;
+        return (
+          <ModalRoot onClose={() => setEditingId(null)}>
+            <div onClick={() => setEditingId(null)} style={{
+              position: "fixed", inset: 0, background: "rgba(20,20,19,0.45)",
+              backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
+              display: "flex", alignItems: "flex-start", justifyContent: "center",
+              zIndex: 9999, padding: 16, overflowY: "auto", overscrollBehavior: "contain",
+            }}>
+              <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 640, margin: "16px 0" }}>
+                <ActivityForm
+                  mode="edit"
+                  initial={editLog}
+                  onSave={(data) => handleEditSubmit(editLog.id, data)}
+                  onCancel={() => setEditingId(null)}
+                  hrZones={hrZones}
+                />
+              </div>
+            </div>
+          </ModalRoot>
+        );
+      })()}
     </div>
   );
 }

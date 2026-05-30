@@ -119,6 +119,7 @@ const dict = {
   "common.save":          { en: "Save",                     zh: "保存" },
   "common.save_changes":  { en: "Save Changes",             zh: "保存修改" },
   "common.delete":        { en: "Delete",                   zh: "删除" },
+  "common.edit":          { en: "Edit",                     zh: "编辑" },
   "common.done":          { en: "Done",                     zh: "完成" },
   "common.required":      { en: "⚠ Required fields missing", zh: "⚠ 必填项未填" },
   "common.undo_warning":  { en: "This action cannot be undone.", zh: "此操作无法撤销。" },

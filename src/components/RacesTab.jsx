@@ -1,12 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { s } from "../styles";
 import { RACE_PRIORITY, RACE_CATEGORIES, RACE_CATEGORY_COLOR, SPARTAN_SUBTYPES, SPARTAN_TIER_COLOR } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { forwardGeocode, fetchRaceDayWeather, skyconMeta } from "../lib/weather";
 import { parseDistanceKm, inferRaceCategory } from "../utils/format";
-import { useClickOutside } from "../utils/useClickOutside";
 import { useIsNarrow, useIsMobile } from "../hooks/useMediaQuery";
 import { ClockIcon } from "./Icons";
+import { ModalRoot } from "./ModalRoot";
+import { ItemActionModal } from "./ItemActionModal";
 import { PersonalRecordsBar } from "./PersonalRecordsBar";
 
 // Shared grid template for race rows (desktop only). Same fixed columns for
@@ -183,18 +184,30 @@ export function RacesTab({
     setPastRaceWarning(null);
   }
 
-  // Click-outside auto-collapses the inline edit form (race cards). Warn first
-  // if the form has unsaved changes; the dirty check compares the current draft
-  // to a snapshot of the race being edited.
+  // Race long-press → Edit/Delete action modal. Single press timer (one touch
+  // at a time); longPressFired suppresses the click that follows.
+  const [actionRace, setActionRace] = useState(null);
+  const pressTimer = useRef(null);
+  const longPressFired = useRef(false);
+  function startPress(r) {
+    longPressFired.current = false;
+    pressTimer.current = setTimeout(() => { longPressFired.current = true; setActionRace(r); }, 450);
+  }
+  function endPress() {
+    if (pressTimer.current) { clearTimeout(pressTimer.current); pressTimer.current = null; }
+  }
+
+  // The edit form now opens as a blurred modal (was inline). Closing warns if
+  // there are unsaved changes (dirty = current draft differs from the race).
   function isEditFormDirty() {
     if (!editingRaceId) return false;
     const original = races.find(r => r.id === editingRaceId);
     if (!original) return false;
     return JSON.stringify(newRace) !== JSON.stringify(raceToForm(original));
   }
-  const editFormRef = useClickOutside(() => {
+  function attemptCloseEdit() {
     if (!isEditFormDirty() || window.confirm(t("form.discard_confirm"))) cancelEdit();
-  }, !!editingRaceId);
+  }
 
   function deleteRace(id) {
     setConfirmDelete({ type: "race", id });
@@ -366,14 +379,12 @@ export function RacesTab({
     );
   }
 
-  // Render a single race card OR its inline edit form. Used twice below (target + history sections).
+  // Render a single race card. Editing opens as a blurred modal (rendered once
+  // at the bottom), not inline.
   function renderRaceCard(r) {
     const timeStr = [r.resultH, r.resultM, r.resultS].some(Boolean)
       ? `${r.resultH || "0"}:${String(r.resultM || "0").padStart(2, "0")}:${String(r.resultS || "0").padStart(2, "0")}`
       : "";
-    if (editingRaceId === r.id) {
-      return <div key={r.id} ref={editFormRef}>{renderRaceForm("edit")}</div>;
-    }
     return renderRaceCardInner(r, timeStr);
   }
 
@@ -456,6 +467,36 @@ export function RacesTab({
       </>
     );
   }
+
+  // Shared modals (long-press actions + the edit form). Rendered in both the
+  // mobile and desktop returns; ModalRoot portals them out so placement is
+  // just about being in the tree.
+  const modals = (
+    <>
+      {actionRace && (
+        <ItemActionModal
+          title={`${actionRace.date || ""} ${actionRace.name || ""}`.trim() || undefined}
+          onEdit={() => { const r = actionRace; setActionRace(null); startEdit(r); }}
+          onDelete={() => { const r = actionRace; setActionRace(null); deleteRace(r.id); }}
+          onClose={() => setActionRace(null)}
+        />
+      )}
+      {editingRaceId && (
+        <ModalRoot onClose={attemptCloseEdit}>
+          <div onClick={attemptCloseEdit} style={{
+            position: "fixed", inset: 0, background: "rgba(20,20,19,0.45)",
+            backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
+            display: "flex", alignItems: "flex-start", justifyContent: "center",
+            zIndex: 9999, padding: 16, overflowY: "auto", overscrollBehavior: "contain",
+          }}>
+            <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 640, margin: "16px 0" }}>
+              {renderRaceForm("edit")}
+            </div>
+          </div>
+        </ModalRoot>
+      )}
+    </>
+  );
 
   // ── Mobile layout ──────────────────────────────────────────────────────
   // Top tabs: Races (left, default) | PR (right). Inside Races, full-width
@@ -583,6 +624,7 @@ export function RacesTab({
             })}
           </>
         )}
+        {modals}
       </div>
     );
   }
@@ -590,6 +632,7 @@ export function RacesTab({
   // ── Desktop layout (unchanged): PR bar, both lists stacked ─────────────
   return (
     <div>
+      {modals}
       <PersonalRecordsBar races={races} itraPI={itraPI} setItraPI={setItraPI} />
 
       <div style={{ marginBottom: 14, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
@@ -647,13 +690,16 @@ export function RacesTab({
         if (ascStr) row3Parts.push(ascStr);
       }
       return (
-        <div key={r.id} onClick={() => startEdit(r)}
+        <div key={r.id}
+          onTouchStart={() => startPress(r)} onTouchEnd={endPress} onTouchMove={endPress} onTouchCancel={endPress}
+          onMouseDown={() => startPress(r)} onMouseUp={endPress} onMouseLeave={endPress}
           style={{
             ...s.card, cursor: "pointer",
             display: "flex", flexDirection: "column",
             gap: 5, padding: "10px 14px",
           }}>
-          {/* Row 1: date · priority · category · subtype · delete (no wrap) */}
+          {/* Row 1: date · priority · category · subtype · countdown.
+              Edit/Delete moved to a long-press action modal (no inline ✕). */}
           <div style={{ display: "flex", gap: 8, alignItems: "center", minWidth: 0 }}>
             <span style={{
               fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--ink-3)",
@@ -674,9 +720,6 @@ export function RacesTab({
             )}
             {countdown}
             <div style={{ flex: 1 }} />
-            <button onClick={(e) => { e.stopPropagation(); deleteRace(r.id); }}
-              aria-label="Delete"
-              style={{ border: "none", background: "none", color: "var(--ink-3)", cursor: "pointer", fontSize: 13, padding: "0 4px", minHeight: 24, flexShrink: 0 }}>✕</button>
           </div>
           {/* Row 2: name (truncate) + time/ascent suffix (right-aligned) */}
           <div style={{ display: "flex", gap: 10, alignItems: "baseline", minWidth: 0 }}>
