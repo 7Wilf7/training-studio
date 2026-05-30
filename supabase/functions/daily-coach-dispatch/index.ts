@@ -60,7 +60,16 @@ async function sendPush(projectId: string, accessToken: string, token: string, t
   const resp = await fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ message: { token, notification: { title, body } } }),
+    // android.notification.channel_id must match a channel created on the
+    // device (push.js createChannel) or Android 8+ silently drops the tray
+    // notification. priority:high improves delivery on aggressive ROMs.
+    body: JSON.stringify({
+      message: {
+        token,
+        notification: { title, body },
+        android: { priority: "high", notification: { channel_id: "daily_coach" } },
+      },
+    }),
   });
   const respBody = await resp.json().catch(() => ({}));
   return { ok: resp.ok, status: resp.status, body: respBody };
@@ -248,9 +257,14 @@ Deno.serve(async (req) => {
 
       if (!fcmAccessToken) fcmAccessToken = await getAccessToken(sa);
       let sent = 0;
+      const fcmErrors: any[] = [];
       for (const s of subs) {
         const r = await sendPush(sa.project_id, fcmAccessToken, s.fcm_token, "Training Studio", message);
         if (r.ok) sent++;
+        // Surface FCM rejections (invalid/stale token, sender mismatch, etc.)
+        // so a manual invoke shows WHY a push didn't land instead of silently
+        // counting 0 sent.
+        else fcmErrors.push({ status: r.status, error: (r.body as any)?.error?.status || (r.body as any)?.error?.message || r.body });
       }
 
       // Persist the message to the in-app inbox so the user can re-read it
@@ -260,7 +274,7 @@ Deno.serve(async (req) => {
         .from("push_inbox").insert({ user_id: u.user_id, body: message });
       if (inboxErr) summary.push({ user: u.user_id, warn: `inbox insert: ${inboxErr.message}` });
 
-      summary.push({ user: u.user_id, sent, devices: subs.length, message });
+      summary.push({ user: u.user_id, sent, devices: subs.length, fcmErrors, message });
     }
 
     return json({ processed: summary.length, summary });

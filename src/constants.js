@@ -109,7 +109,9 @@ export const WEATHER_RELEVANT_TYPES = ["Road Run", "Trail Run", "Hiking", "HIIT"
 // belong on a single workout — sick / travel especially matter for how the
 // coach plans around a disrupted week. Stored as text[], so adding values
 // here needs no schema change.
-export const DAILY_TAGS = ["massage", "stretching", "poor_sleep", "sick", "travel"];
+// Order matters for the Calendar day-tag grid (3 cols → row 1: massage /
+// stretching / sick, row 2: poor_sleep [spans 2 cols] / travel).
+export const DAILY_TAGS = ["massage", "stretching", "sick", "poor_sleep", "travel"];
 
 // Emoji glyph per day tag. Mobile calendar cells show just these icons (no
 // room for text); desktop chips + the day modal show icon + label.

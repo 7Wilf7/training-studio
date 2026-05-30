@@ -229,25 +229,27 @@ export function CalendarDayModal({
           </div>
         )}
 
-        {/* Day-level tags — past/today only. Toggle chips; each click upserts
-            the daily_notes row immediately (no separate save step). */}
-        {!isFuture && (
+        {/* Day-level tags — available for past, today AND future days (e.g.
+            pre-tag a known travel day). "Poor sleep" is hidden on future days
+            since it hasn't happened yet. Each click upserts immediately. */}
+        {(
           <div style={{ borderTop: "1px solid var(--rule)", paddingTop: 14, marginBottom: 14 }}>
             <div style={{ ...s.label, marginBottom: 8 }}>
               {t("calendar.day_tags_title")}
             </div>
-            {/* 3-column grid → the 5 tags lay out in exactly 2 rows (3 + 2)
-                instead of wrapping to 3. Cells stretch to equal height; the
-                long "Poor sleep (last night)" wraps inside its own cell. */}
+            {/* 3-column grid → 2 rows. Row 1: massage / stretching / sick.
+                Row 2: poor_sleep (spans 2 cols so "(last night)" fits one line)
+                + travel. On future days poor_sleep is dropped. */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
-              {DAILY_TAGS.map(tag => (
+              {DAILY_TAGS.filter(tag => !(isFuture && tag === "poor_sleep")).map(tag => (
                 <button key={tag}
                   onClick={() => toggleDayTag(tag)}
                   style={{
                     ...s.chip(currentTags.includes(tag)),
                     width: "100%", minHeight: 0, padding: "8px 6px",
                     fontSize: 12, lineHeight: 1.25, textAlign: "center",
-                    whiteSpace: "normal",
+                    whiteSpace: "nowrap",
+                    gridColumn: (tag === "poor_sleep" && !isFuture) ? "span 2" : undefined,
                   }}>
                   {DAILY_TAG_ICONS[tag] ? `${DAILY_TAG_ICONS[tag]} ` : ""}{t(`calendar.tag.${tag}`)}
                 </button>

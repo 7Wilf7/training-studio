@@ -1044,14 +1044,16 @@ function ExpandedMetrics({ log: l }) {
 
   return (
     <>
-      {/* Metric data — kept on its own row so weather (below) doesn't push a
-          number like TE onto a second line. Tight gap + space-between spreads
-          the metrics across the full width and fits as many on one line as the
-          screen allows (a very narrow phone with many road-run metrics may
-          still wrap one item). */}
+      {/* Metric data on its own row (weather goes on the line below). Road Run
+          has the most metrics, so ONLY there do we tighten the gap + spread
+          with space-between to fit them on one line on narrow phones. Other
+          types (Trail / Hiking / etc.) have few metrics, so they keep the
+          normal left-packed gap — space-between would leave 3 items awkwardly
+          spaced edge-to-edge. */}
       <div style={{
-        display: "flex", gap: "6px 10px", flexWrap: "wrap",
-        justifyContent: "space-between",
+        display: "flex", flexWrap: "wrap",
+        gap: isRoad ? "6px 10px" : 14,
+        justifyContent: isRoad ? "space-between" : "flex-start",
         fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums",
         fontSize: 12, color: "var(--ink-2)",
       }}>

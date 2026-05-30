@@ -44,6 +44,21 @@ export async function initPushNotifications() {
       console.info('[push] notification permission not granted:', perm.receive);
       return;
     }
+    // Android 8+ requires a notification channel or the tray notification is
+    // silently dropped. Must match the channel_id the dispatch sends
+    // (android.notification.channel_id = 'daily_coach'). importance 5 = HIGH
+    // (heads-up). Safe to call repeatedly — Android upserts by id.
+    try {
+      await PushNotifications.createChannel({
+        id: 'daily_coach',
+        name: 'Daily coach',
+        description: 'Your daily AI coach check-in',
+        importance: 5,
+        visibility: 1,
+      });
+    } catch (err) {
+      console.warn('[push] createChannel failed (non-fatal):', err);
+    }
     await PushNotifications.register();
   } catch (err) {
     console.error('[push] init failed:', err);
