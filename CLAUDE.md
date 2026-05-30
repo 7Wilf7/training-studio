@@ -127,7 +127,8 @@ npx supabase functions deploy daily-coach-dispatch --no-verify-jwt
 - `npm.cmd run lint` —— ESLint 检查
 
 ## 工作流约定
-- 改完代码主动跑 `npm.cmd run dev` 验证，能跑起来再交付
+- **验证 = `npm.cmd run lint` + `npm.cmd run build` 通过即可交付**。不用再起 dev server / preview 去"看一眼"——app 是邀请制登录，本地起来只有登录页，看不到真实界面（用户也明确说没必要每次起预览检查）。功能对不对由用户在真机/线上验。
+- **移动端优先**：用户的需求绝大多数针对手机端；PC 端网页按"跟随移动端"的原则自行优化、保持合理即可，不用每个改动都纠结桌面。用户会不时上 PC 网页看，有问题会反馈。
 - 大改动前先在小样本上验证，参考全局 CLAUDE.md 中的工作纪律
 - 不引入额外构建工具或框架除非明确需要 (例如 Next.js、Remix)
 - 新依赖安装前先告知用途和体积影响

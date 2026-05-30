@@ -125,7 +125,10 @@ export function UpdateChecker() {
     } catch (err) {
       console.error("[update] in-app install failed:", err);
       setInstallState("idle");
-      setInstallMsg(t("settings.update_install_failed"));
+      // Surface the actual reason (so a failure is diagnosable) AND still fall
+      // back to the browser download so the button never dead-ends. The message
+      // persists in-app when the user returns from the browser.
+      setInstallMsg(`${t("settings.update_install_failed")} (${err?.message || String(err)})`);
       window.open(apkUrl, "_blank", "noreferrer");
     } finally {
       progressHandle?.remove?.();
@@ -159,12 +162,10 @@ export function UpdateChecker() {
 
       {status === "newer" && release && (
         <div style={updatePanelStyle}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--ink-2)" }}>
-            {t("settings.update_available")} · <strong>v{release.version}</strong>
-          </div>
-          {release.notes && (
-            <pre style={notesStyle}>{release.notes.slice(0, 600)}</pre>
-          )}
+          {/* Just the changelog for this release — no version header / blurb. */}
+          {release.notes
+            ? <pre style={notesStyle}>{release.notes.slice(0, 800)}</pre>
+            : <div style={{ ...secondaryStyle, marginTop: 0 }}>v{release.version}</div>}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {release.apkUrl && (
               isNative() ? (
