@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { s } from "../styles";
-import { ACTIVITY_TYPES, RUN_GROUP_TYPES, TYPE_COLOR } from "../constants";
+import { ACTIVITY_TYPES, RUN_GROUP_TYPES, STRENGTH_SUBS, TYPE_COLOR } from "../constants";
 import { useT } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
+import { timeOfDayToStartedAt } from "../utils/format";
 import { ModalRoot } from "./ModalRoot";
 
 // Each row in the modal is a draft proposal — user can toggle, edit, or
@@ -17,6 +18,7 @@ function buildDraft(p, idx) {
     subTypes: Array.isArray(p.subTypes) ? p.subTypes : [],
     distance: p.distance != null ? String(p.distance) : "",
     durationMin: p.duration != null ? String(p.duration) : "",
+    timeOfDay: (p.timeOfDay === "am" || p.timeOfDay === "pm") ? p.timeOfDay : "",
     notes: p.notes || "",
   };
 }
@@ -53,6 +55,7 @@ export function CoachPlanImportModal({ plans, onConfirm, onCancel }) {
       distance: parseFloat(it.distance) || 0,
       duration: Math.round((parseFloat(it.durationMin) || 0) * 60),
       pace: 0, hr: 0, maxHR: 0, ascent: 0, cadence: 0, aerobicTE: 0, gap: 0,
+      startedAt: timeOfDayToStartedAt(it.date, it.timeOfDay),
       isPlanned: true,
       tags: [],
     }));
@@ -189,6 +192,28 @@ export function CoachPlanImportModal({ plans, onConfirm, onCancel }) {
                         placeholder="—"
                         style={{ ...s.input, padding: "5px 8px", fontSize: 12 }} />
                     </div>
+                  </div>
+
+                  {/* Second row: time of day + (strength) area chips, so an
+                      imported plan clearly says when + what to train. */}
+                  <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap", alignItems: "center" }}>
+                    <select value={it.timeOfDay}
+                      onChange={e => patch(it._id, { timeOfDay: e.target.value })}
+                      style={{ ...s.input, width: "auto", padding: "4px 8px", fontSize: 12 }}>
+                      <option value="">{t("calendar.plan_tod_any")}</option>
+                      <option value="am">{t("calendar.plan_tod_am")}</option>
+                      <option value="pm">{t("calendar.plan_tod_pm")}</option>
+                    </select>
+                    {it.type === "Strength" && STRENGTH_SUBS.map(sub => {
+                      const on = (it.subTypes || []).includes(sub);
+                      return (
+                        <button key={sub} type="button"
+                          onClick={() => patch(it._id, { subTypes: on ? it.subTypes.filter(x => x !== sub) : [...(it.subTypes || []), sub] })}
+                          style={{ ...s.chip(on), minHeight: 0, padding: "4px 10px", fontSize: 12 }}>
+                          {t(`enum.subtype.${sub}`)}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               );

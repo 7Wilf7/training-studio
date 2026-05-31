@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { s } from "../styles";
-import { ACTIVITY_TYPES, DAILY_TAGS, DAILY_TAG_ICONS, RUN_GROUP_TYPES, TYPE_COLOR } from "../constants";
+import { ACTIVITY_TYPES, DAILY_TAGS, DAILY_TAG_ICONS, RUN_GROUP_TYPES, STRENGTH_SUBS, TYPE_COLOR } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
-import { formatDuration } from "../utils/format";
+import { formatDuration, timeOfDayToStartedAt, startedAtToTimeOfDay } from "../utils/format";
 import { formatWeatherShort, skyconMeta } from "../lib/weather";
 import { ModalRoot } from "./ModalRoot";
 
@@ -44,6 +44,9 @@ export function CalendarDayModal({
   const [planType, setPlanType] = useState("Road Run");
   const [planDistance, setPlanDistance] = useState("");
   const [planDurationMin, setPlanDurationMin] = useState("");
+  const [planTimeOfDay, setPlanTimeOfDay] = useState(""); // "" | "am" | "pm"
+  const [planSubTypes, setPlanSubTypes] = useState([]);   // strength: Upper/Lower/Core
+  const planIsStrength = planType === "Strength";
 
   // Day-level tags live in dailyNotes — we toggle in-place. The Save is implicit:
   // each click calls setDailyTags() which upserts immediately. UI reflects the
@@ -62,10 +65,17 @@ export function CalendarDayModal({
     setDailyTags(dateKey, currentTags, travelDraft).catch(() => {});
   }
 
+  function togglePlanSub(sub) {
+    setPlanSubTypes(prev => prev.includes(sub) ? prev.filter(x => x !== sub) : [...prev, sub]);
+  }
+
   async function savePlan() {
     const distNum = parseFloat(planDistance) || 0;
     const durSec = (parseFloat(planDurationMin) || 0) * 60;
-    if (distNum === 0 && durSec === 0) {
+    const subTypes = planIsStrength ? planSubTypes : [];
+    // A strength plan is meaningful with just a picked area (e.g. "Core") even
+    // without a duration; everything else still needs a distance or duration.
+    if (distNum === 0 && durSec === 0 && subTypes.length === 0) {
       alert(t("calendar.plan_empty_warning"));
       return;
     }
@@ -73,17 +83,20 @@ export function CalendarDayModal({
       await addLog({
         date: dateKey,
         type: planType,
-        subTypes: [],
+        subTypes,
         distance: distNum,
         duration: Math.round(durSec),
         pace: 0, hr: 0, maxHR: 0,
         ascent: 0, cadence: 0, aerobicTE: 0, gap: 0,
+        startedAt: timeOfDayToStartedAt(dateKey, planTimeOfDay),
         isPlanned: true,
         tags: [],
       }, { source: "calendar_plan" });
       setPlanType("Road Run");
       setPlanDistance("");
       setPlanDurationMin("");
+      setPlanTimeOfDay("");
+      setPlanSubTypes([]);
       setPanel(null);
     } catch { /* alert shown by wrapper */ }
   }
@@ -193,6 +206,20 @@ export function CalendarDayModal({
                       <div style={{ ...s.tag(l.type), fontSize: 11 }}>
                         {t(`enum.activity.${l.type}`)}
                       </div>
+                      {/* Strength area(s) + AM/PM so a plan reads "Strength · Core · AM". */}
+                      {Array.isArray(l.subTypes) && l.subTypes.length > 0 && (
+                        <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-2)" }}>
+                          {l.subTypes.map(st => t(`enum.subtype.${st}`)).join(" · ")}
+                        </div>
+                      )}
+                      {(() => {
+                        const tod = startedAtToTimeOfDay(l.startedAt);
+                        return tod ? (
+                          <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--ink-3)", letterSpacing: "0.06em" }}>
+                            {t(tod === "am" ? "calendar.plan_tod_am" : "calendar.plan_tod_pm")}
+                          </div>
+                        ) : null;
+                      })()}
                       {l.isPlanned && (
                         <div style={{
                           fontSize: 10, fontFamily: "var(--font-mono)",
@@ -305,12 +332,36 @@ export function CalendarDayModal({
                       placeholder="e.g. 45"
                       style={{ ...s.input, padding: "6px 8px", fontSize: 13 }} />
                   </div>
+                  <div>
+                    <div style={{ ...s.muted, fontSize: 11, marginBottom: 4 }}>{t("calendar.plan_time_of_day")}</div>
+                    <select value={planTimeOfDay} onChange={e => setPlanTimeOfDay(e.target.value)}
+                      style={{ ...s.input, padding: "6px 8px", fontSize: 13 }}>
+                      <option value="">{t("calendar.plan_tod_any")}</option>
+                      <option value="am">{t("calendar.plan_tod_am")}</option>
+                      <option value="pm">{t("calendar.plan_tod_pm")}</option>
+                    </select>
+                  </div>
                 </div>
+                {/* Strength: which area(s) — so an imported "Strength" plan shows
+                    Upper / Lower / Core instead of a bare label. */}
+                {planIsStrength && (
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ ...s.muted, fontSize: 11, marginBottom: 6 }}>{t("calendar.plan_strength_area")}</div>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {STRENGTH_SUBS.map(sub => (
+                        <button key={sub} type="button" onClick={() => togglePlanSub(sub)}
+                          style={{ ...s.chip(planSubTypes.includes(sub)), minHeight: 0, padding: "5px 11px", fontSize: 12 }}>
+                          {t(`enum.subtype.${sub}`)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div style={{ display: "flex", gap: 6 }}>
                   <button onClick={savePlan} style={{ ...s.btn, fontSize: 12, padding: "6px 14px" }}>
                     {t("calendar.save_plan")}
                   </button>
-                  <button onClick={() => { setPanel(null); setPlanDistance(""); setPlanDurationMin(""); }} style={{ ...s.btnGhost, fontSize: 12, padding: "6px 14px" }}>
+                  <button onClick={() => { setPanel(null); setPlanDistance(""); setPlanDurationMin(""); setPlanTimeOfDay(""); setPlanSubTypes([]); }} style={{ ...s.btnGhost, fontSize: 12, padding: "6px 14px" }}>
                     {t("common.cancel")}
                   </button>
                 </div>

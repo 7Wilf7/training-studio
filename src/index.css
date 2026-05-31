@@ -193,6 +193,23 @@ summary::-webkit-details-marker { display: none; }
   .ts-overlay-in, .ts-modal-in { animation: none; }
 }
 
+/* Tab-switch slide — the content slides in from the side you swiped toward
+   (left swipe → next tab enters from the right, and vice-versa), so changing
+   tabs reads as motion instead of a hard cut. Short + subtle. */
+@keyframes ts-tab-slide-r {
+  from { opacity: 0.3; transform: translateX(30px); }
+  to   { opacity: 1;   transform: translateX(0); }
+}
+@keyframes ts-tab-slide-l {
+  from { opacity: 0.3; transform: translateX(-30px); }
+  to   { opacity: 1;   transform: translateX(0); }
+}
+.ts-tab-in-right { animation: ts-tab-slide-r 0.24s cubic-bezier(0.2, 0.7, 0.3, 1); }
+.ts-tab-in-left  { animation: ts-tab-slide-l 0.24s cubic-bezier(0.2, 0.7, 0.3, 1); }
+@media (prefers-reduced-motion: reduce) {
+  .ts-tab-in-right, .ts-tab-in-left { animation: none; }
+}
+
 /* ============================================================
    Mobile-only overrides
    ------------------------------------------------------------

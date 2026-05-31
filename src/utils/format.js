@@ -120,6 +120,24 @@ export function inferRaceCategory(race) {
   return "";
 }
 
+// Planned-workout time-of-day helpers. We don't add a DB column — instead we
+// ride on `started_at`: "am" → 08:00 local, "pm" → 18:00 local on the plan's
+// date. Display derives the AM/PM badge back from that hour.
+export function timeOfDayToStartedAt(dateKey, tod) {
+  if (!dateKey) return null;
+  if (tod === "am") return `${dateKey}T08:00:00`;
+  if (tod === "pm") return `${dateKey}T18:00:00`;
+  return null;
+}
+// Returns "am" | "pm" | "" from a workout's startedAt (local hour). "" when no
+// time is set, so callers can hide the badge entirely.
+export function startedAtToTimeOfDay(startedAt) {
+  if (!startedAt) return "";
+  const h = new Date(startedAt).getHours();
+  if (!Number.isFinite(h)) return "";
+  return h < 12 ? "am" : "pm";
+}
+
 export function isDuplicate(a, b) {
   if (a.date !== b.date) return false;
   if (a.type !== b.type) return false;

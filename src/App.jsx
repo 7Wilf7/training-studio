@@ -1028,13 +1028,15 @@ Output a JSON array. Each item:
   "distance": number (kilometres, optional — omit if not specified),
   "duration": number (MINUTES, optional — omit if not specified),
   "subTypes": ["Easy Run" | "Aerobic Run" | "Tempo Run" | "Interval Run" | "Race" | "Upper Body" | "Lower Body" | "Core"] (optional, only when relevant),
+  "timeOfDay": "am" | "pm" (optional — ONLY if the coach explicitly says morning/上午 or evening/afternoon/下午/晚上),
   "notes": string (brief — optional)
 }
 
 Rules:
 - Only extract suggestions that have a clear day (explicit date OR a weekday like "Wednesday" / "周三" / "tomorrow"). Resolve weekdays to the next upcoming occurrence from today.
+- For Strength sessions, set subTypes to the area(s) the coach names — "Upper Body" / "Lower Body" / "Core" (one or more). If the coach just says "strength" with no area, leave subTypes empty.
 - Skip vague advice ("rest more", "stay hydrated"), past references, and analysis-only text.
-- If the coach explicitly suggests a rest / recovery day with no activity, set type to "Recovery".
+- REST DAYS ARE NORMAL: do NOT invent a workout for every day. Only output entries for days the coach actually assigns training. A day the coach leaves blank — or explicitly calls a rest day with no activity — gets NO entry at all (just omit it). Only emit a "Recovery" entry if the coach explicitly prescribes an active-recovery session (e.g. an easy shakeout, mobility).
 - If you cannot find any concrete plan, output [].
 - Output the JSON array ONLY. No prose, no markdown fences, no comments.`;
 

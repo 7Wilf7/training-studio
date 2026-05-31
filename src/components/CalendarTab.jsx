@@ -5,6 +5,7 @@ import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { CalendarDayModal } from "./CalendarDayModal";
 import { skyconMeta } from "../lib/weather";
+import { startedAtToTimeOfDay } from "../utils/format";
 
 const WEEKDAY_SHORT_EN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const WEEKDAY_SHORT_ZH = ["日", "一", "二", "三", "四", "五", "六"];
@@ -759,11 +760,16 @@ function LogPill({ log, t }) {
   const isPlanned = log.isPlanned;
   const color = TYPE_COLOR[log.type] || "#57564f";
 
-  // Metrics line: distance + ascent for runs; nothing for Strength/HIIT (the
-  // type label alone is the headline since they don't carry km).
+  // Metrics line: distance + ascent for runs; strength shows its area(s) so a
+  // planned "Strength" reads as "Core" not a bare label. AM/PM (when set) leads.
   const metrics = [];
+  const tod = startedAtToTimeOfDay(log.startedAt);
+  if (tod) metrics.push(tod === "am" ? t("calendar.plan_tod_am") : t("calendar.plan_tod_pm"));
   if (isRun && log.distance > 0) metrics.push(`${log.distance} km`);
   if (isRun && log.ascent > 0)   metrics.push(`+${log.ascent} m`);
+  if (!isRun && Array.isArray(log.subTypes) && log.subTypes.length > 0) {
+    metrics.push(log.subTypes.map(st => t(`enum.subtype.${st}`)).join(" · "));
+  }
 
   return (
     <div style={{

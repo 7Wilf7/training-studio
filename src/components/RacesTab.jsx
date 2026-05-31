@@ -156,28 +156,8 @@ export function RacesTab({
     );
   }
 
-  // Folded weather block for a race card: a small tappable chip that toggles
-  // the weather line. Renders nothing if there's no weather for this race.
-  function renderRaceWeatherFold(r) {
-    if (!raceWeather[r.id]) return null;
-    const open = !!weatherOpen[r.id];
-    return (
-      <div style={{ marginTop: 1 }}>
-        <button
-          onClick={(e) => toggleWeather(r.id, e)}
-          style={{
-            display: "inline-flex", alignItems: "center", gap: 5,
-            background: "transparent", border: "1px solid var(--rule)",
-            borderRadius: 2, padding: "3px 9px", minHeight: 0,
-            fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-2)",
-            cursor: "pointer", WebkitTapHighlightColor: "transparent",
-          }}>
-          🌤 {t("races.weather_toggle")} <span style={{ fontSize: 9, color: "var(--ink-3)" }}>{open ? "▲" : "▼"}</span>
-        </button>
-        {open && renderRaceWeather(r)}
-      </div>
-    );
-  }
+  // Weather is revealed by TAPPING the race card (see the card's onClick), not
+  // a dedicated chip — keeps the folded card as clean as an indoor race.
 
   // addingMode: null = no add form; "target" or "history" = the new race kind being added.
   // No more target/history TAB switching — both lists render on the same page.
@@ -767,6 +747,14 @@ export function RacesTab({
       }
       return (
         <div key={r.id}
+          onClick={() => {
+            // Long-press (edit/delete) fires first and sets this flag — swallow
+            // the click that follows so a hold doesn't also toggle weather.
+            if (longPressFired.current) { longPressFired.current = false; return; }
+            // Tap reveals the race-day weather (no dedicated chip — kept low-key
+            // like indoor races that simply show nothing).
+            if (raceWeather[r.id]) toggleWeather(r.id);
+          }}
           onTouchStart={() => startPress(r)} onTouchEnd={endPress} onTouchMove={endPress} onTouchCancel={endPress}
           onMouseDown={() => startPress(r)} onMouseUp={endPress} onMouseLeave={endPress}
           style={{
@@ -834,7 +822,7 @@ export function RacesTab({
             </select>
           )}
           {r.itraScore && <span style={{ ...s.subTag, fontSize: 10, alignSelf: "flex-start" }}>ITRA {r.itraScore}</span>}
-          {renderRaceWeatherFold(r)}
+          {weatherOpen[r.id] && renderRaceWeather(r)}
           {/* Race day reached → let the user enter a finish time, which moves
               this race from Target to History. */}
           {r.isTarget && daysUntilRace(r.date, now) !== null && daysUntilRace(r.date, now) <= 0 && (

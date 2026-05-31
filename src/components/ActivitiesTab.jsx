@@ -572,8 +572,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
                     <span style={{
                       display: "inline-flex", alignItems: "center", gap: 3, flexShrink: 0,
                       fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 600,
-                      background: "var(--moss)", color: "var(--ink-inv)",
-                      padding: "2px 6px", letterSpacing: "0.04em",
+                      color: "var(--ink-2)", letterSpacing: "0.04em",
                     }}>🏆 {t("enum.subtype.Race")}</span>
                   )}
                   {/* Sub-types — inline joined text, no chips. Allows ellipsis
@@ -700,11 +699,11 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
                     return l.type === "Strength";
                   }).map(st => {
                     const isFlag = RUN_FLAGS.includes(st);
-                    // Race flag → filled trophy chip (matches the mobile card),
-                    // so it reads as a clear marker rather than a faint outline.
+                    // Race flag → trophy + label, NO background fill (the moss
+                    // green clashed with Trail Run's green; the 🏆 is enough).
                     return (
                       <div key={st} style={isFlag
-                        ? { ...s.subTag, display: "inline-flex", alignItems: "center", gap: 3, background: "var(--moss)", color: "var(--ink-inv)", borderColor: "var(--moss)" }
+                        ? { ...s.subTag, display: "inline-flex", alignItems: "center", gap: 3, border: "none", padding: "2px 4px", color: "var(--ink-2)" }
                         : s.subTag}>
                         {isFlag ? "🏆 " : ""}{t(`enum.subtype.${st}`)}
                       </div>

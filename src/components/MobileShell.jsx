@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useT } from "../i18n/LanguageContext";
 import { Spinner } from "./Spinner";
 import { CalendarIcon, CoachIcon, FootIcon, SettingsIcon, TrophyIcon } from "./Icons";
@@ -51,6 +51,15 @@ export function MobileShell({ children, tab, setTab, coachBusy = false }) {
   // vertical scrolling or a card tap. Drags that begin inside a horizontal
   // scroller are left alone (see inHorizontalScroller).
   const touch = useRef(null);
+  // Direction of the last tab change — kept in STATE (not a ref) because the
+  // wrapper reads it during render to pick the slide-in class, and refs can't
+  // be read in render. Set in go() alongside setTab so both land in one render.
+  const [slideDir, setSlideDir] = useState("right");
+  function go(nextTab) {
+    if (nextTab === tab) return;
+    setSlideDir(nextTab > tab ? "right" : "left");
+    setTab(nextTab);
+  }
   function onTouchStart(e) {
     if (e.touches.length !== 1) { touch.current = null; return; }
     const p = e.touches[0];
@@ -65,8 +74,8 @@ export function MobileShell({ children, tab, setTab, coachBusy = false }) {
     const dx = p.clientX - st.x;
     const dy = p.clientY - st.y;
     if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 2) return;
-    if (dx < 0 && tab < TABS.length - 1) setTab(tab + 1);
-    else if (dx > 0 && tab > 0) setTab(tab - 1);
+    if (dx < 0 && tab < TABS.length - 1) go(tab + 1);
+    else if (dx > 0 && tab > 0) go(tab - 1);
   }
 
   return (
@@ -105,7 +114,12 @@ export function MobileShell({ children, tab, setTab, coachBusy = false }) {
         // + safe-area). Tab content inside main lays out above this padding.
         paddingBottom: "calc(76px + env(safe-area-inset-bottom))",
       }}>
-        {children}
+        {/* Keyed by tab so each switch remounts + replays the slide-in. The
+            tab content is conditionally rendered upstream anyway, so this adds
+            no extra unmount cost. */}
+        <div key={tab} className={slideDir === "right" ? "ts-tab-in-right" : "ts-tab-in-left"}>
+          {children}
+        </div>
       </main>
 
       {/* ── Bottom tab bar ─────────────────────────────────────────────────
@@ -126,7 +140,7 @@ export function MobileShell({ children, tab, setTab, coachBusy = false }) {
           return (
             <button
               key={key}
-              onClick={() => setTab(idx)}
+              onClick={() => go(idx)}
               style={{
                 background: "transparent",
                 border: "none",
