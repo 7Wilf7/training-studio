@@ -797,7 +797,7 @@ export function AICoachTab({
         overflowY: "auto",
       }}>
         {chatMessages.length === 0 ? (
-          <div style={{ color: "#888", textAlign: "center", padding: 30, fontSize: 13, whiteSpace: "pre-line" }}>
+          <div style={{ color: "var(--ink-3)", textAlign: "center", padding: 30, fontSize: 13, whiteSpace: "pre-line" }}>
             {t("coach.empty")}
           </div>
         ) : (
@@ -816,7 +816,7 @@ export function AICoachTab({
                 const canResend = isUser && i === lastUserIdx && !chatLoading && sendChat;
                 const extracting = extractingForMsgId === m.id;
                 return (
-                  <div key={i} style={{
+                  <div key={i} className="ts-msg-in" style={{
                     alignSelf: isUser ? "flex-end" : "flex-start",
                     // Mobile bubbles get wider so long messages don't squeeze into
                     // a narrow column the user has to keep scrolling to read.
@@ -828,8 +828,13 @@ export function AICoachTab({
                     gap: 6, minWidth: 0,
                   }}>
                     <div style={{
-                      background: isUser ? "#222" : "#f5f5f5",
-                      color: isUser ? "#fff" : "#222",
+                      // On-token bubbles: user = stamped ink block (echoes the
+                      // s.tag stamp), coach = sunken panel with a hairline (the
+                      // app's borders-not-fills rule). Soft 10px radius kept on
+                      // purpose — chat reads warmer than the sharp 2px cards.
+                      background: isUser ? "var(--ink-1)" : "var(--bg-sunken)",
+                      color: isUser ? "var(--ink-inv)" : "var(--ink-1)",
+                      border: `1px solid ${isUser ? "var(--ink-1)" : "var(--rule)"}`,
                       borderRadius: 10, padding: "10px 14px",
                       fontSize: 13, lineHeight: 1.7,
                       minWidth: 0, maxWidth: "100%",
@@ -895,7 +900,7 @@ export function AICoachTab({
             })()}
             {chatLoading && (
               <div style={{
-                alignSelf: "flex-start", color: "#888", fontSize: 13,
+                alignSelf: "flex-start", color: "var(--ink-3)", fontSize: 13,
                 display: "inline-flex", alignItems: "center", gap: 8,
                 padding: "10px 14px",
               }}>

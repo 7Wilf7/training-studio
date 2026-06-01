@@ -210,6 +210,20 @@ summary::-webkit-details-marker { display: none; }
   .ts-tab-in-right, .ts-tab-in-left { animation: none; }
 }
 
+/* Chat message entrance — a single subtle fade + 6px rise as a bubble lands.
+   Runs once on element mount: React keys bubbles by index and doesn't recreate
+   existing ones on append, so only a genuinely NEW message animates (the coach
+   reply settling in). On tab switch the whole list mounts and settles together.
+   Uniform timing, no per-index stagger — a long history shouldn't crawl in. */
+@keyframes ts-msg-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.ts-msg-in { animation: ts-msg-in 0.26s cubic-bezier(0.2, 0.7, 0.3, 1); }
+@media (prefers-reduced-motion: reduce) {
+  .ts-msg-in { animation: none; }
+}
+
 /* ============================================================
    Mobile-only overrides
    ------------------------------------------------------------
