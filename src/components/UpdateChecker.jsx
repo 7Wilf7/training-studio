@@ -186,10 +186,8 @@ export function UpdateChecker() {
 
       {status === "newer" && release && (
         <div style={updatePanelStyle}>
-          {/* Just the changelog for this release — no version header / blurb. */}
-          {release.notes
-            ? <pre style={notesStyle}>{release.notes.slice(0, 800)}</pre>
-            : <div style={{ ...secondaryStyle, marginTop: 0 }}>v{release.version}</div>}
+          {/* Actions FIRST so the download CTA is always reachable without
+              scrolling past the notes (which used to trap the touch scroll). */}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {release.apkUrl && (
               isNative() ? (
@@ -234,6 +232,11 @@ export function UpdateChecker() {
               {installMsg}
             </div>
           )}
+          {/* This release's changes, below the actions. No internal scroll
+              (see notesStyle) so it never traps the page scroll. */}
+          {release.notes
+            ? <pre style={notesStyle}>{release.notes.slice(0, 800)}</pre>
+            : <div style={{ ...secondaryStyle, marginTop: 0 }}>v{release.version}</div>}
         </div>
       )}
     </div>
@@ -306,8 +309,9 @@ const notesStyle = {
   fontSize: 11,
   color: "var(--ink-2)",
   margin: 0,
-  maxHeight: 160,
-  overflow: "auto",
+  // No internal scroll on purpose — a nested scroller swallows the touch
+  // gesture and the page can't scroll on to the buttons. The notes flow and
+  // the page (MobileShell <main>) does the scrolling. Notes are short now.
 };
 
 const downloadBtnStyle = {

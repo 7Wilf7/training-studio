@@ -106,18 +106,29 @@ jobs:
           mv android/app/build/outputs/apk/release/app-release.apk \
              "training-studio-${GITHUB_REF_NAME}.apk"
 
+      - name: Build release notes from commits since last tag
+        # The in-app "Check for updates" dialog shows this body verbatim, so
+        # keep it to just THIS release's changes — no install boilerplate, no
+        # auto "Full Changelog" link. Uses the commit subjects since the
+        # previous tag.
+        run: |
+          prev=$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || true)
+          if [ -n "$prev" ]; then
+            notes=$(git log --no-merges --pretty='- %s' "$prev..${GITHUB_REF_NAME}")
+          else
+            notes=$(git log --no-merges --pretty='- %s' -n 20 "${GITHUB_REF_NAME}")
+          fi
+          {
+            echo 'RELEASE_NOTES<<__TSEOF__'
+            echo "$notes"
+            echo '__TSEOF__'
+          } >> "$GITHUB_ENV"
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: training-studio-${{ github.ref_name }}.apk
           name: Training Studio ${{ github.ref_name }}
-          generate_release_notes: true
+          generate_release_notes: false
           fail_on_unmatched_files: true
-          body: |
-            Android APK for Training Studio ${{ github.ref_name }}.
-
-            **Install**: download the APK below, open it on your phone, allow
-            "install from unknown sources" when prompted.
-
-            **Update**: if you already have an older signed version installed,
-            this will replace it in place (no need to uninstall first).
+          body: ${{ env.RELEASE_NOTES }}

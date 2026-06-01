@@ -287,25 +287,52 @@ export function AICoachTab({
   const chatScrollRef = useRef(null);
   const [showJumpTop, setShowJumpTop] = useState(false);
   const [showJumpBottom, setShowJumpBottom] = useState(false);
+  const hideJumpTimer = useRef(null);
+  // Programmatic scrolls (mount / new message / jump-button taps) fire scroll
+  // events too — mute the button logic briefly so they don't flash the arrows.
+  const suppressJumpUntil = useRef(0);
 
-  // Drive the jump buttons from scroll position: "↑ top" once the user has
-  // scrolled down into history, "↓ latest" whenever they're not near the
-  // newest message. 120px hysteresis so a tiny scroll doesn't flicker them.
+  // Jump buttons appear only WHILE the user is actively scrolling, then fade
+  // out 2s after scrolling stops — so they never sit on top of the text while
+  // reading. Position still decides WHICH arrow is relevant (no "↑ top" when
+  // already at the top). 120px hysteresis avoids flicker on a tiny nudge.
+  const hideJumpSoon = useCallback(() => {
+    clearTimeout(hideJumpTimer.current);
+    hideJumpTimer.current = setTimeout(() => {
+      setShowJumpTop(false);
+      setShowJumpBottom(false);
+    }, 2000);
+  }, []);
   const updateJumpButtons = useCallback(() => {
     const el = chatScrollRef.current;
     if (!el) return;
+    if (Date.now() < suppressJumpUntil.current) return;
     const fromBottom = el.scrollHeight - el.clientHeight - el.scrollTop;
     setShowJumpTop(el.scrollTop > 120);
     setShowJumpBottom(fromBottom > 120);
+    hideJumpSoon();
+  }, [hideJumpSoon]);
+  // Both jump helpers + the auto-pin scroll mute the button logic and hide any
+  // visible arrow immediately, so tapping an arrow doesn't leave the other one
+  // popping up mid-scroll.
+  const muteAndHideJumps = useCallback(() => {
+    suppressJumpUntil.current = Date.now() + 600;
+    clearTimeout(hideJumpTimer.current);
+    setShowJumpTop(false);
+    setShowJumpBottom(false);
   }, []);
   const scrollToBottom = useCallback((behavior = "auto") => {
     const el = chatScrollRef.current;
-    if (el) el.scrollTo({ top: el.scrollHeight, behavior });
-  }, []);
+    if (!el) return;
+    muteAndHideJumps();
+    el.scrollTo({ top: el.scrollHeight, behavior });
+  }, [muteAndHideJumps]);
   const scrollToTop = useCallback(() => {
     const el = chatScrollRef.current;
-    if (el) el.scrollTo({ top: 0, behavior: "smooth" });
-  }, []);
+    if (!el) return;
+    muteAndHideJumps();
+    el.scrollTo({ top: 0, behavior: "smooth" });
+  }, [muteAndHideJumps]);
 
   // Pin to the latest message on mount (tab switch) and whenever the list
   // grows. Markdown tables/long replies can lay out a frame late, so we set
@@ -315,13 +342,13 @@ export function AICoachTab({
   useLayoutEffect(() => {
     const el = chatScrollRef.current;
     if (!el) return;
+    muteAndHideJumps();
     el.scrollTop = el.scrollHeight;
-    const id = requestAnimationFrame(() => {
-      el.scrollTop = el.scrollHeight;
-      updateJumpButtons();
-    });
+    const id = requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
     return () => cancelAnimationFrame(id);
-  }, [chatMessages.length, chatLoading, updateJumpButtons]);
+  }, [chatMessages.length, chatLoading, muteAndHideJumps]);
+  // Drop the pending hide timer if the tab unmounts mid-countdown.
+  useEffect(() => () => clearTimeout(hideJumpTimer.current), []);
 
   // Small circular jump button, vertically pinned to top/bottom of the window.
   const jumpBtnStyle = (edge) => ({

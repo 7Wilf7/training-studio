@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { s } from "../styles";
 import { ACTIVITY_TYPES, DAILY_TAGS, DAILY_TAG_ICONS, RUN_GROUP_TYPES, STRENGTH_SUBS, TYPE_COLOR } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
@@ -49,6 +49,15 @@ export function CalendarDayModal({
   const [planTimeOfDay, setPlanTimeOfDay] = useState(""); // "" | "am" | "pm"
   const [planSubTypes, setPlanSubTypes] = useState([]);   // strength: Upper/Lower/Core
   const [editingId, setEditingId] = useState(null);
+  // Long-press a workout row to reveal its edit/delete actions — kept hidden
+  // otherwise so the day reads clean. Only one row's actions show at a time.
+  const [revealedId, setRevealedId] = useState(null);
+  const pressTimer = useRef(null);
+  function startRowPress(id) {
+    clearTimeout(pressTimer.current);
+    pressTimer.current = setTimeout(() => setRevealedId(id), 450);
+  }
+  function cancelRowPress() { clearTimeout(pressTimer.current); }
   const planIsStrength = planType === "Strength";
 
   // Day-level tags live in dailyNotes — we toggle in-place. The Save is implicit:
@@ -89,6 +98,7 @@ export function CalendarDayModal({
     setPlanDurationMin(l.duration > 0 ? String(Math.round(l.duration / 60)) : "");
     setPlanTimeOfDay(startedAtToTimeOfDay(l.startedAt) || "");
     setPlanSubTypes(Array.isArray(l.subTypes) ? l.subTypes : []);
+    setRevealedId(null);
     setPanel("plan");
   }
 
@@ -226,7 +236,13 @@ export function CalendarDayModal({
               {logs.map(l => {
                 const color = TYPE_COLOR[l.type] || "var(--ink-2)";
                 return (
-                  <div key={l.id} style={{
+                  <div key={l.id}
+                    onPointerDown={() => startRowPress(l.id)}
+                    onPointerUp={cancelRowPress}
+                    onPointerLeave={cancelRowPress}
+                    onPointerCancel={cancelRowPress}
+                    onContextMenu={e => e.preventDefault()}
+                    style={{
                     border: "1px solid var(--rule)",
                     borderLeft: `3px ${l.isPlanned ? "dashed" : "solid"} ${color}`,
                     padding: "10px 12px",
@@ -256,21 +272,24 @@ export function CalendarDayModal({
                       }}>
                         {logHeadline(l)}
                       </div>
-                      <div style={{ display: "flex", gap: 6, marginLeft: "auto" }}>
-                        {/* Planned workouts can be edited in place; the dashed
-                            border already marks them as a plan, so no text badge. */}
-                        {l.isPlanned && (
-                          <button onClick={() => startEditPlan(l)}
-                            style={{ ...s.btnGhost, fontSize: 11, padding: "4px 9px" }}>
-                            {t("common.edit")}
+                      {revealedId === l.id && (
+                        <div style={{ display: "flex", gap: 6, marginLeft: "auto" }}>
+                          {/* Revealed by long-press. Planned workouts can be
+                              edited in place; the dashed border already marks
+                              them as a plan, so no text badge. */}
+                          {l.isPlanned && (
+                            <button onClick={() => startEditPlan(l)}
+                              style={{ ...s.btnGhost, fontSize: 11, padding: "4px 9px" }}>
+                              {t("common.edit")}
+                            </button>
+                          )}
+                          <button onClick={() => deleteLog(l.id)}
+                            style={{ ...s.btnGhost, fontSize: 11, padding: "4px 9px",
+                              color: "var(--danger)" }}>
+                            {t("common.delete")}
                           </button>
-                        )}
-                        <button onClick={() => deleteLog(l.id)}
-                          style={{ ...s.btnGhost, fontSize: 11, padding: "4px 9px",
-                            color: "var(--danger)" }}>
-                          {t("common.delete")}
-                        </button>
-                      </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -296,10 +315,15 @@ export function CalendarDayModal({
               {t("calendar.day_tags_title")}
             </div>
             {/* 3-column grid → 2 rows. Row 1: massage / stretching / sick.
-                Row 2: poor_sleep (spans 2 cols so "(last night)" fits one line)
-                + travel. On future days poor_sleep is dropped. */}
+                Row 2: travel (left) + poor_sleep (right, spans 2 cols so
+                "(last night)" fits one line). On future days poor_sleep is
+                dropped, leaving travel alone on row 2. */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
-              {DAILY_TAGS.filter(tag => !(isFuture && tag === "poor_sleep")).map(tag => (
+              {DAILY_TAGS
+                .filter(tag => !(isFuture && tag === "poor_sleep"))
+                // poor_sleep renders after travel so it lands to travel's right.
+                .sort((a, b) => Number(a === "poor_sleep") - Number(b === "poor_sleep"))
+                .map(tag => (
                 <button key={tag}
                   onClick={() => toggleDayTag(tag)}
                   style={{
