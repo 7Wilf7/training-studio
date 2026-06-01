@@ -301,7 +301,7 @@ export function AICoachTab({
     hideJumpTimer.current = setTimeout(() => {
       setShowJumpTop(false);
       setShowJumpBottom(false);
-    }, 2000);
+    }, 1000);
   }, []);
   const updateJumpButtons = useCallback(() => {
     const el = chatScrollRef.current;
@@ -333,6 +333,21 @@ export function AICoachTab({
     muteAndHideJumps();
     el.scrollTo({ top: 0, behavior: "smooth" });
   }, [muteAndHideJumps]);
+
+  // rAF-throttle the scroll handler: updateJumpButtons reads scrollHeight +
+  // clientHeight, and firing that on every scroll event during a SLOW drag
+  // forces repeated layout reads → the stutter felt only on slow drags (fast
+  // flings coalesce events so it wasn't noticeable). One read per frame is
+  // plenty for showing/hiding the arrows.
+  const scrollRaf = useRef(false);
+  const onChatScroll = useCallback(() => {
+    if (scrollRaf.current) return;
+    scrollRaf.current = true;
+    requestAnimationFrame(() => {
+      scrollRaf.current = false;
+      updateJumpButtons();
+    });
+  }, [updateJumpButtons]);
 
   // Pin to the latest message on mount (tab switch) and whenever the list
   // grows. Markdown tables/long replies can lay out a frame late, so we set
@@ -816,7 +831,7 @@ export function AICoachTab({
         maxHeight: isMobile ? undefined : 500,
         display: "flex", flexDirection: "column", minWidth: 0,
       }}>
-      <div ref={chatScrollRef} onScroll={updateJumpButtons} style={{
+      <div ref={chatScrollRef} onScroll={onChatScroll} style={{
         ...s.card,
         marginBottom: 0,
         flex: 1,

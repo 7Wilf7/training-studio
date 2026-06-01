@@ -111,8 +111,11 @@ export function MobileShell({ children, tab, setTab, coachBusy = false }) {
         padding: "14px 14px 0",
         paddingTop: "max(env(safe-area-inset-top), 14px)",
         // Reserve room for the position: fixed bottom nav (~64px content
-        // + safe-area). Tab content inside main lays out above this padding.
-        paddingBottom: "calc(76px + env(safe-area-inset-bottom))",
+        // + safe-area), plus headroom so the LAST line of a scrolled tab
+        // (e.g. the version cell's "you're on the latest version") clears the
+        // nav instead of hiding behind it. 76px left the last line clipped on
+        // some devices.
+        paddingBottom: "calc(100px + env(safe-area-inset-bottom))",
       }}>
         {/* Keyed by tab so each switch remounts + replays the slide-in. The
             tab content is conditionally rendered upstream anyway, so this adds

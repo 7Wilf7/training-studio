@@ -6,6 +6,7 @@ import { useIsMobile } from "../hooks/useMediaQuery";
 import { formatDuration, timeOfDayToStartedAt, startedAtToTimeOfDay } from "../utils/format";
 import { formatWeatherShort, skyconMeta } from "../lib/weather";
 import { ModalRoot } from "./ModalRoot";
+import { ItemActionModal } from "./ItemActionModal";
 
 // Pretty header date: "Thu, May 21 2026" / "5月21日 周四 2026"
 function formatHeaderDate(yyyy_mm_dd, lang) {
@@ -49,13 +50,13 @@ export function CalendarDayModal({
   const [planTimeOfDay, setPlanTimeOfDay] = useState(""); // "" | "am" | "pm"
   const [planSubTypes, setPlanSubTypes] = useState([]);   // strength: Upper/Lower/Core
   const [editingId, setEditingId] = useState(null);
-  // Long-press a workout row to reveal its edit/delete actions — kept hidden
-  // otherwise so the day reads clean. Only one row's actions show at a time.
-  const [revealedId, setRevealedId] = useState(null);
+  // Long-press a workout row → a centered Edit/Delete action card (same
+  // pattern as the Training list's ItemActionModal). actionTarget = the log.
+  const [actionTarget, setActionTarget] = useState(null);
   const pressTimer = useRef(null);
-  function startRowPress(id) {
+  function startRowPress(l) {
     clearTimeout(pressTimer.current);
-    pressTimer.current = setTimeout(() => setRevealedId(id), 450);
+    pressTimer.current = setTimeout(() => setActionTarget(l), 450);
   }
   function cancelRowPress() { clearTimeout(pressTimer.current); }
   const planIsStrength = planType === "Strength";
@@ -98,7 +99,7 @@ export function CalendarDayModal({
     setPlanDurationMin(l.duration > 0 ? String(Math.round(l.duration / 60)) : "");
     setPlanTimeOfDay(startedAtToTimeOfDay(l.startedAt) || "");
     setPlanSubTypes(Array.isArray(l.subTypes) ? l.subTypes : []);
-    setRevealedId(null);
+    setActionTarget(null);
     setPanel("plan");
   }
 
@@ -237,7 +238,7 @@ export function CalendarDayModal({
                 const color = TYPE_COLOR[l.type] || "var(--ink-2)";
                 return (
                   <div key={l.id}
-                    onPointerDown={() => startRowPress(l.id)}
+                    onPointerDown={() => startRowPress(l)}
                     onPointerUp={cancelRowPress}
                     onPointerLeave={cancelRowPress}
                     onPointerCancel={cancelRowPress}
@@ -272,24 +273,6 @@ export function CalendarDayModal({
                       }}>
                         {logHeadline(l)}
                       </div>
-                      {revealedId === l.id && (
-                        <div style={{ display: "flex", gap: 6, marginLeft: "auto" }}>
-                          {/* Revealed by long-press. Planned workouts can be
-                              edited in place; the dashed border already marks
-                              them as a plan, so no text badge. */}
-                          {l.isPlanned && (
-                            <button onClick={() => startEditPlan(l)}
-                              style={{ ...s.btnGhost, fontSize: 11, padding: "4px 9px" }}>
-                              {t("common.edit")}
-                            </button>
-                          )}
-                          <button onClick={() => deleteLog(l.id)}
-                            style={{ ...s.btnGhost, fontSize: 11, padding: "4px 9px",
-                              color: "var(--danger)" }}>
-                            {t("common.delete")}
-                          </button>
-                        </div>
-                      )}
                     </div>
                   </div>
                 );
@@ -353,20 +336,43 @@ export function CalendarDayModal({
           </div>
         )}
 
-        {/* Add a plan (future days) or edit an existing planned workout (the
-            form also opens via the Edit button on a planned row above). */}
-        {(isFuture || panel === "plan") && (
+        {/* Future days: button to open the plan form (which is its own modal). */}
+        {isFuture && (
           <div style={{ borderTop: "1px solid var(--rule)", paddingTop: 14 }}>
-            {panel === "plan" ? (
-              <>
-                <div style={{ ...s.label, marginBottom: 8 }}>
-                  {editingId ? t("calendar.edit_plan_title") : t("calendar.add_plan_title")}
+            <button onClick={() => setPanel("plan")} style={s.btn}>
+              {t("calendar.add_plan_button")}
+            </button>
+          </div>
+        )}
+
+        {/* Long-press action sheet for a workout row — Edit (plans only) + Delete.
+            Mirrors the Training list's long-press pattern. Portals to body. */}
+        {actionTarget && (
+          <ItemActionModal
+            title={t(`enum.activity.${actionTarget.type}`)}
+            onEdit={actionTarget.isPlanned ? () => startEditPlan(actionTarget) : undefined}
+            onDelete={() => { const id = actionTarget.id; setActionTarget(null); deleteLog(id); }}
+            onClose={() => setActionTarget(null)}
+          />
+        )}
+
+        {/* Plan add/edit form — a modal over the day modal (ModalRoot portals
+            it to body, so it floats above this card). */}
+        {panel === "plan" && (
+          <ModalRoot onClose={() => { setPanel(null); resetPlanForm(); }}>
+            <div style={s.modalOverlay(isMobile, { float: true })} onClick={() => { setPanel(null); resetPlanForm(); }}>
+              <div style={s.modalCard(isMobile, { maxWidth: 460, float: true })} onClick={e => e.stopPropagation()}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                  <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>
+                    {editingId ? t("calendar.edit_plan_title") : t("calendar.add_plan_title")}
+                  </h2>
+                  <button onClick={() => { setPanel(null); resetPlanForm(); }} style={s.modalCloseBtn} aria-label="Close">×</button>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
                   <div>
                     <div style={{ ...s.muted, fontSize: 11, marginBottom: 4 }}>{t("form.type")}</div>
                     <select value={planType} onChange={e => setPlanType(e.target.value)}
-                      style={{ ...s.input, padding: "6px 8px", fontSize: 13 }}>
+                      style={{ ...s.input, padding: "8px 10px", fontSize: 14 }}>
                       {ACTIVITY_TYPES.map(at => (
                         <option key={at} value={at}>{t(`enum.activity.${at}`)}</option>
                       ))}
@@ -378,7 +384,7 @@ export function CalendarDayModal({
                       <input type="number" step="0.1" min="0" value={planDistance}
                         onChange={e => setPlanDistance(e.target.value)}
                         placeholder="e.g. 8"
-                        style={{ ...s.input, padding: "6px 8px", fontSize: 13 }} />
+                        style={{ ...s.input, padding: "8px 10px", fontSize: 14 }} />
                     </div>
                   )}
                   <div>
@@ -386,12 +392,12 @@ export function CalendarDayModal({
                     <input type="number" step="1" min="0" value={planDurationMin}
                       onChange={e => setPlanDurationMin(e.target.value)}
                       placeholder="e.g. 45"
-                      style={{ ...s.input, padding: "6px 8px", fontSize: 13 }} />
+                      style={{ ...s.input, padding: "8px 10px", fontSize: 14 }} />
                   </div>
                   <div>
                     <div style={{ ...s.muted, fontSize: 11, marginBottom: 4 }}>{t("calendar.plan_time_of_day")}</div>
                     <select value={planTimeOfDay} onChange={e => setPlanTimeOfDay(e.target.value)}
-                      style={{ ...s.input, padding: "6px 8px", fontSize: 13 }}>
+                      style={{ ...s.input, padding: "8px 10px", fontSize: 14 }}>
                       <option value="">{t("calendar.plan_tod_any")}</option>
                       <option value="am">{t("calendar.plan_tod_am")}</option>
                       <option value="pm">{t("calendar.plan_tod_pm")}</option>
@@ -406,28 +412,24 @@ export function CalendarDayModal({
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                       {STRENGTH_SUBS.map(sub => (
                         <button key={sub} type="button" onClick={() => togglePlanSub(sub)}
-                          style={{ ...s.chip(planSubTypes.includes(sub)), minHeight: 0, padding: "5px 11px", fontSize: 12 }}>
+                          style={{ ...s.chip(planSubTypes.includes(sub)), minHeight: 0, padding: "6px 12px", fontSize: 13 }}>
                           {t(`enum.subtype.${sub}`)}
                         </button>
                       ))}
                     </div>
                   </div>
                 )}
-                <div style={{ display: "flex", gap: 6 }}>
-                  <button onClick={savePlan} style={{ ...s.btn, fontSize: 12, padding: "6px 14px" }}>
-                    {t("calendar.save_plan")}
-                  </button>
-                  <button onClick={() => { setPanel(null); resetPlanForm(); }} style={{ ...s.btnGhost, fontSize: 12, padding: "6px 14px" }}>
+                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                  <button onClick={() => { setPanel(null); resetPlanForm(); }} style={s.btnGhost}>
                     {t("common.cancel")}
                   </button>
+                  <button onClick={savePlan} style={s.btn}>
+                    {t("calendar.save_plan")}
+                  </button>
                 </div>
-              </>
-            ) : (
-              <button onClick={() => setPanel("plan")} style={s.btn}>
-                {t("calendar.add_plan_button")}
-              </button>
-            )}
-          </div>
+              </div>
+            </div>
+          </ModalRoot>
         )}
       </div>
     </div>

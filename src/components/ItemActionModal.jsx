@@ -28,8 +28,10 @@ export function ItemActionModal({ title, onEdit, onDelete, onClose }) {
               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
             }}>{title}</div>
           )}
-          <button onClick={onEdit} style={ACTION_BTN}>{t("common.edit")}</button>
-          <button onClick={onDelete} style={{ ...ACTION_BTN, color: "var(--danger)", borderTop: "1px solid var(--rule-soft)" }}>
+          {onEdit && (
+            <button onClick={onEdit} style={ACTION_BTN}>{t("common.edit")}</button>
+          )}
+          <button onClick={onDelete} style={{ ...ACTION_BTN, color: "var(--danger)", borderTop: onEdit ? "1px solid var(--rule-soft)" : "none" }}>
             {t("common.delete")}
           </button>
           <button onClick={onClose} style={{ ...ACTION_BTN, color: "var(--ink-3)", borderTop: "1px solid var(--rule-soft)" }}>
